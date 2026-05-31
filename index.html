@@ -242,19 +242,28 @@ body.restaurant-mode .restaurant-mode-banner { display: block; }
   background: rgba(77, 171, 247, 0.1); color: var(--info);
   padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; }
 </style>
-  <link rel="manifest" href="manifest.json">
+  
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="الإدارة">
   <link rel="apple-touch-icon" href="icon-192.png">
 <script>
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.getRegistrations().then(r=>r.forEach(sw=>sw.unregister()));
-  caches.keys().then(k=>k.forEach(n=>caches.delete(n)));
-}
+
 </script></head>
-<body>
+<body><script>
+(function(){
+  if(!navigator.serviceWorker)return;
+  navigator.serviceWorker.getRegistrations().then(function(regs){
+    for(var r of regs){ r.unregister(); }
+  });
+  if(window.caches){
+    caches.keys().then(function(keys){
+      keys.forEach(function(k){ caches.delete(k); });
+    });
+  }
+})();
+</script>
 
 <div class="login-screen" id="loginScreen" style="display:none;">
   <div class="login-card">
@@ -2420,12 +2429,7 @@ setInterval(() => { if (currentUser) renderAll(); }, 5000);
 </script>
 
 <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js')
-      .then(r => console.log('SW registered'))
-      .catch(e => console.log('SW failed:', e));
-  });
+);
 }
 </script>
 </body>
