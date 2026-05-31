@@ -248,7 +248,12 @@ body.restaurant-mode .restaurant-mode-banner { display: block; }
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="الإدارة">
   <link rel="apple-touch-icon" href="icon-192.png">
-</head>
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.getRegistrations().then(r=>r.forEach(sw=>sw.unregister()));
+  caches.keys().then(k=>k.forEach(n=>caches.delete(n)));
+}
+</script></head>
 <body>
 
 <div class="login-screen" id="loginScreen" style="display:none;">
