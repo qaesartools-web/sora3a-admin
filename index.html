@@ -241,6 +241,99 @@ body.restaurant-mode .restaurant-mode-banner { display: block; }
 .eta-display { display: inline-flex; align-items: center; gap: 6px;
   background: rgba(77, 171, 247, 0.1); color: var(--info);
   padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; }
+
+/* ── RESPONSIVE & IMPROVED DESIGN ── */
+@media (min-width: 768px) {
+  body { padding-bottom: 0; }
+  main { max-width: 800px !important; }
+  .login-card { max-width: 480px; padding: 40px 36px; }
+  .stats-row { grid-template-columns: repeat(4, 1fr) !important; }
+  .form-row { grid-template-columns: 1fr 1fr; }
+  .order-item { padding: 16px; }
+  header { padding: 14px 24px; }
+}
+
+@media (min-width: 1024px) {
+  main { max-width: 960px !important; padding: 20px 24px; }
+  .stats-row { grid-template-columns: repeat(5, 1fr) !important; }
+  .bottom-nav { display: none !important; }
+  .desktop-nav {
+    display: flex !important;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 0 24px;
+    gap: 4px;
+  }
+  .desktop-nav-btn {
+    padding: 14px 18px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-family: 'Tajawal', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all .2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .desktop-nav-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .desktop-nav-btn:hover { color: var(--text); }
+  body { padding-bottom: 0; }
+  .login-card { max-width: 520px; }
+}
+
+/* Better login on desktop */
+.login-screen {
+  background-image: 
+    radial-gradient(ellipse at 20% 30%, rgba(255,107,61,.18) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 70%, rgba(255,184,77,.12) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 50%, rgba(168,85,247,.06) 0%, transparent 60%);
+}
+.login-card {
+  box-shadow: 0 30px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,107,61,.1);
+}
+
+/* Better cards */
+.card { transition: box-shadow .2s; }
+.card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.3); }
+
+/* Better header */
+header {
+  background: linear-gradient(135deg, #1a1d28, #161922);
+  box-shadow: 0 2px 20px rgba(0,0,0,.3);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+
+/* Better buttons */
+.btn-primary { transition: all .2s; }
+.btn-primary:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,107,61,.35); }
+
+/* Desktop nav placeholder */
+.desktop-nav { display: none; }
+
+/* Better stat cards */
+.stat-mini { transition: all .2s; cursor: default; }
+.stat-mini:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+/* Better order items */
+.order-item { transition: all .2s; }
+.order-item:hover { border-color: rgba(255,107,61,.3); }
+
+/* Better inputs */
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+  box-shadow: 0 0 0 3px rgba(255,107,61,.15);
+}
+
 </style>
   
   <meta name="mobile-web-app-capable" content="yes">
@@ -314,6 +407,15 @@ body.restaurant-mode .restaurant-mode-banner { display: block; }
     <button class="logout-btn" onclick="logout()">خروج</button>
   </div>
 </header>
+
+<div class="desktop-nav" id="desktopNav">
+  <button class="desktop-nav-btn active" onclick="switchToScreen(this, 'orders')">📋 الطلبات</button>
+  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'captains')">🛵 الكباتن</button>
+  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'restaurants')">🍽️ المطاعم</button>
+  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'map')">🗺️ الخريطة</button>
+  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'analytics')">📊 التحليلات</button>
+  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'settings')">⚙️ الإعدادات</button>
+</div>
 
 <main>
 
@@ -2425,6 +2527,27 @@ function renderRestaurantLeaderboard() {
 }
 
 // Auto refresh every 5 seconds
+
+// Desktop nav sync
+window.switchToScreen = function(btn, screenId) {
+  // Sync with existing nav
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const mobileBtn = document.querySelector(`.nav-btn[data-screen="${screenId}"]`);
+  if(mobileBtn) mobileBtn.click();
+  // Update desktop active
+  document.querySelectorAll('.desktop-nav-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+};
+// Sync mobile nav with desktop
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const screen = btn.dataset.screen;
+    document.querySelectorAll('.desktop-nav-btn').forEach(b => b.classList.remove('active'));
+    const dBtn = document.querySelector(`.desktop-nav-btn[onclick*="${screen}"]`);
+    if(dBtn) dBtn.classList.add('active');
+  });
+});
+
 setInterval(() => { if (currentUser) renderAll(); }, 5000);
 </script>
 
