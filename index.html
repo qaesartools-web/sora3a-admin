@@ -409,12 +409,11 @@ header {
 </header>
 
 <div class="desktop-nav" id="desktopNav">
-  <button class="desktop-nav-btn active" onclick="switchToScreen(this, 'orders')">📋 الطلبات</button>
-  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'captains')">🛵 الكباتن</button>
-  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'restaurants')">🍽️ المطاعم</button>
-  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'map')">🗺️ الخريطة</button>
-  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'analytics')">📊 التحليلات</button>
-  <button class="desktop-nav-btn" onclick="switchToScreen(this, 'settings')">⚙️ الإعدادات</button>
+  <button class="desktop-nav-btn active" data-dscreen="dashboard">🏠 الرئيسية</button>
+  <button class="desktop-nav-btn" data-dscreen="orders">📋 الطلبات</button>
+  <button class="desktop-nav-btn" data-dscreen="map">🗺️ الخريطة</button>
+  <button class="desktop-nav-btn" data-dscreen="manage">⚙️ إدارة (مطاعم/كباتن)</button>
+  <button class="desktop-nav-btn" data-dscreen="analytics">📊 التحليلات</button>
 </div>
 
 <main>
@@ -2528,25 +2527,30 @@ function renderRestaurantLeaderboard() {
 
 // Auto refresh every 5 seconds
 
-// Desktop nav sync
-window.switchToScreen = function(btn, screenId) {
-  // Sync with existing nav
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const mobileBtn = document.querySelector(`.nav-btn[data-screen="${screenId}"]`);
-  if(mobileBtn) mobileBtn.click();
-  // Update desktop active
-  document.querySelectorAll('.desktop-nav-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-};
-// Sync mobile nav with desktop
+
+// Desktop nav
+document.querySelectorAll('.desktop-nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const screen = btn.dataset.dscreen;
+    if(!screen) return;
+    // Click matching mobile nav button
+    const mobileBtn = document.querySelector(`.nav-btn[data-screen="${screen}"]`);
+    if(mobileBtn) mobileBtn.click();
+    // Update desktop active state
+    document.querySelectorAll('.desktop-nav-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+// Sync mobile → desktop
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     const screen = btn.dataset.screen;
     document.querySelectorAll('.desktop-nav-btn').forEach(b => b.classList.remove('active'));
-    const dBtn = document.querySelector(`.desktop-nav-btn[onclick*="${screen}"]`);
+    const dBtn = document.querySelector(`.desktop-nav-btn[data-dscreen="${screen}"]`);
     if(dBtn) dBtn.classList.add('active');
   });
 });
+
 
 setInterval(() => { if (currentUser) renderAll(); }, 5000);
 </script>
