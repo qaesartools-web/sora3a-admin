@@ -679,6 +679,7 @@ window.renderCapStats=function(){
         <div class="cap-stat-item"><div class="cap-stat-v" style="font-size:13px;">${fmt(cap.fee)}</div><div class="cap-stat-l">د.ع توصيل</div></div>
         <div class="cap-stat-item"><div class="cap-stat-v" style="color:var(--yellow);">${toA(cap.count-cap.delivered)}</div><div class="cap-stat-l">غير مكتملة</div></div>
         <div class="cap-stat-item"><div class="cap-stat-v">${cap.count?toA(Math.round(cap.delivered/cap.count*100))+'%':'—'}</div><div class="cap-stat-l">نسبة إنجاز</div></div>
+        <div class="cap-stat-item" style="grid-column:span 3;background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.3);"><div class="cap-stat-v" style="color:#ffa500;font-size:15px;">${fmt(cap.total+cap.fee)}</div><div class="cap-stat-l">د.ع المجموع (مبيعات + توصيل)</div></div>
       </div>
     </div>`).join(''):'<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد بيانات</div>';
   document.getElementById('capStatsList').innerHTML=html;
