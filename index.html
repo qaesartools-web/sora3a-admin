@@ -251,7 +251,10 @@ body.rest-mode .admin-only{display:none!important;}
 
     <!-- Orders -->
     <div class="screen" id="scOrders">
-      <div class="filter-row" id="ordersFilter">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+  <button class="btn-sm btn-del" onclick="deleteAllOrders()" style="font-size:12px;padding:6px 12px;">🗑️ حذف الكل</button>
+</div>
+<div class="filter-row" id="ordersFilter">
         <button class="filter-btn on" onclick="setOF('all',this)">📋 الكل</button>
         <button class="filter-btn" onclick="setOF('delivery',this)">🏍️ دلفري</button>
         <button class="filter-btn" onclick="setOF('salon',this)">🪑 صالة</button>
@@ -618,6 +621,9 @@ function orderCard(o){
       ${o.captainName?`<span style="font-size:11px;color:var(--muted);">🛵 ${o.captainName}</span>`:''}
       ${isAdmin()&&o.restaurantName?`<span style="font-size:11px;color:var(--muted);">🍽️ ${o.restaurantName}</span>`:''}
     </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="btn-sm btn-del" onclick="deleteOrder('${o.id}')">🗑️ حذف</button>
+    </div>
   </div>`;
 }
 
@@ -706,6 +712,31 @@ window.addCaptain=async function(){
     toast('❌ '+e.message,'error');
     console.error(e);
   }
+};
+
+window.deleteOrder=async function(id){
+  if(!confirm('حذف هذا الطلب نهائياً؟'))return;
+  try{
+    await window._fb.deleteDoc(window._fb.doc(window._fb.db,'orders',id));
+    toast('🗑️ تم حذف الطلب');
+  }catch(e){alert('خطأ: '+e.message);}
+};
+
+window.deleteAllOrders=async function(){
+  const fil=document.querySelectorAll('#ordersList .order-row');
+  if(!fil.length){toast('لا توجد طلبات');return;}
+  if(!confirm(`⚠️ حذف ${fil.length} طلب؟ هذا لا يمكن التراجع عنه!`))return;
+  try{
+    // get visible order ids from current filter
+    let orders=allOrders;
+    if(orderFilter==='delivery')orders=allOrders.filter(o=>!o.orderType||o.orderType==='delivery');
+    else if(orderFilter==='salon')orders=allOrders.filter(o=>o.orderType==='salon');
+    else if(orderFilter==='takeaway')orders=allOrders.filter(o=>o.orderType==='takeaway');
+    else if(orderFilter==='pending')orders=allOrders.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
+    else if(orderFilter==='delivered')orders=allOrders.filter(o=>o.status==='delivered');
+    await Promise.all(orders.map(o=>window._fb.deleteDoc(window._fb.doc(window._fb.db,'orders',o.id))));
+    toast('🗑️ تم حذف '+orders.length+' طلب');
+  }catch(e){alert('خطأ: '+e.message);}
 };
 
 window.deleteCaptain=async function(id){
