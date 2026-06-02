@@ -4,2624 +4,868 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0f1115">
-<title>سرعة - لوحة الإدارة المتقدمة</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=Reem+Kufi:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="إدارة سرعة">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>سرعة — الإدارة</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg: #0f1115; --panel: #161922; --panel-2: #1d212c; --line: #262b38;
-  --text: #e8eaf0; --muted: #8a93a6; --accent: #ff6b3d; --accent-2: #ffb84d;
-  --success: #2ecc71; --danger: #ff4757; --info: #4dabf7; --warning: #ffc83d;
-  --purple: #a855f7; --pink: #ec4899; --role-color: #ff6b3d;
+:root{
+  --bg:#0f1115; --panel:#161922; --panel2:#1d2230; --line:#262b38;
+  --text:#e8eaf0; --muted:#8a93a6; --accent:#ff6b3d; --accent2:#ffb84d;
+  --green:#2ecc71; --red:#ff4757; --blue:#4dabf7; --yellow:#ffc83d; --purple:#a855f7;
 }
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 
 /* ── SPLASH ── */
-#splash{position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0f1115 0%,#1a0a05 50%,#0f1115 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s;}
+#splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:radial-gradient(ellipse at 30% 30%,rgba(255,107,61,.2),transparent 60%),
+             radial-gradient(ellipse at 70% 70%,rgba(255,184,77,.15),transparent 60%),#0f1115;
+  transition:opacity .6s;}
 #splash.hide{opacity:0;pointer-events:none;}
-.sp-logo{width:90px;height:90px;background:linear-gradient(135deg,#ff6b3d,#ffb84d);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:40px;box-shadow:0 0 60px rgba(255,107,61,.5);animation:spPulse 1.5s ease-in-out infinite;margin-bottom:20px;}
-@keyframes spPulse{0%,100%{transform:scale(1);box-shadow:0 0 40px rgba(255,107,61,.4);}50%{transform:scale(1.06);box-shadow:0 0 80px rgba(255,107,61,.7);}}
-.sp-title{font-size:32px;font-weight:900;background:linear-gradient(135deg,#ff6b3d,#ffb84d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:fadeUp .8s ease both;}
-.sp-sub{font-size:13px;color:#8a93a6;margin-top:6px;animation:fadeUp .8s ease .2s both;}
-.sp-dots{display:flex;gap:8px;margin-top:28px;animation:fadeUp .8s ease .4s both;}
-.sp-dot{width:8px;height:8px;border-radius:50%;background:#ff6b3d;animation:dotB 1.2s ease infinite;}
-.sp-dot:nth-child(2){animation-delay:.2s;background:#ffb84d;}
-.sp-dot:nth-child(3){animation-delay:.4s;background:rgba(255,107,61,.4);}
-@keyframes dotB{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
+.sp-ring{width:110px;height:110px;border-radius:50%;border:3px solid rgba(255,107,61,.3);display:flex;align-items:center;justify-content:center;animation:spRing 2s ease-in-out infinite;margin-bottom:24px;position:relative;}
+.sp-ring::before{content:'';position:absolute;inset:-8px;border-radius:50%;border:2px solid rgba(255,184,77,.2);animation:spRing 2s ease-in-out infinite reverse;}
+.sp-logo{width:80px;height:80px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:36px;box-shadow:0 0 40px rgba(255,107,61,.4);}
+@keyframes spRing{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+.sp-title{font-size:38px;font-weight:900;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:fadeUp .8s ease both;}
+.sp-sub{font-size:14px;color:var(--muted);margin-top:6px;animation:fadeUp .8s ease .2s both;}
+.sp-bar{width:200px;height:3px;background:rgba(255,107,61,.2);border-radius:3px;margin-top:32px;overflow:hidden;animation:fadeUp .8s ease .4s both;}
+.sp-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;animation:spFill 2s ease forwards;}
+@keyframes spFill{from{width:0;}to{width:100%;}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
 
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 80px; }
-.login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
-  background-image: radial-gradient(circle at 20% 30%, rgba(255, 107, 61, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 80% 70%, rgba(255, 184, 77, 0.1) 0%, transparent 50%); }
-.login-card { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 30px 24px; max-width: 420px; width: 100%; }
-.login-logo { width: 70px; height: 70px; background: linear-gradient(135deg, var(--role-color), var(--accent-2)); border-radius: 18px;
-  display: grid; place-items: center; font-size: 34px; margin: 0 auto 18px; box-shadow: 0 10px 30px rgba(255, 107, 61, 0.4); }
-.login-title { text-align: center; font-family: 'Reem Kufi'; font-size: 24px; margin-bottom: 6px; }
-.login-subtitle { text-align: center; color: var(--muted); font-size: 13px; margin-bottom: 24px; }
-.cloud-status { display: flex; align-items: center; gap: 6px; background: rgba(46, 204, 113, 0.1); border: 1px solid var(--success);
-  color: var(--success); padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; margin: 0 auto 16px; width: fit-content; }
-.role-badge-top { background: rgba(255, 107, 61, 0.15); border: 1px solid var(--role-color); color: var(--role-color);
-  padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; text-align: center; margin: 0 auto 18px; width: fit-content; }
-.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: blink 1.5s infinite; display: inline-block; margin-left: 4px; }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-header { background: linear-gradient(135deg, #1a1d28, #161922); border-bottom: 1px solid var(--line); padding: 12px 14px;
-  position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.header-logo { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
-.header-logo-mark { width: 36px; height: 36px; background: linear-gradient(135deg, var(--role-color), var(--accent-2));
-  border-radius: 10px; display: grid; place-items: center; font-size: 17px; flex-shrink: 0; }
-.header-logo h1 { font-family: 'Reem Kufi'; font-size: 14px; }
-.header-logo p { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.header-actions { display: flex; gap: 6px; align-items: center; }
-.alert-bell { position: relative; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
-  padding: 7px 10px; border-radius: 8px; cursor: pointer; font-size: 14px; }
-.alert-bell.has-alerts { color: var(--warning); animation: bell-shake 0.5s ease infinite; }
-@keyframes bell-shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(10deg); } 75% { transform: rotate(-10deg); } }
-.alert-bell-count { position: absolute; top: -6px; right: -6px; background: var(--danger); color: white;
-  font-size: 9px; min-width: 18px; height: 18px; border-radius: 9px; padding: 0 4px;
-  display: flex; align-items: center; justify-content: center; font-weight: 700; }
-.logout-btn { background: var(--panel-2); border: 1px solid var(--line); color: var(--danger); padding: 6px 10px;
-  border-radius: 8px; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 700; }
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--panel); border-top: 1px solid var(--line);
-  display: flex; z-index: 200; padding-bottom: env(safe-area-inset-bottom); }
-.nav-btn { flex: 1; padding: 10px 4px; background: transparent; border: none; color: var(--muted); font-family: inherit;
-  font-size: 10px; font-weight: 700; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; position: relative; }
-.nav-btn.active { color: var(--role-color); }
-.nav-icon { font-size: 19px; }
-main { padding: 14px; max-width: 600px; margin: 0 auto; }
-.screen { display: none; animation: fadeIn 0.25s; }
-.screen.active { display: block; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
-.card-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; font-family: 'Reem Kufi'; }
-.card-title .dot { width: 4px; height: 18px; background: var(--role-color); border-radius: 3px; }
-.card-title .count { background: var(--panel-2); color: var(--muted); padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-right: auto; }
-.card-subtitle { font-size: 11px; color: var(--muted); margin-bottom: 10px; line-height: 1.6; }
-.form-group { margin-bottom: 12px; }
-.form-group label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 500; }
-.form-group input, .form-group textarea, .form-group select { width: 100%; padding: 11px 12px; background: var(--panel-2);
-  border: 1px solid var(--line); border-radius: 10px; color: var(--text); font-family: inherit; font-size: 14px; }
-.form-group input:focus, .form-group select:focus { outline: none; border-color: var(--role-color); }
-.form-input { width: 100%; padding: 11px 12px; background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: 10px; color: var(--text); font-family: inherit; font-size: 14px; }
-.form-input:focus { outline: none; border-color: var(--role-color); }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.form-error { background: rgba(255, 71, 87, 0.1); border: 1px solid var(--danger); color: var(--danger);
-  padding: 10px; border-radius: 8px; font-size: 12px; margin-bottom: 12px; }
-.btn { padding: 12px 18px; border: none; border-radius: 10px; font-family: inherit; font-size: 14px; font-weight: 700;
-  cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
-.btn:active { transform: scale(0.98); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: linear-gradient(135deg, var(--role-color), var(--accent-2)); color: white; box-shadow: 0 4px 14px rgba(255, 107, 61, 0.25); }
-.btn-success { background: var(--success); color: white; }
-.btn-danger { background: var(--danger); color: white; }
-.btn-ghost { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
-.btn-sm { padding: 7px 12px; font-size: 12px; width: auto; }
-.hint { background: rgba(77, 171, 247, 0.08); border: 1px solid rgba(77, 171, 247, 0.3); border-radius: 10px;
-  padding: 10px 12px; font-size: 11px; color: var(--info); margin-bottom: 12px; line-height: 1.6; }
-.hint-warning { background: rgba(255, 200, 61, 0.08); border-color: rgba(255, 200, 61, 0.3); color: var(--warning); }
-.hint-success { background: rgba(46, 204, 113, 0.08); border-color: rgba(46, 204, 113, 0.3); color: var(--success); }
-.hint-danger { background: rgba(255, 71, 87, 0.08); border-color: rgba(255, 71, 87, 0.3); color: var(--danger); }
-/* إخفاء عناصر Super Admin عن مدير المطعم */
-.superadmin-only { display: flex !important; }
-body.restaurant-mode .superadmin-only { display: none !important; }
-.restaurant-mode-banner { display: none; background: linear-gradient(135deg, rgba(255,107,61,0.15), rgba(255,184,77,0.1));
-  border: 1px solid var(--role-color); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px;
-  font-size: 13px; font-weight: 700; color: var(--accent); text-align: center; }
-body.restaurant-mode .restaurant-mode-banner { display: block; }
-.stats-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
-.stat-mini { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 6px; text-align: center; position: relative; overflow: hidden; }
-.stat-mini-value { font-size: 18px; font-weight: 900; font-family: 'Reem Kufi'; color: var(--role-color); transition: all 0.3s; }
-.stat-mini-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
-.stat-mini.flash { animation: flash 0.6s ease; }
-@keyframes flash { 0%, 100% { background: var(--panel); } 50% { background: rgba(46, 204, 113, 0.15); } }
-.live-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-.live-stat-card { background: linear-gradient(135deg, var(--panel), var(--panel-2)); border: 1px solid var(--line);
-  border-radius: 14px; padding: 12px; position: relative; overflow: hidden; }
-.live-stat-card.highlight { border-color: var(--role-color); }
-.live-stat-card .live-dot { position: absolute; top: 8px; right: 8px;
-  width: 8px; height: 8px; border-radius: 50%; background: var(--success); animation: blink 1.5s infinite; }
-.live-stat-icon { font-size: 22px; margin-bottom: 6px; }
-.live-stat-value { font-size: 22px; font-weight: 900; font-family: 'Reem Kufi'; color: var(--text); }
-.live-stat-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.order-item { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; position: relative; cursor: pointer; transition: transform 0.2s; }
-.order-item:active { transform: scale(0.98); }
-.order-item.late { border-color: var(--danger); }
-.order-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; }
-.order-id { font-weight: 700; font-size: 13px; }
-.order-time { font-size: 11px; color: var(--muted); }
-.order-info { font-size: 12px; color: var(--muted); margin: 3px 0; line-height: 1.5; }
-.late-badge { position: absolute; top: -8px; right: 8px; background: var(--danger); color: white; padding: 3px 8px;
-  border-radius: 10px; font-size: 10px; font-weight: 700; animation: pulse-late 1.2s infinite; }
-@keyframes pulse-late { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.6); } 50% { box-shadow: 0 0 0 6px rgba(255, 71, 87, 0); } }
-.badge { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: 700; white-space: nowrap; }
-.badge-pending { background: rgba(255, 200, 61, 0.15); color: var(--warning); }
-.badge-accepted { background: rgba(77, 171, 247, 0.15); color: var(--info); }
-.badge-pickup { background: rgba(255, 107, 61, 0.15); color: var(--accent); }
-.badge-delivering { background: rgba(255, 184, 77, 0.2); color: var(--accent-2); }
-.badge-delivered { background: rgba(46, 204, 113, 0.15); color: var(--success); }
-.badge-cancelled { background: rgba(255, 71, 87, 0.15); color: var(--danger); }
-.badge-success { background: rgba(46, 204, 113, 0.15); color: var(--success); }
-.badge-warning { background: rgba(255, 200, 61, 0.15); color: var(--warning); }
-.badge-danger { background: rgba(255, 71, 87, 0.15); color: var(--danger); }
-.sub-tabs { display: flex; gap: 4px; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px; }
-.sub-tab { padding: 7px 12px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
-  border-radius: 18px; font-family: inherit; font-size: 11px; font-weight: 700; white-space: nowrap; cursor: pointer; }
-.sub-tab.active { background: var(--role-color); color: white; border-color: var(--role-color); }
-.sub-screen { display: none; }
-.sub-screen.active { display: block; }
-#liveMap { height: 380px; border-radius: 12px; border: 1px solid var(--line); margin-bottom: 12px; }
-.leaflet-popup-content-wrapper { background: var(--panel); color: var(--text); border-radius: 10px; }
-.leaflet-popup-tip { background: var(--panel); }
-.leaflet-popup-content { font-family: 'Tajawal', sans-serif; }
-.map-controls { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
-.map-control-btn { flex: 1; min-width: 80px; padding: 8px 10px; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
-  border-radius: 10px; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 4px; }
-.map-control-btn.active { background: var(--role-color); border-color: var(--role-color); color: white; }
-.map-legend { display: flex; gap: 12px; flex-wrap: wrap; background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: 10px; padding: 8px 12px; font-size: 11px; margin-bottom: 12px; }
-.legend-item { display: flex; align-items: center; gap: 6px; }
-.legend-dot { width: 12px; height: 12px; border-radius: 50%; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(6px); z-index: 9998;
-  display: none; align-items: flex-end; justify-content: center; }
-.modal-overlay.show { display: flex; }
-.modal { background: var(--panel); border: 1px solid var(--line); border-top-left-radius: 20px; border-top-right-radius: 20px;
-  padding: 20px; width: 100%; max-height: 90vh; overflow-y: auto; animation: slideUp 0.3s; }
-@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-.modal h3 { font-family: 'Reem Kufi'; margin-bottom: 12px; font-size: 17px; }
-.credentials-box { background: linear-gradient(135deg, rgba(46, 204, 113, 0.1), rgba(255, 184, 77, 0.05));
-  border: 1px solid var(--success); border-radius: 10px; padding: 12px; margin-bottom: 10px; font-size: 12px; }
-.credentials-box .copy-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; gap: 8px; }
-.credentials-box .copy-row strong { font-family: monospace; color: var(--success); }
-.entity-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 8px; }
-.entity-card h4 { font-family: 'Reem Kufi'; font-size: 14px; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center; }
-.entity-card .meta { font-size: 11px; color: var(--muted); line-height: 1.6; }
-.entity-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
-.empty { text-align: center; padding: 28px 14px; color: var(--muted); }
-.empty-icon { font-size: 38px; margin-bottom: 8px; opacity: 0.5; }
-.empty p { font-size: 13px; }
-.toast { position: fixed; bottom: 86px; left: 14px; right: 14px; background: var(--panel); border: 1px solid var(--success);
-  border-radius: 12px; padding: 11px 14px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index: 1000; transform: translateY(150px);
-  transition: transform 0.3s; display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; }
-.toast.show { transform: translateY(0); }
-.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white; border-radius: 50%; animation: spin 0.6s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.small-money { font-variant-numeric: tabular-nums; font-weight: 700; }
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-thumb { background: var(--line); }
-.captain-marker-icon { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: 2px solid white;
-  border-radius: 50%; width: 36px !important; height: 36px !important; display: flex !important; align-items: center;
-  justify-content: center; font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.4); }
-.captain-marker-icon.busy { background: linear-gradient(135deg, var(--info), #2980b9); }
-.captain-marker-icon.offline { background: linear-gradient(135deg, #555, #333); opacity: 0.6; }
-.order-detail-row { display: flex; justify-content: space-between; padding: 6px 0; gap: 8px; font-size: 13px; }
-.order-detail-row > span:first-child { color: var(--muted); white-space: nowrap; }
-.order-detail-row > span:last-child { font-weight: 700; text-align: left; }
-.delivery-proof { background: var(--panel); border: 1px solid var(--success); border-radius: 10px; padding: 10px;
-  margin-top: 10px; font-size: 12px; }
-.delivery-proof img { max-width: 100%; border-radius: 8px; margin-top: 6px; cursor: pointer; }
-.chart-container { background: var(--panel-2); border-radius: 12px; padding: 12px; margin-bottom: 12px; position: relative; height: 240px; }
-.chart-container canvas { max-height: 220px; }
-.period-selector { display: flex; gap: 4px; margin-bottom: 12px; background: var(--panel-2); padding: 3px; border-radius: 10px; }
-.period-btn { flex: 1; padding: 7px 8px; background: transparent; border: none; color: var(--muted);
-  border-radius: 8px; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; }
-.period-btn.active { background: var(--role-color); color: white; }
-.leaderboard-item { display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
-.leaderboard-rank { font-family: 'Reem Kufi'; font-weight: 900; font-size: 16px;
-  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--panel); flex-shrink: 0; }
-.leaderboard-rank.gold { background: linear-gradient(135deg, #FFD700, #FFA500); color: #000; }
-.leaderboard-rank.silver { background: linear-gradient(135deg, #C0C0C0, #808080); color: #000; }
-.leaderboard-rank.bronze { background: linear-gradient(135deg, #CD7F32, #8B4513); color: white; }
-.leaderboard-info { flex: 1; min-width: 0; }
-.leaderboard-name { font-weight: 700; font-size: 13px; }
-.leaderboard-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.leaderboard-value { text-align: left; font-weight: 700; font-size: 13px; color: var(--role-color); flex-shrink: 0; }
-.leaderboard-stars { display: inline-flex; gap: 1px; font-size: 11px; }
-.leaderboard-stars .full { color: var(--warning); }
-.leaderboard-stars .empty { color: var(--line); }
-.timeline { position: relative; padding-right: 24px; margin-top: 12px; }
-.timeline::before { content: ''; position: absolute; top: 0; bottom: 0; right: 7px; width: 2px; background: var(--line); }
-.timeline-item { position: relative; padding-bottom: 14px; }
-.timeline-item:last-child { padding-bottom: 0; }
-.timeline-dot { position: absolute; right: -22px; top: 2px; width: 16px; height: 16px; border-radius: 50%;
-  background: var(--panel); border: 2px solid var(--line); }
-.timeline-dot.done { background: var(--success); border-color: var(--success); }
-.timeline-dot.active { background: var(--role-color); border-color: var(--role-color);
-  box-shadow: 0 0 0 4px rgba(255, 107, 61, 0.2); animation: pulse-dot 1.5s infinite; }
-@keyframes pulse-dot { 0%, 100% { box-shadow: 0 0 0 4px rgba(255, 107, 61, 0.2); } 50% { box-shadow: 0 0 0 8px rgba(255, 107, 61, 0); } }
-.timeline-content { background: var(--panel-2); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
-.timeline-content strong { display: block; font-size: 13px; margin-bottom: 2px; }
-.timeline-time { color: var(--muted); font-size: 10px; }
-.alert-item { display: flex; align-items: flex-start; gap: 10px; background: var(--panel-2);
-  border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; border-right: 3px solid var(--warning); }
-.alert-item.danger { border-right-color: var(--danger); }
-.alert-item.info { border-right-color: var(--info); }
-.alert-icon { font-size: 18px; flex-shrink: 0; }
-.alert-content { flex: 1; min-width: 0; }
-.alert-title { font-weight: 700; font-size: 13px; margin-bottom: 2px; }
-.alert-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
-.order-timer { display: inline-flex; align-items: center; gap: 4px;
-  background: rgba(255, 107, 61, 0.1); color: var(--accent);
-  padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.order-timer.warning { background: rgba(255, 200, 61, 0.15); color: var(--warning); }
-.order-timer.danger { background: rgba(255, 71, 87, 0.15); color: var(--danger); animation: blink 1.5s infinite; }
-.eta-display { display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(77, 171, 247, 0.1); color: var(--info);
-  padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; }
+/* ── LOGIN ── */
+#loginPage{min-height:100vh;display:none;align-items:center;justify-content:center;padding:20px;
+  background:radial-gradient(ellipse at 20% 50%,rgba(255,107,61,.1),transparent 55%),
+             radial-gradient(ellipse at 80% 50%,rgba(255,184,77,.07),transparent 55%);}
+.lbox{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:36px 28px;width:100%;max-width:400px;box-shadow:0 40px 100px rgba(0,0,0,.6);}
+.l-icon{width:72px;height:72px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 18px;box-shadow:0 8px 30px rgba(255,107,61,.4);}
+.l-title{text-align:center;font-size:24px;font-weight:900;margin-bottom:4px;}
+.l-sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px;}
+.l-badge{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.3);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--green);margin-bottom:20px;}
+.l-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:blink 1.5s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+.l-inp{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:14px;outline:none;transition:border-color .2s;margin-bottom:10px;}
+.l-inp:focus{border-color:var(--accent);}
+.l-err{background:rgba(255,71,87,.1);border:1px solid var(--red);color:var(--red);padding:10px 12px;border-radius:10px;font-size:12px;margin-bottom:10px;display:none;}
+.l-btn{width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(255,107,61,.35);}
+.l-hint{text-align:center;color:var(--muted);font-size:11px;margin-top:12px;}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 
-/* ── RESPONSIVE & IMPROVED DESIGN ── */
-@media (min-width: 768px) {
-  body { padding-bottom: 0; }
-  main { max-width: 800px !important; }
-  .login-card { max-width: 480px; padding: 40px 36px; }
-  .stats-row { grid-template-columns: repeat(4, 1fr) !important; }
-  .form-row { grid-template-columns: 1fr 1fr; }
-  .order-item { padding: 16px; }
-  header { padding: 14px 24px; }
-}
+/* ── APP ── */
+#appPage{display:none;}
 
-@media (min-width: 1024px) {
-  main { max-width: 960px !important; padding: 20px 24px; }
-  .stats-row { grid-template-columns: repeat(5, 1fr) !important; }
-  .bottom-nav { display: none !important; }
-  .desktop-nav {
-    display: flex !important;
-    background: var(--panel);
-    border-bottom: 1px solid var(--line);
-    padding: 0 24px;
-    gap: 4px;
-  }
-  .desktop-nav-btn {
-    padding: 14px 18px;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-family: 'Tajawal', sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    border-bottom: 3px solid transparent;
-    transition: all .2s;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .desktop-nav-btn.active {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
-  }
-  .desktop-nav-btn:hover { color: var(--text); }
-  body { padding-bottom: 0; }
-  .login-card { max-width: 520px; }
-}
+/* Header */
+.hdr{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 20px rgba(0,0,0,.3);}
+.hdr-logo{font-size:20px;font-weight:900;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.hdr-user{display:flex;align-items:center;gap:10px;}
+.hdr-name{font-size:12px;color:var(--muted);}
+.hdr-role{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;}
+.role-admin{background:rgba(255,107,61,.2);color:var(--accent);}
+.role-rest{background:rgba(77,171,247,.2);color:var(--blue);}
+.logout-btn{background:transparent;border:1px solid var(--line);color:var(--red);padding:5px 12px;border-radius:8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:11px;}
 
-/* Better login on desktop */
-.login-screen {
-  background-image: 
-    radial-gradient(ellipse at 20% 30%, rgba(255,107,61,.18) 0%, transparent 55%),
-    radial-gradient(ellipse at 80% 70%, rgba(255,184,77,.12) 0%, transparent 55%),
-    radial-gradient(ellipse at 50% 50%, rgba(168,85,247,.06) 0%, transparent 60%);
-}
-.login-card {
-  box-shadow: 0 30px 80px rgba(0,0,0,.5), 0 0 0 1px rgba(255,107,61,.1);
-}
+/* Desktop Nav */
+.dnav{background:var(--panel2);border-bottom:1px solid var(--line);display:flex;overflow-x:auto;padding:0 16px;}
+.dnav::-webkit-scrollbar{height:0;}
+.dnav-btn{flex-shrink:0;padding:13px 18px;background:transparent;border:none;border-bottom:3px solid transparent;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;white-space:nowrap;}
+.dnav-btn.on{color:var(--accent);border-bottom-color:var(--accent);}
+.dnav-btn:hover{color:var(--text);}
 
-/* Better cards */
-.card { transition: box-shadow .2s; }
-.card:hover { box-shadow: 0 4px 20px rgba(0,0,0,.3); }
+/* Mobile Nav */
+.mnav{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--line);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);}
+@media(min-width:900px){.mnav{display:none;}}
+.mnav-btn{flex:1;padding:9px 4px;background:transparent;border:none;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:10px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.mnav-btn.on{color:var(--accent);}
+.mnav-icon{font-size:18px;}
 
-/* Better header */
-header {
-  background: linear-gradient(135deg, #1a1d28, #161922);
-  box-shadow: 0 2px 20px rgba(0,0,0,.3);
-}
+/* Main content */
+.main{padding:16px;max-width:1200px;margin:0 auto;padding-bottom:80px;}
+@media(min-width:900px){.main{padding-bottom:20px;}}
+
+/* Screen */
+.screen{display:none;}
+.screen.on{display:block;}
+
+/* Cards */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;}
+.card-title{font-size:14px;font-weight:900;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.card-title .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+
+/* Stats grid */
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
+@media(min-width:600px){.stats{grid-template-columns:repeat(4,1fr);}}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;text-align:center;transition:all .2s;}
+.stat:hover{border-color:var(--accent);transform:translateY(-2px);}
+.stat-v{font-size:24px;font-weight:900;color:var(--accent);}
+.stat-l{font-size:11px;color:var(--muted);margin-top:4px;}
+
+/* Form */
+.form-group{margin-bottom:12px;}
+.form-group label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:700;}
+.form-inp{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:10px 13px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;transition:border-color .2s;}
+.form-inp:focus{border-color:var(--accent);}
+.form-sel{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:10px 13px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media(max-width:500px){.form-row{grid-template-columns:1fr;}}
+.btn-primary{width:100%;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px);}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+
+/* Entity cards */
+.entity{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;transition:all .2s;}
+.entity:hover{border-color:rgba(255,107,61,.3);}
+.entity-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.entity-icon{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,rgba(255,107,61,.2),rgba(255,184,77,.2));display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+.entity-name{font-size:14px;font-weight:900;}
+.entity-sub{font-size:11px;color:var(--muted);}
+.entity-meta{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px;}
+.meta-item{background:var(--panel);border-radius:8px;padding:6px 8px;font-size:11px;color:var(--muted);}
+.meta-item strong{color:var(--text);display:block;}
+.entity-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.btn-sm{padding:6px 12px;border-radius:8px;border:none;font-family:'Tajawal',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-edit{background:rgba(77,171,247,.15);color:var(--blue);}
+.btn-edit:hover{background:rgba(77,171,247,.3);}
+.btn-del{background:rgba(255,71,87,.15);color:var(--red);}
+.btn-del:hover{background:rgba(255,71,87,.3);}
+.btn-cap{background:rgba(255,107,61,.15);color:var(--accent);}
+.btn-cap:hover{background:rgba(255,107,61,.3);}
+
+/* Captain stats */
+.cap-stat-card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;}
+.cap-stat-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.cap-av{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.cap-stats-g{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.cap-stat-item{background:var(--panel);border-radius:8px;padding:8px;text-align:center;}
+.cap-stat-v{font-size:16px;font-weight:900;color:var(--accent);}
+.cap-stat-l{font-size:10px;color:var(--muted);}
+
+/* Orders list */
+.order-row{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:8px;transition:all .2s;}
+.order-row:hover{border-color:rgba(255,107,61,.3);}
+.order-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.order-id{font-weight:900;font-size:13px;font-family:monospace;}
+.order-time{font-size:11px;color:var(--muted);}
+.badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;}
+.b-pending{background:rgba(255,200,61,.15);color:#ffc83d;}
+.b-accepted{background:rgba(77,171,247,.15);color:var(--blue);}
+.b-delivering{background:rgba(255,184,77,.15);color:#ffb84d;}
+.b-delivered{background:rgba(46,204,113,.15);color:var(--green);}
+.b-cancelled{background:rgba(255,71,87,.15);color:var(--red);}
+.b-salon{background:rgba(168,85,247,.15);color:var(--purple);}
+.b-takeaway{background:rgba(255,200,61,.15);color:#ffc83d;}
+
+/* Filters */
+.filter-row{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px;}
+.filter-row::-webkit-scrollbar{height:0;}
+.filter-btn{flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid var(--line);background:transparent;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:11px;font-weight:700;cursor:pointer;}
+.filter-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+/* Date filter */
+.date-filter{display:flex;gap:8px;margin-bottom:12px;}
+.date-filter input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:12px;outline:none;}
+.date-filter button{padding:7px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
+
+/* Modal */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:5000;display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-ov.open{display:flex;}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:16px;font-weight:900;margin-bottom:16px;}
+.modal-btns{display:flex;gap:8px;margin-top:16px;}
+.modal-btns .btn-save{flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;}
+.modal-btns .btn-cancel{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:13px;cursor:pointer;}
+
+/* Toast */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;z-index:9999;transition:transform .3s;white-space:nowrap;}
+.toast.on{transform:translateX(-50%) translateY(0);}
+
+/* Restaurant mode banner */
+.rest-banner{background:linear-gradient(135deg,rgba(77,171,247,.1),rgba(77,171,247,.05));border:1px solid rgba(77,171,247,.3);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-weight:700;color:var(--blue);text-align:center;display:none;}
+body.rest-mode .rest-banner{display:block;}
+body.rest-mode .admin-only{display:none!important;}
+
+/* Install btn */
+#installBtn{display:none;position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;border:none;border-radius:20px;padding:8px 18px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;z-index:7000;box-shadow:0 4px 20px rgba(255,107,61,.5);}
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
-
-/* Better buttons */
-.btn-primary { transition: all .2s; }
-.btn-primary:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,107,61,.35); }
-
-/* Desktop nav placeholder */
-.desktop-nav { display: none; }
-
-/* Better stat cards */
-.stat-mini { transition: all .2s; cursor: default; }
-.stat-mini:hover { border-color: var(--accent); transform: translateY(-2px); }
-
-/* Better order items */
-.order-item { transition: all .2s; }
-.order-item:hover { border-color: rgba(255,107,61,.3); }
-
-/* Better inputs */
-.form-group input:focus, .form-group textarea:focus, .form-group select:focus {
-  box-shadow: 0 0 0 3px rgba(255,107,61,.15);
-}
-
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
 </style>
-  
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="الإدارة">
-  <link rel="apple-touch-icon" href="icon-192.png">
-<script>
+</head>
+<body>
 
-</script></head>
-<body><script>
-(function(){
-  if(!navigator.serviceWorker)return;
-  navigator.serviceWorker.getRegistrations().then(function(regs){
-    for(var r of regs){ r.unregister(); }
-  });
-  if(window.caches){
-    caches.keys().then(function(keys){
-      keys.forEach(function(k){ caches.delete(k); });
-    });
-  }
-})();
-</script>
+<!-- SPLASH -->
+<div id="splash">
+  <div class="sp-ring"><div class="sp-logo">📊</div></div>
+  <div class="sp-title">سرعة</div>
+  <div class="sp-sub">لوحة الإدارة المتقدمة</div>
+  <div class="sp-bar"><div class="sp-bar-fill"></div></div>
+</div>
 
-<div class="login-screen" id="loginScreen" style="display:none;">
-  <div class="login-card">
-    <div class="login-logo">📊</div>
-    <div class="login-title">منصة سرعة</div>
-    <div class="login-subtitle">لوحة الإدارة - النسخة المتقدمة</div>
-    <div class="cloud-status"><span class="sync-dot"></span><span>متصل بـ Firebase</span></div>
-    <div class="role-badge-top">📊 دخول الإدارة والمطاعم</div>
-    <div class="form-error" id="loginError" style="display:none;"></div>
-    <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="loginEmail" placeholder="admin@sora3a.com"></div>
-    <div class="form-group"><label>كلمة المرور</label><input type="password" id="loginPassword" placeholder="••••••••"></div>
-    <button class="btn btn-primary" id="loginBtn">🔐 دخول</button>
-    <div id="createAdminSection" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); display:none;">
-      <p style="color: var(--muted); font-size: 12px; margin-bottom: 12px; text-align: center;">💡 ما عندك حساب بعد؟</p>
-      <button class="btn btn-ghost" onclick="showCreateFirstAdmin()">➕ إنشاء حساب إدارة جديد</button>
-    </div>
+<button id="installBtn" onclick="doInstall()">📲 تثبيت التطبيق</button>
+
+<!-- LOGIN -->
+<div id="loginPage">
+  <div class="lbox">
+    <div class="l-icon">📊</div>
+    <div class="l-title">منصة سرعة</div>
+    <div class="l-sub">لوحة الإدارة المتقدمة</div>
+    <div class="l-badge"><span class="l-dot"></span> متصل بـ Firebase</div>
+    <div class="l-err" id="lErr"></div>
+    <div class="form-group"><label>البريد الإلكتروني</label><input class="l-inp" id="lEmail" type="email" placeholder="admin@sora3a.com" autocomplete="email"></div>
+    <div class="form-group"><label>كلمة المرور</label><input class="l-inp" id="lPass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="l-btn" id="lBtn" onclick="doLogin()">🔐 دخول</button>
+    <div class="l-hint">الإدارة العليا والمطاعم فقط</div>
   </div>
 </div>
 
-<div class="modal-overlay" id="firstAdminModal">
+<!-- APP -->
+<div id="appPage">
+  <div class="hdr">
+    <div class="hdr-logo">🚀 سرعة</div>
+    <div class="hdr-user">
+      <div>
+        <div class="hdr-name" id="hdrName">—</div>
+        <span class="hdr-role" id="hdrRole">—</span>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">خروج</button>
+    </div>
+  </div>
+
+  <!-- Desktop Nav -->
+  <div class="dnav" id="dNav"></div>
+
+  <div class="main">
+    <!-- Dashboard -->
+    <div class="screen on" id="scDash">
+      <div class="rest-banner" id="restBanner">🍽️ أنت تشوف بيانات مطعمك فقط</div>
+      <div class="stats" id="dashStats"></div>
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> آخر الطلبات</div>
+        <div id="dashOrders"></div>
+      </div>
+    </div>
+
+    <!-- Orders -->
+    <div class="screen" id="scOrders">
+      <div class="filter-row" id="ordersFilter">
+        <button class="filter-btn on" onclick="setOF('all',this)">📋 الكل</button>
+        <button class="filter-btn" onclick="setOF('delivery',this)">🏍️ دلفري</button>
+        <button class="filter-btn" onclick="setOF('salon',this)">🪑 صالة</button>
+        <button class="filter-btn" onclick="setOF('takeaway',this)">🥡 سفري</button>
+        <button class="filter-btn" onclick="setOF('pending',this)">🟡 ينتظر</button>
+        <button class="filter-btn" onclick="setOF('delivered',this)">✅ مسلّمة</button>
+      </div>
+      <div id="ordersList"></div>
+    </div>
+
+    <!-- Captains Stats -->
+    <div class="screen" id="scCaptains">
+      <div class="date-filter">
+        <input type="date" id="capFrom">
+        <input type="date" id="capTo">
+        <button onclick="renderCapStats()">🔍 بحث</button>
+      </div>
+      <div id="capStatsList"></div>
+      <!-- Add Captain Form -->
+      <div class="card" id="addCapForm">
+        <div class="card-title"><span class="dot"></span> ➕ إضافة كابتن</div>
+        <div class="form-group admin-only"><label>المطعم *</label><select class="form-sel" id="ncRest"><option value="">-- اختر --</option></select></div>
+        <div class="form-row">
+          <div class="form-group"><label>الاسم *</label><input class="form-inp" id="ncName" placeholder="اسم الكابتن"></div>
+          <div class="form-group"><label>الهاتف *</label><input class="form-inp" id="ncPhone" placeholder="07xxxxxxxxx" type="tel"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>الإيميل *</label><input class="form-inp" id="ncEmail" type="email" placeholder="captain@sora3a.com"></div>
+          <div class="form-group"><label>كلمة المرور *</label><input class="form-inp" id="ncPass" type="password" placeholder="••••••"></div>
+        </div>
+        <button class="btn-primary" onclick="addCaptain()">➕ إضافة الكابتن</button>
+      </div>
+    </div>
+
+    <!-- Restaurants -->
+    <div class="screen admin-only" id="scRests">
+      <!-- Add Restaurant -->
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> ➕ إضافة مطعم جديد</div>
+        <div class="form-row">
+          <div class="form-group"><label>اسم المطعم *</label><input class="form-inp" id="nrName" placeholder="اسم المطعم"></div>
+          <div class="form-group"><label>المنطقة *</label><input class="form-inp" id="nrArea" placeholder="الحسينية..."></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>الإيميل *</label><input class="form-inp" id="nrEmail" type="email" placeholder="rest@sora3a.com"></div>
+          <div class="form-group"><label>الهاتف</label><input class="form-inp" id="nrPhone" type="tel" placeholder="07xxxxxxxxx"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>كلمة المرور *</label><input class="form-inp" id="nrPass" type="password" placeholder="••••••"></div>
+          <div class="form-group"><label>الاشتراك (د.ع/شهر)</label><input class="form-inp" id="nrSub" type="number" placeholder="50000" value="50000"></div>
+        </div>
+        <button class="btn-primary" id="addRestBtn" onclick="addRestaurant()">➕ إضافة المطعم</button>
+      </div>
+      <!-- List -->
+      <div id="restList"></div>
+    </div>
+
+    <!-- Analytics -->
+    <div class="screen" id="scAnalytics">
+      <div class="date-filter">
+        <input type="date" id="anFrom">
+        <input type="date" id="anTo">
+        <button onclick="renderAnalytics()">🔍 بحث</button>
+      </div>
+      <div id="analyticsContent"></div>
+    </div>
+  </div>
+
+  <!-- Mobile Nav -->
+  <nav class="mnav" id="mNav"></nav>
+</div>
+
+<!-- Edit Restaurant Modal -->
+<div class="modal-ov" id="editRestMo">
   <div class="modal">
-    <h3>👑 إنشاء حساب الإدارة</h3>
-    <div class="form-error" id="firstAdminError" style="display:none;"></div>
-    <div class="form-group"><label>اسمك</label><input type="text" id="adminName"></div>
-    <div class="form-group"><label>البريد الإلكتروني</label><input type="email" id="adminEmail"></div>
-    <div class="form-group"><label>كلمة المرور (6+)</label><input type="password" id="adminPassword"></div>
-    <button class="btn btn-primary" onclick="createFirstAdmin()">✓ إنشاء الحساب</button>
-    <button class="btn btn-ghost" onclick="closeModal('firstAdminModal')" style="margin-top: 8px;">إلغاء</button>
+    <div class="modal-title">✏️ تعديل بيانات المطعم</div>
+    <input type="hidden" id="erId">
+    <div class="form-group"><label>اسم المطعم *</label><input class="form-inp" id="erName"></div>
+    <div class="form-group"><label>المنطقة</label><input class="form-inp" id="erArea"></div>
+    <div class="form-group"><label>الإيميل الجديد *</label><input class="form-inp" id="erEmail" type="email"></div>
+    <div class="form-group"><label>الهاتف</label><input class="form-inp" id="erPhone" type="tel"></div>
+    <div class="form-group"><label>الاشتراك (د.ع/شهر)</label><input class="form-inp" id="erSub" type="number"></div>
+    <div class="form-group"><label>كلمة المرور الجديدة (اتركها فارغة إذا لا تريد تغييرها)</label><input class="form-inp" id="erPass" type="password" placeholder="••••••"></div>
+    <div class="modal-btns">
+      <button class="btn-save" onclick="saveRest()">✅ حفظ</button>
+      <button class="btn-cancel" onclick="closeMo('editRestMo')">إلغاء</button>
+    </div>
   </div>
 </div>
 
-<div id="appContainer" style="display:none;">
+<div class="toast" id="toast"></div>
 
-<header>
-  <div class="header-logo">
-    <div class="header-logo-mark">📊</div>
-    <div style="min-width: 0; flex: 1;">
-      <h1 id="headerTitle">لوحة الإدارة <span class="sync-dot"></span></h1>
-      <span id="roleBadgeHeader" style="display:none; background:rgba(255,107,61,0.15); border:1px solid var(--role-color); color:var(--role-color); padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700;"></span>
-      <p id="hSubtitle">قيصر</p>
-    </div>
-  </div>
-  <div class="header-actions">
-    <button class="alert-bell" id="alertBell" onclick="switchScreen('alerts')">
-      🔔
-      <span class="alert-bell-count" id="alertCount" style="display:none">0</span>
-    </button>
-    <button class="logout-btn" onclick="logout()">خروج</button>
-  </div>
-</header>
-
-<div class="desktop-nav" id="desktopNav">
-  <button class="desktop-nav-btn active" data-dscreen="dashboard">🏠 الرئيسية</button>
-  <button class="desktop-nav-btn" data-dscreen="orders">📋 الطلبات</button>
-  <button class="desktop-nav-btn" data-dscreen="map">🗺️ الخريطة</button>
-  <button class="desktop-nav-btn" data-dscreen="manage">⚙️ إدارة (مطاعم/كباتن)</button>
-  <button class="desktop-nav-btn" data-dscreen="analytics">📊 التحليلات</button>
-</div>
-
-<main>
-
-<section class="screen active" id="screen-dashboard">
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> ⚡ لحظة بلحظة</div>
-    <div class="card-subtitle">إحصائيات فورية - تتحدث تلقائياً</div>
-    <div class="live-stats">
-      <div class="live-stat-card highlight">
-        <div class="live-dot"></div>
-        <div class="live-stat-icon">🛵</div>
-        <div class="live-stat-value" id="live-active">0</div>
-        <div class="live-stat-label">طلبات نشطة الآن</div>
-      </div>
-      <div class="live-stat-card">
-        <div class="live-dot"></div>
-        <div class="live-stat-icon">📡</div>
-        <div class="live-stat-value" id="live-online">0</div>
-        <div class="live-stat-label">كباتن متصلين</div>
-      </div>
-      <div class="live-stat-card">
-        <div class="live-stat-icon">🟡</div>
-        <div class="live-stat-value" id="live-pending">0</div>
-        <div class="live-stat-label">بانتظار قبول</div>
-      </div>
-      <div class="live-stat-card">
-        <div class="live-stat-icon">⚠️</div>
-        <div class="live-stat-value" id="live-late" style="color: var(--danger)">0</div>
-        <div class="live-stat-label">طلبات متأخرة</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 📅 اليوم</div>
-    <div class="stats-row">
-      <div class="stat-mini"><div class="stat-mini-value" id="today-orders">0</div><div class="stat-mini-label">طلبات</div></div>
-      <div class="stat-mini"><div class="stat-mini-value" id="today-delivered">0</div><div class="stat-mini-label">مسلّمة</div></div>
-      <div class="stat-mini"><div class="stat-mini-value small-money" id="today-revenue">0</div><div class="stat-mini-label">عمولة (د.ع)</div></div>
-    </div>
-    <div class="stats-row">
-      <div class="stat-mini"><div class="stat-mini-value" id="today-avg-time">0</div><div class="stat-mini-label">دقيقة متوسط</div></div>
-      <div class="stat-mini"><div class="stat-mini-value" id="today-cancelled">0</div><div class="stat-mini-label">ملغية</div></div>
-      <div class="stat-mini"><div class="stat-mini-value" id="today-success">0%</div><div class="stat-mini-label">نجاح</div></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 🏢 الإجمالي</div>
-    <div class="stats-row">
-      <div class="stat-mini"><div class="stat-mini-value" id="a-restaurants">0</div><div class="stat-mini-label">مطاعم</div></div>
-      <div class="stat-mini"><div class="stat-mini-value" id="a-captains">0</div><div class="stat-mini-label">كباتن</div></div>
-      <div class="stat-mini"><div class="stat-mini-value" id="a-total">0</div><div class="stat-mini-label">كل الطلبات</div></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> ⚡ آخر النشاطات</div>
-    <div id="recentActivity"></div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 🔗 روابط التطبيقات</div>
-    <p style="color: var(--muted); font-size: 12px; margin-bottom: 10px;">شارك هذه الروابط:</p>
-    <div class="hint" style="margin-bottom: 8px;">🍽️ <strong>للمطاعم:</strong><br><span id="restLink" style="word-break: break-all; color: var(--text);"></span></div>
-    <div class="hint">🛵 <strong>للكباتن:</strong><br><span id="capLink" style="word-break: break-all; color: var(--text);"></span></div>
-  </div>
-</section>
-
-<section class="screen" id="screen-analytics">
-  <div class="period-selector">
-    <button class="period-btn active" data-period="7">أسبوع</button>
-    <button class="period-btn" data-period="30">شهر</button>
-    <button class="period-btn" data-period="90">3 أشهر</button>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 📈 الطلبات اليومية</div>
-    <div class="chart-container">
-      <canvas id="chartOrders"></canvas>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 💰 الإيرادات</div>
-    <div class="chart-container">
-      <canvas id="chartRevenue"></canvas>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 🥇 ترتيب الكباتن</div>
-    <div class="card-subtitle">حسب عدد التوصيلات المنجزة</div>
-    <div id="captainLeaderboard"></div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 🏆 ترتيب المطاعم</div>
-    <div class="card-subtitle">حسب عدد الطلبات</div>
-    <div id="restaurantLeaderboard"></div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 📊 توزيع حالات الطلبات</div>
-    <div class="chart-container" style="height: 280px;">
-      <canvas id="chartStatus"></canvas>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> ⏱️ تحليل أوقات المطاعم</div>
-    <div class="card-subtitle">متوسط الأوقات لكل مطعم (بالدقائق)</div>
-    <div id="timingAnalysis"></div>
-  </div>
-</section>
-
-<section class="screen" id="screen-map">
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 🗺️ التتبع الذكي</div>
-    <div class="map-controls">
-      <button class="map-control-btn active" data-layer="markers" onclick="toggleMapLayer('markers')">📍 الكباتن</button>
-      <button class="map-control-btn" data-layer="heatmap" onclick="toggleMapLayer('heatmap')">🔥 الكثافة</button>
-      <button class="map-control-btn" data-layer="tracks" onclick="toggleMapLayer('tracks')">🛤️ المسارات</button>
-    </div>
-    <div id="liveMap"></div>
-    <div class="map-legend">
-      <div class="legend-item"><div class="legend-dot" style="background: var(--accent)"></div><span>متاح</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background: var(--info)"></div><span>مشغول</span></div>
-      <div class="legend-item"><div class="legend-dot" style="background: #555"></div><span>غير متصل</span></div>
-    </div>
-  </div>
-</section>
-
-<section class="screen" id="screen-orders">
-  <div class="sub-tabs">
-    <button class="sub-tab active" data-filter="all">الكل</button>
-    <button class="sub-tab" data-filter="late">⚠️ متأخرة</button>
-    <button class="sub-tab" data-filter="pending">جديدة</button>
-    <button class="sub-tab" data-filter="active">نشطة</button>
-    <button class="sub-tab" data-filter="delivered">مسلّمة</button>
-  </div>
-  <div id="adminOrders"></div>
-</section>
-
-<section class="screen" id="screen-alerts">
-  <div class="card">
-    <div class="card-title"><span class="dot"></span> 🚨 التنبيهات النشطة</div>
-    <div class="card-subtitle">تنبيهات تظهر تلقائياً عند المشاكل</div>
-    <div id="alertsList"></div>
-  </div>
-</section>
-
-<section class="screen" id="screen-manage">
-  <div class="sub-tabs">
-    <button class="sub-tab active" data-manage="restaurants">🍽️ المطاعم</button>
-    <button class="sub-tab" data-manage="captains">🛵 الكباتن</button>
-    <button class="sub-tab" data-manage="financial">💰 المحاسبة</button>
-  </div>
-
-  <div class="sub-screen active" id="manage-restaurants">
-    <div class="card superadmin-only">
-      <div class="card-title"><span class="dot"></span> 🍽️ تسجيل مطعم جديد</div>
-      <div class="hint hint-success">✨ ستبقى مسجل دخول كإدارة!</div>
-      <div class="form-group"><label>اسم المطعم *</label><input type="text" id="newRestName"></div>
-      <div class="form-group"><label>المنطقة *</label><input type="text" id="newRestArea"></div>
-      <div class="form-row">
-        <div class="form-group"><label>الإيميل *</label><input type="email" id="newRestEmail"></div>
-        <div class="form-group"><label>كلمة المرور *</label><input type="text" id="newRestPassword"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>الهاتف</label><input type="tel" id="newRestPhone"></div>
-        <div class="form-group"><label>الاشتراك (د.ع)</label><input type="number" id="newRestSub" value="50000"></div>
-      </div>
-      <button class="btn btn-primary" id="addRestBtn" onclick="addRestaurant()">➕ إضافة المطعم</button>
-    </div>
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> المطاعم <span class="count" id="restCount">0</span></div>
-      <div id="restaurantsList"></div>
-    </div>
-  </div>
-
-  <div class="sub-screen" id="manage-captains">
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> 🛵 تسجيل كابتن جديد</div>
-      <div class="form-group"><label>المطعم *</label><select id="newCapRest"><option value="">-- اختر --</option></select></div>
-      <div class="form-row">
-        <div class="form-group"><label>الاسم *</label><input type="text" id="newCapName"></div>
-        <div class="form-group"><label>الهاتف *</label><input type="tel" id="newCapPhone"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>الإيميل *</label><input type="email" id="newCapEmail"></div>
-        <div class="form-group"><label>كلمة المرور *</label><input type="text" id="newCapPassword"></div>
-      </div>
-      <div class="form-row">
-        <div class="form-group"><label>المركبة</label>
-          <select id="newCapVehicle"><option value="دراجة نارية">🏍️ دراجة نارية</option><option value="سيارة">🚗 سيارة</option></select>
-        </div>
-        <div class="form-group"><label>رقم اللوحة</label><input type="text" id="newCapPlate"></div>
-      </div>
-      <button class="btn btn-primary" id="addCapBtn" onclick="addCaptain()">➕ إضافة الكابتن</button>
-    </div>
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> الكباتن <span class="count" id="capCount">0</span></div>
-      <div id="captainsList"></div>
-    </div>
-  </div>
-
-  <div class="sub-screen" id="manage-financial">
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> 💰 النظام المحاسبي</div>
-      <div class="stats-row" style="grid-template-columns: 1fr 1fr;">
-        <div class="stat-mini"><div class="stat-mini-value small-money" id="f-revenue">0</div><div class="stat-mini-label">إيرادات اليوم</div></div>
-        <div class="stat-mini"><div class="stat-mini-value small-money" id="f-net">0</div><div class="stat-mini-label">صافي الربح</div></div>
-      </div>
-      <div style="display: grid; gap: 8px; margin-top: 12px;">
-        <div class="order-detail-row" style="background: var(--panel-2); padding: 10px; border-radius: 8px;">
-          <span>عمولات (10%)</span><span style="color: var(--success)" id="f-commission">0 د.ع</span>
-        </div>
-        <div class="order-detail-row" style="background: var(--panel-2); padding: 10px; border-radius: 8px;">
-          <span>اشتراكات شهرية</span><span style="color: var(--info)" id="f-subs">0 د.ع</span>
-        </div>
-        <div class="order-detail-row" style="background: var(--panel-2); padding: 10px; border-radius: 8px;">
-          <span>أجور الكباتن</span><span style="color: var(--accent)" id="f-payouts">0 د.ع</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- اختيار التاريخ المرن -->
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> 🗓️ الفترة الزمنية</div>
-      <div class="sub-tabs" style="margin-bottom:10px;">
-        <button class="sub-tab" data-datemode="day" onclick="setDateMode('day')">📅 يوم</button>
-        <button class="sub-tab active" data-datemode="month" onclick="setDateMode('month')">🗓️ شهر</button>
-        <button class="sub-tab" data-datemode="range" onclick="setDateMode('range')">📆 فترة</button>
-        <button class="sub-tab" data-datemode="all" onclick="setDateMode('all')">♾️ الكل</button>
-      </div>
-      <!-- يوم -->
-      <div id="dateMode-day" class="date-mode" style="display:none;">
-        <input type="date" id="accDay" class="form-input" onchange="renderAccounting()">
-      </div>
-      <!-- شهر -->
-      <div id="dateMode-month" class="date-mode">
-        <div style="display:flex; gap:8px;">
-          <select id="accMonth" class="form-input" style="flex:1;" onchange="renderAccounting()"></select>
-          <select id="accYear" class="form-input" style="width:90px;" onchange="renderAccounting()"></select>
-        </div>
-      </div>
-      <!-- فترة -->
-      <div id="dateMode-range" class="date-mode" style="display:none;">
-        <div style="display:flex; gap:8px; align-items:center;">
-          <div style="flex:1;"><label style="font-size:11px; color:var(--muted);">من</label>
-            <input type="date" id="accFrom" class="form-input" onchange="renderAccounting()"></div>
-          <div style="flex:1;"><label style="font-size:11px; color:var(--muted);">إلى</label>
-            <input type="date" id="accTo" class="form-input" onchange="renderAccounting()"></div>
-        </div>
-      </div>
-      <div id="dateRangeLabel" style="margin-top:8px; font-size:12px; color:var(--accent); font-weight:700;"></div>
-    </div>
-
-    <!-- إعدادات العمولة -->
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> ⚙️ إعدادات العمولة</div>
-      <div class="card-subtitle">عدّل عمولة كل مطعم وكابتن — يُحفظ تلقائياً</div>
-      <div class="sub-tabs" style="margin-bottom:10px;">
-        <button class="sub-tab active" data-commtab="rest" onclick="switchCommTab('rest')">🏪 المطاعم</button>
-        <button class="sub-tab" data-commtab="cap" onclick="switchCommTab('cap')">🛵 الكباتن</button>
-      </div>
-      <div id="commTab-rest" class="comm-tab"><div id="restCommissionList"></div></div>
-      <div id="commTab-cap" class="comm-tab" style="display:none;"><div id="capCommissionList"></div></div>
-    </div>
-
-    <!-- حسابات المطاعم -->
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> 🏪 حسابات المطاعم</div>
-      <div class="card-subtitle">العمولات + الاشتراك لكل مطعم</div>
-      <button class="btn btn-primary btn-sm" style="margin-bottom:10px;" onclick="exportRestaurantsExcel()">📊 تصدير Excel</button>
-      <div id="restAccountingList"></div>
-    </div>
-
-    <!-- رواتب الكباتن -->
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> 🛵 رواتب الكباتن</div>
-      <div class="card-subtitle">إجمالي أجور التوصيل المنجزة</div>
-      <button class="btn btn-primary btn-sm" style="margin-bottom:10px;" onclick="exportCaptainsExcel()">📊 تصدير Excel</button>
-      <div id="capSalaryList"></div>
-    </div>
-
-    <!-- تحليل الزبائن -->
-    <div class="card">
-      <div class="card-title"><span class="dot"></span> 👥 تحليل الزبائن</div>
-      <div class="card-subtitle">بحث بالاسم أو رقم الهاتف</div>
-      <div style="display:flex; gap:8px; margin-bottom:10px;">
-        <input type="text" id="custSearch" class="form-input" placeholder="🔍 اسم أو رقم الزبون..." style="flex:1;" oninput="renderCustomers()">
-        <select id="custRestFilter" class="form-input" style="width:120px;" onchange="renderCustomers()">
-          <option value="">كل المطاعم</option>
-        </select>
-      </div>
-      <button class="btn btn-primary btn-sm" style="margin-bottom:10px;" onclick="exportCustomersExcel()">📊 تصدير Excel</button>
-      <div id="customersList"></div>
-    </div>
-  </div>
-</section>
-
-</main>
-
-<nav class="bottom-nav">
-  <button class="nav-btn active" data-screen="dashboard"><div class="nav-icon">🏠</div><div>الرئيسية</div></button>
-  <button class="nav-btn" data-screen="analytics"><div class="nav-icon">📊</div><div>تحليلات</div></button>
-  <button class="nav-btn" data-screen="map"><div class="nav-icon">🗺️</div><div>الخريطة</div></button>
-  <button class="nav-btn" data-screen="orders"><div class="nav-icon">📋</div><div>الطلبات</div></button>
-  <button class="nav-btn superadmin-only" data-screen="manage"><div class="nav-icon">⚙️</div><div>الإدارة</div></button>
-</nav>
-
-</div>
-
-<div class="modal-overlay" id="orderDetailModal">
-  <div class="modal">
-    <h3 id="orderDetailTitle">📋 تفاصيل الطلب</h3>
-    <div id="orderDetailContent"></div>
-    <button class="btn btn-ghost" onclick="closeModal('orderDetailModal')" style="margin-top: 12px;">إغلاق</button>
-  </div>
-</div>
-
-<div class="modal-overlay" id="reassignModal">
-  <div class="modal">
-    <h3>🔄 تغيير الكابتن</h3>
-    <div id="captainSelectList"></div>
-    <button class="btn btn-ghost" onclick="closeModal('reassignModal')" style="margin-top: 10px;">إلغاء</button>
-  </div>
-</div>
-
-<div class="modal-overlay" id="credsModal">
-  <div class="modal">
-    <h3>🎉 تم إنشاء الحساب</h3>
-    <div id="credsContent"></div>
-    <button class="btn btn-primary" onclick="closeModal('credsModal')" style="margin-top: 12px;">حسناً</button>
-  </div>
-</div>
-
-<div class="toast" id="toast"><span id="toastIcon">✅</span><span id="toastText">تم</span></div>
-
+<!-- FIREBASE -->
 <script type="module">
-import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence,
-  getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+  signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc,
+import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
   query, where, orderBy, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyDMqqb4XN25rAM5DBvSuDPjDN1dgcya-zA",
-  authDomain: "sora3a-delivery.firebaseapp.com",
-  projectId: "sora3a-delivery",
-  storageBucket: "sora3a-delivery.firebasestorage.app",
-  messagingSenderId: "774569904586",
-  appId: "1:774569904586:web:e0d2e20d8964e4d6656733"
-};
+const app = initializeApp({
+  apiKey:"AIzaSyDMqqb4XN25rAM5DBvSuDPjDN1dgcya-zA",
+  authDomain:"sora3a-delivery.firebaseapp.com",
+  projectId:"sora3a-delivery",
+  storageBucket:"sora3a-delivery.firebasestorage.app",
+  messagingSenderId:"774569904586",
+  appId:"1:774569904586:web:e0d2e20d8964e4d6656733"
+},"admin-v2");
 
-// IMPORTANT: Named app "sora3a-admin" gives this app an ISOLATED auth session.
-// This prevents the admin from being logged out when restaurant/captain apps
-// are opened in the same browser (each has its own separate session storage).
-const app = initializeApp(firebaseConfig, "sora3a-admin");
-const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
+// Secondary app for creating users without logout
+const app2 = initializeApp({
+  apiKey:"AIzaSyDMqqb4XN25rAM5DBvSuDPjDN1dgcya-zA",
+  authDomain:"sora3a-delivery.firebaseapp.com",
+  projectId:"sora3a-delivery",
+  storageBucket:"sora3a-delivery.firebasestorage.app",
+  messagingSenderId:"774569904586",
+  appId:"1:774569904586:web:e0d2e20d8964e4d6656733"
+},"admin-secondary");
+
+const auth = initializeAuth(app,{persistence:[indexedDBLocalPersistence,browserLocalPersistence]});
+const auth2 = initializeAuth(app2,{persistence:[]});
 const db = getFirestore(app);
-
-window.fb = { app, auth, db, firebaseConfig };
-window.fbFns = { initializeApp, deleteApp, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  signOut, onAuthStateChanged, getAuth, collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc,
-  deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp };
-
-document.getElementById('loginScreen').style.display = 'flex';
-window.dispatchEvent(new Event('firebaseReady'));
-
-// Splash
-setTimeout(()=>{
-  const sp=document.getElementById('splash');
-  sp.classList.add('hide');
-  setTimeout(()=>{
-    sp.style.display='none';
-    document.querySelector('.login-screen').style.display='flex';
-  },600);
-},2500);
-
+window._fb={auth,auth2,db,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged,
+  collection,doc,addDoc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,query,where,orderBy,onSnapshot,serverTimestamp};
+window.dispatchEvent(new Event('fbReady'));
 </script>
 
 <script>
 'use strict';
 
-// ============ STATE ============
-let currentUser = null;
-let unsubscribers = [];
-let cachedRestaurants = [];
-let cachedCaptains = [];
-let cachedOrders = [];
-let cachedCaptainLocations = {};
-let currentOrderFilter = 'all';
-let currentPeriod = 7;
-let leafletMap = null;
-let mapMarkers = {};
-let heatmapLayer = null;
-let trackLayers = {};
-let currentMapLayer = 'markers';
-let charts = {};
-let alertsCache = [];
-let prevLiveStats = { active: 0, pending: 0, online: 0, late: 0 };
+let currentUser=null, restData=null;
+let allOrders=[], allCaptains=[], allRestaurants=[];
+let unsubs=[], orderFilter='all', installPrompt=null, toastT;
 
-// Constants
-const LATE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
-const AVG_PREP_TIME_MIN = 15; // restaurant prep time
-const AVG_SPEED_KMH = 25; // captain speed for ETA
+const fmt=n=>Number(n||0).toLocaleString('ar-IQ');
+const toA=n=>n.toString().replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+const isAdmin=()=>currentUser?.role==='admin';
+const isRest=()=>currentUser?.role==='restaurant';
 
-// ============ INIT ============
-window.addEventListener('firebaseReady', () => {
-  setupAuthListener();
-  setupLoginButton();
-  setupSubTabs();
-  setupNav();
-  setupPeriodSelector();
-  setupMapControls();
-  const baseUrl = window.location.href.replace(/\/[^\/]*$/, '');
-  document.getElementById('restLink').textContent = baseUrl + '/restaurant.html';
-  document.getElementById('capLink').textContent = baseUrl + '/captain.html';
+function toast(msg,type='success'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.borderColor=type==='error'?'var(--red)':type==='warn'?'var(--yellow)':'var(--green)';
+  t.style.color=type==='error'?'var(--red)':type==='warn'?'var(--yellow)':'var(--green)';
+  t.classList.add('on');
+  clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),3000);
+}
+
+// PWA
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();installPrompt=e;
+  document.getElementById('installBtn').style.display='block';
+});
+window.doInstall=()=>{if(!installPrompt)return;installPrompt.prompt();installPrompt.userChoice.then(()=>{document.getElementById('installBtn').style.display='none';installPrompt=null;});};
+
+// SPLASH
+let splashDone=false;
+function hideSplash(){
+  if(splashDone)return;splashDone=true;
+  const sp=document.getElementById('splash');
+  sp.classList.add('hide');
+  setTimeout(()=>sp.style.display='none',600);
+}
+setTimeout(hideSplash,2800);
+
+// AUTH
+window.addEventListener('fbReady',()=>{
+  const fb=window._fb;
+  fb.onAuthStateChanged(fb.auth,async user=>{
+    hideSplash();
+    if(user){
+      try{
+        // Check users collection
+        const udoc=await fb.getDoc(fb.doc(fb.db,'users',user.uid));
+        if(!udoc.exists()){await fb.signOut(fb.auth);return;}
+        const ud=udoc.data();
+        if(ud.role!=='admin'&&ud.role!=='restaurant'){
+          await fb.signOut(fb.auth);
+          showErr('❌ هذا الحساب غير مصرح له');return;
+        }
+        currentUser={uid:user.uid,email:user.email,...ud};
+        if(ud.role==='restaurant'){
+          // Find restaurant by email first, then userId
+          let rs=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('email','==',user.email)));
+          if(rs.empty) rs=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('userId','==',user.uid)));
+          if(rs.empty){await fb.signOut(fb.auth);showErr('❌ هذا الحساب غير مرتبط بمطعم');return;}
+          restData={id:rs.docs[0].id,...rs.docs[0].data()};
+          currentUser.restaurantId=restData.id;
+          currentUser.restaurantName=restData.name;
+          // Update userId if changed
+          if(restData.userId!==user.uid) fb.updateDoc(fb.doc(fb.db,'restaurants',restData.id),{userId:user.uid}).catch(()=>{});
+        }
+        enterApp();
+      }catch(e){console.error(e);await fb.signOut(fb.auth);}
+    }else{
+      currentUser=null;restData=null;
+      unsubs.forEach(u=>u&&u());unsubs=[];
+      document.getElementById('loginPage').style.display='flex';
+      document.getElementById('appPage').style.display='none';
+      document.body.classList.remove('rest-mode');
+      resetLoginBtn();
+    }
+  });
+  document.getElementById('lPass').addEventListener('keypress',e=>{if(e.key==='Enter')doLogin();});
 });
 
-// ============ HELPERS ============
-function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
-function nowTime() { const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
-
-function statusBadge(status) {
-  const map = {
-    pending: { class: 'badge-pending', text: '🟡 ينتظر' },
-    accepted: { class: 'badge-accepted', text: '🔵 مقبول' },
-    pickup: { class: 'badge-pickup', text: '🟠 في المطعم' },
-    delivering: { class: 'badge-delivering', text: '🛵 يتوصل' },
-    delivered: { class: 'badge-delivered', text: '✅ مسلّم' },
-    cancelled: { class: 'badge-cancelled', text: '❌ ملغي' }
-  };
-  return `<span class="badge ${map[status].class}">${map[status].text}</span>`;
+function showErr(msg){
+  const el=document.getElementById('lErr');
+  el.textContent=msg;el.style.display='block';
+  resetLoginBtn();
+}
+function resetLoginBtn(){
+  const btn=document.getElementById('lBtn');
+  btn.innerHTML='🔐 دخول';btn.disabled=false;
 }
 
-function statusText(s) {
-  const m = { pending: 'ينتظر قبول', accepted: 'قبله الكابتن', pickup: 'وصل المطعم',
-    delivering: 'متجه للزبون', delivered: 'تم التسليم', cancelled: 'ملغي' };
-  return m[s] || s;
-}
-
-let toastTimeout;
-function showToast(text, icon = '✅') {
-  document.getElementById('toastText').textContent = text;
-  document.getElementById('toastIcon').textContent = icon;
-  const t = document.getElementById('toast');
-  t.classList.add('show');
-  clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => t.classList.remove('show'), 3000);
-}
-
-function closeModal(id) { document.getElementById(id).classList.remove('show'); }
-window.closeModal = closeModal;
-
-// Time helpers
-function minutesAgo(ms) { return Math.floor((Date.now() - ms) / 60000); }
-function formatDuration(mins) {
-  if (mins < 60) return `${mins}د`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m > 0 ? `${h}س ${m}د` : `${h}س`;
-}
-function isOrderLate(o) {
-  if (['delivered','cancelled'].includes(o.status)) return false;
-  if (!o.createdAtMs) return false;
-  return (Date.now() - o.createdAtMs) > LATE_THRESHOLD_MS;
-}
-
-// Calculate distance between two GPS points (km)
-function gpsDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
-
-// ============ AUTH ============
-function setupLoginButton() {
-  document.getElementById('loginBtn').addEventListener('click', login);
-  document.getElementById('loginPassword').addEventListener('keypress', (e) => { if (e.key === 'Enter') login(); });
-}
-
-async function login() {
-  const email = document.getElementById('loginEmail').value.trim().toLowerCase();
-  const password = document.getElementById('loginPassword').value;
-  const errorEl = document.getElementById('loginError');
-  const loginBtn = document.getElementById('loginBtn');
-  if (!email || !password) { errorEl.textContent = 'أدخل الإيميل وكلمة المرور'; errorEl.style.display = 'block'; return; }
-  errorEl.style.display = 'none';
-  loginBtn.innerHTML = '<div class="spinner"></div>';
-  loginBtn.disabled = true;
-  try {
-    await window.fbFns.signInWithEmailAndPassword(window.fb.auth, email, password);
-    // onAuthStateChanged سيتولى باقي العملية
-  } catch (err) {
-    let msg = err.message;
-    if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') msg = '❌ بيانات الدخول غير صحيحة';
-    else if (err.code === 'auth/too-many-requests') msg = '⚠️ محاولات كثيرة، انتظر قليلاً';
-    errorEl.textContent = msg;
-    errorEl.style.display = 'block';
-    loginBtn.innerHTML = '🔐 دخول';
-    loginBtn.disabled = false;
+window.doLogin=async()=>{
+  const email=document.getElementById('lEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('lPass').value;
+  const btn=document.getElementById('lBtn');
+  document.getElementById('lErr').style.display='none';
+  if(!email||!pass){showErr('أدخل الإيميل وكلمة المرور');return;}
+  btn.innerHTML='<div class="spin"></div>';btn.disabled=true;
+  try{
+    await window._fb.signInWithEmailAndPassword(window._fb.auth,email,pass);
+  }catch(e){
+    let msg=e.message;
+    if(['auth/invalid-credential','auth/wrong-password','auth/user-not-found'].includes(e.code))msg='❌ بيانات الدخول غير صحيحة';
+    else if(e.code==='auth/too-many-requests')msg='⚠️ محاولات كثيرة، انتظر';
+    showErr(msg);
   }
-}
-
-window.showCreateFirstAdmin = function() { document.getElementById('firstAdminModal').classList.add('show'); };
-window.createFirstAdmin = async function() {
-  const name = document.getElementById('adminName').value.trim();
-  const email = document.getElementById('adminEmail').value.trim().toLowerCase();
-  const password = document.getElementById('adminPassword').value;
-  const errorEl = document.getElementById('firstAdminError');
-  if (!name || !email || !password) { errorEl.textContent = 'املأ الحقول'; errorEl.style.display = 'block'; return; }
-  if (password.length < 6) { errorEl.textContent = 'كلمة المرور 6+'; errorEl.style.display = 'block'; return; }
-  errorEl.style.display = 'none';
-  try {
-    const cred = await window.fbFns.createUserWithEmailAndPassword(window.fb.auth, email, password);
-    await window.fbFns.setDoc(window.fbFns.doc(window.fb.db, 'users', cred.user.uid), {
-      uid: cred.user.uid, role: 'admin', name, email, createdAt: window.fbFns.serverTimestamp()
-    });
-    closeModal('firstAdminModal');
-    showToast('✅ تم! جاري الدخول...');
-  } catch (err) { errorEl.textContent = err.message; errorEl.style.display = 'block'; }
 };
 
-function setupAuthListener() {
-  window.fbFns.onAuthStateChanged(window.fb.auth, async (user) => {
-    if (user) {
-      try {
-        const userDoc = await window.fbFns.getDoc(window.fbFns.doc(window.fb.db, 'users', user.uid));
-        const userData = userDoc.exists() ? userDoc.data() : null;
-        
-        // قبول admin و restaurant فقط
-        if (!userData || (userData.role !== 'admin' && userData.role !== 'restaurant')) {
-          await window.fbFns.signOut(window.fb.auth);
-          document.getElementById('loginError').textContent = '❌ هذا الحساب غير مصرح له';
-          document.getElementById('loginError').style.display = 'block';
-          return;
-        }
-        
-        currentUser = { uid: user.uid, email: user.email, ...userData };
-        
-        // إذا مطعم، نجيب restaurantId
-        if (userData.role === 'restaurant') {
-          try {
-            // Search by email first (most reliable after email update)
-            let restSnap = await window.fbFns.getDocs(
-              window.fbFns.query(
-                window.fbFns.collection(window.fb.db, 'restaurants'),
-                window.fbFns.where('email', '==', user.email)
-              )
-            );
-            // If not found by email, try userId
-            if (restSnap.empty) {
-              restSnap = await window.fbFns.getDocs(
-                window.fbFns.query(
-                  window.fbFns.collection(window.fb.db, 'restaurants'),
-                  window.fbFns.where('userId', '==', user.uid)
-                )
-              );
-            }
-            if (!restSnap.empty) {
-              currentUser.restaurantId = restSnap.docs[0].id;
-              currentUser.restaurantName = restSnap.docs[0].data().name;
-              // Auto-update userId if changed
-              if(restSnap.docs[0].data().userId !== user.uid) {
-                window.fbFns.updateDoc(window.fbFns.doc(window.fb.db,'restaurants',restSnap.docs[0].id),{userId:user.uid}).catch(()=>{});
-              }
-            } else {
-              await window.fbFns.signOut(window.fb.auth);
-              document.getElementById('loginError').textContent = '❌ هذا الحساب غير مرتبط بمطعم';
-              document.getElementById('loginError').style.display = 'block';
-              return;
-            }
-          } catch (e) {
-            console.warn('restaurantId fetch failed:', e.message);
-          }
-        }
-        
-        // نشغّل enterApp بعد ما عندنا كل المعلومات
-        await enterApp();
-        // إذا مطعم، نعيد تشغيل listeners بعد ما عندنا restaurantId
-        if (userData.role === 'restaurant' && currentUser.restaurantId) {
-          setupRealtimeListeners();
-        }
-      } catch (e) {
-        console.error('Auth error:', e.message);
-        if (currentUser) {
-          await enterApp();
-        } else {
-          document.getElementById('loginError').textContent = 'خطأ في الاتصال: ' + e.message;
-          document.getElementById('loginError').style.display = 'block';
-          await window.fbFns.signOut(window.fb.auth);
-        }
-      }
-    } else {
-      currentUser = null;
-      stopAllListeners();
-      document.getElementById('appContainer').style.display = 'none';
-      document.getElementById('loginScreen').style.display = 'flex';
-      document.getElementById('loginBtn').innerHTML = '🔐 دخول';
-      document.getElementById('loginBtn').disabled = false;
-      // إظهار زر إنشاء حساب فقط إذا ما في مستخدمين
-      checkIfFirstAdmin();
-    }
-  });
-}
-
-async function checkIfFirstAdmin() {
-  try {
-    const snap = await window.fbFns.getDocs(
-      window.fbFns.query(window.fbFns.collection(window.fb.db, 'users'),
-        window.fbFns.where('role', '==', 'admin'))
-    );
-    const btn = document.getElementById('createAdminSection');
-    if (btn) btn.style.display = snap.empty ? 'block' : 'none';
-  } catch(e) {
-    // إذا فشل، نخفي الزر
-    const btn = document.getElementById('createAdminSection');
-    if (btn) btn.style.display = 'none';
-  }
-}
-
-window.logout = async function() {
-  if (!confirm('تسجيل الخروج؟')) return;
-  stopAllListeners();
-  await window.fbFns.signOut(window.fb.auth);
+window.doLogout=async()=>{
+  if(!confirm('تسجيل الخروج؟'))return;
+  unsubs.forEach(u=>u&&u());unsubs=[];
+  await window._fb.signOut(window._fb.auth);
 };
 
-function stopAllListeners() { unsubscribers.forEach(u => u && u()); unsubscribers = []; }
-
-async function enterApp() {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('appContainer').style.display = 'block';
-  const isSuperAdmin = currentUser.role === 'admin';
-  const isRestAdmin = currentUser.role === 'restaurant';
-
-  if (isRestAdmin) {
-    document.body.classList.add('restaurant-mode');
-    // نجيب restaurantId أولاً إذا ما عنده
-    // نبحث دائماً بالإيميل لأنه الأكثر موثوقية
-    try {
-      // أولاً بالإيميل
-      let snap = await window.fbFns.getDocs(
-        window.fbFns.query(window.fbFns.collection(window.fb.db, 'restaurants'),
-          window.fbFns.where('email', '==', currentUser.email))
-      );
-      // إذا ما لقى، نبحث بـ userId
-      if (snap.empty) {
-        snap = await window.fbFns.getDocs(
-          window.fbFns.query(window.fbFns.collection(window.fb.db, 'restaurants'),
-            window.fbFns.where('userId', '==', currentUser.uid))
-        );
-      }
-      if (!snap.empty) {
-        currentUser.restaurantId = snap.docs[0].id.trim();
-        currentUser.restaurantName = snap.docs[0].data().name;
-      } else {
-      }
-    } catch(e) {
-      console.warn('enterApp: restaurantId fetch failed:', e.message);
-    }
-    document.getElementById('hSubtitle').textContent = currentUser.restaurantName || currentUser.name;
-    document.getElementById('headerTitle').textContent = '🏪 ' + (currentUser.restaurantName || 'مطعم');
-    const badge = document.getElementById('roleBadgeHeader');
-    if (badge) { badge.textContent = 'مدير مطعم'; badge.style.display = 'inline-block'; }
-  } else {
-    document.body.classList.remove('restaurant-mode');
-    document.getElementById('hSubtitle').textContent = currentUser.name;
-    document.getElementById('headerTitle').textContent = 'لوحة الإدارة';
-  }
-  setupRealtimeListeners();
+// ENTER APP
+function enterApp(){
+  document.getElementById('loginPage').style.display='none';
+  document.getElementById('appPage').style.display='block';
+  document.getElementById('hdrName').textContent=currentUser.restaurantName||currentUser.email;
+  document.getElementById('hdrRole').className='hdr-role '+(isAdmin()?'role-admin':'role-rest');
+  document.getElementById('hdrRole').textContent=isAdmin()?'👑 إدارة عليا':'🍽️ مطعم';
+  if(isRest()) document.body.classList.add('rest-mode');
+  buildNavs();
+  startListeners();
 }
 
-// ============ NAV ============
-function setupNav() {
-  document.querySelectorAll('.nav-btn').forEach(b => {
-    b.addEventListener('click', () => switchScreen(b.dataset.screen));
-  });
+// NAVS
+const tabs=[
+  {id:'dash',label:'الرئيسية',icon:'🏠',screen:'scDash',adminOnly:false},
+  {id:'orders',label:'الطلبات',icon:'📋',screen:'scOrders',adminOnly:false},
+  {id:'captains',label:'الكباتن',icon:'🛵',screen:'scCaptains',adminOnly:false},
+  {id:'rests',label:'المطاعم',icon:'🍽️',screen:'scRests',adminOnly:true},
+  {id:'analytics',label:'التحليلات',icon:'📊',screen:'scAnalytics',adminOnly:false},
+];
+
+function buildNavs(){
+  const visibleTabs=tabs.filter(t=>!t.adminOnly||isAdmin());
+  document.getElementById('dNav').innerHTML=visibleTabs.map((t,i)=>
+    `<button class="dnav-btn ${i===0?'on':''}" data-screen="${t.screen}" onclick="goTab('${t.screen}',this)">${t.icon} ${t.label}</button>`
+  ).join('');
+  document.getElementById('mNav').innerHTML=visibleTabs.map((t,i)=>
+    `<button class="mnav-btn ${i===0?'on':''}" data-screen="${t.screen}" onclick="goTab('${t.screen}',this)"><div class="mnav-icon">${t.icon}</div><div>${t.label}</div></button>`
+  ).join('');
 }
 
-window.switchScreen = function(screenId) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(`screen-${screenId}`).classList.add('active');
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll(`.nav-btn[data-screen="${screenId}"]`).forEach(b => b.classList.add('active'));
-  if (screenId === 'map') setTimeout(() => initMap(), 100);
-  if (screenId === 'analytics') setTimeout(() => renderAnalytics(), 100);
-  window.scrollTo(0, 0);
-  renderAll();
+window.goTab=function(screenId,btn){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.getElementById(screenId).classList.add('on');
+  document.querySelectorAll('.dnav-btn,.mnav-btn').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll(`[data-screen="${screenId}"]`).forEach(b=>b.classList.add('on'));
+  if(screenId==='scCaptains')renderCapStats();
+  if(screenId==='scAnalytics')renderAnalytics();
+  if(screenId==='scRests')renderRests();
 };
 
-function setupSubTabs() {
-  document.querySelectorAll('[data-filter]').forEach(t => {
-    t.addEventListener('click', () => {
-      document.querySelectorAll('[data-filter]').forEach(x => x.classList.remove('active'));
-      t.classList.add('active');
-      currentOrderFilter = t.dataset.filter;
-      renderAdminOrders();
-    });
-  });
-  document.querySelectorAll('[data-manage]').forEach(t => {
-    t.addEventListener('click', () => {
-      document.querySelectorAll('[data-manage]').forEach(x => x.classList.remove('active'));
-      document.querySelectorAll('.sub-screen').forEach(s => s.classList.remove('active'));
-      t.classList.add('active');
-      document.getElementById('manage-' + t.dataset.manage).classList.add('active');
-    });
-  });
-}
-
-function setupPeriodSelector() {
-  document.querySelectorAll('[data-period]').forEach(b => {
-    b.addEventListener('click', () => {
-      document.querySelectorAll('[data-period]').forEach(x => x.classList.remove('active'));
-      b.classList.add('active');
-      currentPeriod = parseInt(b.dataset.period);
-      renderAnalytics();
-    });
-  });
-}
-
-function setupMapControls() {
-  // handled inline via toggleMapLayer
-}
-
-window.toggleMapLayer = function(layer) {
-  currentMapLayer = layer;
-  document.querySelectorAll('.map-control-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.layer === layer);
-  });
-  if (!leafletMap) return;
-  // Remove all
-  Object.values(mapMarkers).forEach(m => leafletMap.removeLayer(m));
-  if (heatmapLayer) leafletMap.removeLayer(heatmapLayer);
-  Object.values(trackLayers).forEach(t => leafletMap.removeLayer(t));
-  // Add selected
-  if (layer === 'markers') updateMapMarkers();
-  else if (layer === 'heatmap') updateHeatmap();
-  else if (layer === 'tracks') updateTracks();
-};
-
-// ============ REALTIME ============
-function setupRealtimeListeners() {
-  stopAllListeners();
-  // نحفظ snapshot من currentUser عشان ما يتغير
-  const savedRole = currentUser?.role || '';
-  const savedRestId = currentUser?.restaurantId || '';
-  const savedEmail = currentUser?.email || '';
-  const isRestAdmin = savedRole === 'restaurant';
-  const myRestId = isRestAdmin ? savedRestId : null;
-  
-
-  // مطاعم
-  const restQuery = isRestAdmin
-    ? window.fbFns.query(window.fbFns.collection(window.fb.db, 'restaurants'), window.fbFns.where('email', '==', savedEmail))
-    : window.fbFns.collection(window.fb.db, 'restaurants');
-  unsubscribers.push(window.fbFns.onSnapshot(restQuery, (snap) => {
-    cachedRestaurants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderAll();
+// LISTENERS
+function startListeners(){
+  const fb=window._fb;
+  const ordersQ=isRest()
+    ? fb.query(fb.collection(fb.db,'orders'),fb.where('restaurantId','==',currentUser.restaurantId))
+    : fb.query(fb.collection(fb.db,'orders'));
+  unsubs.push(fb.onSnapshot(ordersQ,snap=>{
+    allOrders=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0));
+    renderDash();renderOrders();
   }));
-
-  if (!isRestAdmin) {
-    // كباتن - سوبر أدمن
-    unsubscribers.push(window.fbFns.onSnapshot(window.fbFns.collection(window.fb.db, 'captains'), (snap) => {
-      cachedCaptains = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderAll();
+  const capsQ=isRest()
+    ? fb.query(fb.collection(fb.db,'captains'),fb.where('restaurantId','==',currentUser.restaurantId))
+    : fb.query(fb.collection(fb.db,'captains'));
+  unsubs.push(fb.onSnapshot(capsQ,snap=>{
+    allCaptains=snap.docs.map(d=>({id:d.id,...d.data()}));
+    populateCapRestSelect();
+  }));
+  if(isAdmin()){
+    unsubs.push(fb.onSnapshot(fb.collection(fb.db,'restaurants'),snap=>{
+      allRestaurants=snap.docs.map(d=>({id:d.id,...d.data()}));
+      renderRests();
+      populateRestSelect();
     }));
-    // طلبات - سوبر أدمن
-    unsubscribers.push(window.fbFns.onSnapshot(
-      window.fbFns.query(window.fbFns.collection(window.fb.db, 'orders'), window.fbFns.orderBy('createdAtMs', 'desc')),
-      (snap) => { cachedOrders = snap.docs.map(d => ({ id: d.id, ...d.data() })); renderAll(); }
-    ));
-  } else {
-    // مطعم - نجيب restaurantId من Firebase مباشرة
-    window.fbFns.getDocs(
-      window.fbFns.query(window.fbFns.collection(window.fb.db, 'restaurants'),
-        window.fbFns.where('email', '==', savedEmail))
-    ).then(snap => {
-      if (snap.empty) {
-        return;
-      }
-      const cleanRid = snap.docs[0].id;
-      currentUser.restaurantId = cleanRid;
-      
-      if (cleanRid) {
-      try {
-        const unsubCap = window.fbFns.onSnapshot(
-          window.fbFns.query(window.fbFns.collection(window.fb.db, 'captains'), 
-            window.fbFns.where('restaurantId', '==', cleanRid)),
-          (snap) => { 
-            
-            cachedCaptains = snap.docs.map(d => ({ id: d.id, ...d.data() })); 
-            renderAll(); 
-          },
-          (err) => {  }
-        );
-        unsubscribers.push(unsubCap);
-      } catch(e) {
-      }
-      try {
-        const unsub = window.fbFns.onSnapshot(
-          window.fbFns.query(window.fbFns.collection(window.fb.db, 'orders'),
-            window.fbFns.where('restaurantId', '==', cleanRid)),
-          (snap) => { 
-            
-            cachedOrders = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (b.createdAtMs||0) - (a.createdAtMs||0)); 
-            renderAll(); 
-          },
-          (err) => {  }
-        );
-        unsubscribers.push(unsub);
-      } catch(e) {
-      }
-      }
-    }).catch(e => showToast('خطأ: ' + e.message, '❌'));
   }
-
-  // مواقع الكباتن
-  unsubscribers.push(window.fbFns.onSnapshot(window.fbFns.collection(window.fb.db, 'captainLocations'), (snap) => {
-    cachedCaptainLocations = {};
-    snap.docs.forEach(d => { cachedCaptainLocations[d.id] = d.data(); });
-    renderAll();
-    if (currentMapLayer === 'markers') updateMapMarkers();
-    if (currentMapLayer === 'tracks') updateTracks();
-  }));
 }
 
-// ============ CREATE USERS (without logout) - REST API ============
-// نستخدم REST API مباشرة بدل التطبيق الثانوي لأنه أكثر موثوقية على الجوال
-// هذه الطريقة تنشئ المستخدم بدون التأثير على جلسة دخول الأدمن الحالية
-async function createUserWithoutLogout(email, password) {
-  const apiKey = window.fb.firebaseConfig.apiKey;
-  const url = 'https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + apiKey;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-  let res;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, returnSecureToken: false }),
-      signal: controller.signal
-    });
-  } catch (e) {
-    clearTimeout(timeoutId);
-    if (e.name === 'AbortError') throw new Error('⏱️ انتهت المهلة — تحقق من الإنترنت');
-    throw new Error('🌐 فشل الاتصال: ' + e.message);
-  }
-  clearTimeout(timeoutId);
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    const code = data.error && data.error.message ? data.error.message : 'UNKNOWN';
-    if (code.includes('EMAIL_EXISTS')) throw new Error('⚠️ الإيميل مسجل مسبقاً في النظام');
-    if (code.includes('INVALID_EMAIL')) throw new Error('⚠️ صيغة الإيميل غير صحيحة');
-    if (code.includes('WEAK_PASSWORD')) throw new Error('⚠️ كلمة المرور ضعيفة جداً (6 أحرف على الأقل)');
-    if (code.includes('OPERATION_NOT_ALLOWED')) throw new Error('⚠️ تسجيل المستخدمين معطّل في Firebase');
-    if (code.includes('TOO_MANY_ATTEMPTS')) throw new Error('⚠️ محاولات كثيرة، انتظر قليلاً');
-    throw new Error('خطأ: ' + code);
-  }
-
-  if (!data.localId) throw new Error('لم يتم إنشاء المستخدم بشكل صحيح');
-  return data.localId; // هذا هو الـ uid
-}
-
-window.addRestaurant = async function() {
-  const name = document.getElementById('newRestName').value.trim();
-  const area = document.getElementById('newRestArea').value.trim();
-  const email = document.getElementById('newRestEmail').value.trim().toLowerCase();
-  const password = document.getElementById('newRestPassword').value;
-  const phone = document.getElementById('newRestPhone').value.trim();
-  const sub = parseInt(document.getElementById('newRestSub').value) || 50000;
-  if (!name || !area || !email || !password) { alert('املأ الحقول المطلوبة'); return; }
-  if (password.length < 6) { alert('كلمة المرور 6+'); return; }
-  const btn = document.getElementById('addRestBtn');
-  btn.innerHTML = '<div class="spinner"></div> إنشاء الحساب...'; btn.disabled = true;
-  try {
-    const uid = await createUserWithoutLogout(email, password);
-    btn.innerHTML = '<div class="spinner"></div> حفظ البيانات...';
-    await window.fbFns.setDoc(window.fbFns.doc(window.fb.db, 'users', uid), {
-      uid, role: 'restaurant', name, email, createdAt: window.fbFns.serverTimestamp()
-    });
-    await window.fbFns.addDoc(window.fbFns.collection(window.fb.db, 'restaurants'), {
-      userId: uid, name, area, phone, email, subscription: sub,
-      createdAt: window.fbFns.serverTimestamp(), createdAtMs: Date.now()
-    });
-    btn.innerHTML = '➕ إضافة المطعم'; btn.disabled = false;
-    document.getElementById('credsContent').innerHTML = `
-      <div class="credentials-box">
-        <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">🍽️ ${name}</div>
-        <div class="copy-row"><span>الإيميل:</span><strong>${email}</strong></div>
-        <div class="copy-row"><span>كلمة المرور:</span><strong>${password}</strong></div>
-        <p style="margin-top: 10px; font-size: 11px; color: var(--success);">✅ ستبقى مسجل دخول!</p>
-      </div>`;
-    document.getElementById('credsModal').classList.add('show');
-    ['newRestName','newRestArea','newRestEmail','newRestPassword','newRestPhone'].forEach(id => document.getElementById(id).value = '');
-    document.getElementById('newRestSub').value = '50000';
-  } catch (err) {
-    btn.innerHTML = '➕ إضافة المطعم'; btn.disabled = false;
-    console.error('addRestaurant error:', err);
-    alert('❌ ' + (err.message || 'خطأ غير معروف'));
-  }
-};
-
-window.deleteRestaurant = async function(restId) {
-  if (!confirm('⚠️ حذف المطعم وكباتنه؟')) return;
-  try {
-    const rest = cachedRestaurants.find(r => r.id === restId);
-    if (!rest) return;
-    const capsSnap = await window.fbFns.getDocs(window.fbFns.query(window.fbFns.collection(window.fb.db, 'captains'), window.fbFns.where('restaurantId', '==', restId)));
-    for (const capDoc of capsSnap.docs) {
-      const cap = capDoc.data();
-      await window.fbFns.deleteDoc(window.fbFns.doc(window.fb.db, 'users', cap.userId));
-      await window.fbFns.deleteDoc(window.fbFns.doc(window.fb.db, 'captainLocations', capDoc.id));
-      await window.fbFns.deleteDoc(window.fbFns.doc(window.fb.db, 'captains', capDoc.id));
-    }
-    await window.fbFns.deleteDoc(window.fbFns.doc(window.fb.db, 'users', rest.userId));
-    await window.fbFns.deleteDoc(window.fbFns.doc(window.fb.db, 'restaurants', restId));
-    showToast('🗑️ تم الحذف');
-  } catch (err) { alert('خطأ: ' + err.message); }
-};
-
-window.addCaptain = async function() {
-  const restaurantId = document.getElementById('newCapRest').value;
-  const name = document.getElementById('newCapName').value.trim();
-  const phone = document.getElementById('newCapPhone').value.trim();
-  const email = document.getElementById('newCapEmail').value.trim().toLowerCase();
-  const password = document.getElementById('newCapPassword').value;
-  const vehicle = document.getElementById('newCapVehicle').value;
-  const plate = document.getElementById('newCapPlate').value.trim();
-  if (!restaurantId || !name || !phone || !email || !password) { alert('املأ الحقول المطلوبة'); return; }
-  if (password.length < 6) { alert('كلمة المرور 6+'); return; }
-  const restaurant = cachedRestaurants.find(r => r.id === restaurantId);
-  if (!restaurant) return;
-  const btn = document.getElementById('addCapBtn');
-  btn.innerHTML = '<div class="spinner"></div> إنشاء الحساب...'; btn.disabled = true;
-  try {
-    const uid = await createUserWithoutLogout(email, password);
-    btn.innerHTML = '<div class="spinner"></div> حفظ البيانات...';
-    await window.fbFns.setDoc(window.fbFns.doc(window.fb.db, 'users', uid), {
-      uid, role: 'captain', name, email, createdAt: window.fbFns.serverTimestamp()
-    });
-    await window.fbFns.addDoc(window.fbFns.collection(window.fb.db, 'captains'), {
-      userId: uid, name, phone, email, vehicle, plate, restaurantId, rating: 5.0,
-      createdAt: window.fbFns.serverTimestamp(), createdAtMs: Date.now()
-    });
-    btn.innerHTML = '➕ إضافة الكابتن'; btn.disabled = false;
-    document.getElementById('credsContent').innerHTML = `
-      <div class="credentials-box">
-        <div style="font-weight: 700; font-size: 14px; margin-bottom: 8px;">🛵 ${name}</div>
-        <div style="font-size: 11px; color: var(--muted); margin-bottom: 6px;">تابع لـ: ${restaurant.name}</div>
-        <div class="copy-row"><span>الإيميل:</span><strong>${email}</strong></div>
-        <div class="copy-row"><span>كلمة المرور:</span><strong>${password}</strong></div>
-        <p style="margin-top: 10px; font-size: 11px; color: var(--success);">✅ ستبقى مسجل دخول!</p>
-      </div>`;
-    document.getElementById('credsModal').classList.add('show');
-    ['newCapName','newCapPhone','newCapEmail','newCapPassword','newCapPlate'].forEach(id => document.getElementById(id).value = '');
-  } catch (err) {
-    btn.innerHTML = '➕ إضافة الكابتن'; btn.disabled = false;
-    console.error('addCaptain error:', err);
-    alert('❌ ' + (err.message || 'خطأ غير معروف'));
-  }
-};
-
-window.deleteCaptain = async function(capId) {
-  if (!confirm('⚠️ حذف الكابتن؟')) return;
-  try {
-    const cap = cachedCaptains.find(c => c.id === capId);
-    if (!cap) return;
-    await window.fbFns.deleteDoc(window.fbFns.doc(window.fb.db, 'users', cap.userId));
-    await window.fbFns.deleteDoc(window.fbFns.doc(window.fb.db, 'captainLocations', capId));
-    await window.fbFns.deleteDoc(window.fbFns.doc(window.fb.db, 'captains', capId));
-    showToast('🗑️ تم الحذف');
-  } catch (err) { alert('خطأ: ' + err.message); }
-};
-
-window.openImageFullscreen = function(orderId) {
-  const order = cachedOrders.find(o => o.id === orderId);
-  if (!order?.deliveryProof) return;
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:99999; display:flex; align-items:center; justify-content:center; padding:20px; flex-direction:column; gap:14px;';
-  overlay.innerHTML = `<div style="color:white; font-family:'Reem Kufi'; font-size:16px;">📸 إثبات تسليم</div>
-    <img src="${order.deliveryProof.image}" style="max-width:100%; max-height:75vh; border-radius:12px;">
-    <button style="background:#ff6b3d; color:white; border:none; padding:12px 24px; border-radius:10px; font-weight:700; font-family:inherit;">إغلاق</button>`;
-  overlay.onclick = () => overlay.remove();
-  document.body.appendChild(overlay);
-};
-
-// ============ REASSIGN ============
-let reassignOrderId = null;
-window.openReassign = function(orderId, event) {
-  if (event) event.stopPropagation();
-  reassignOrderId = orderId;
-  const order = cachedOrders.find(o => o.id === orderId);
-  if (!order) return;
-  const captains = cachedCaptains.filter(c => c.restaurantId === order.restaurantId);
-  const list = document.getElementById('captainSelectList');
-  if (captains.length === 0) list.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 20px;">لا يوجد كباتن</p>';
-  else {
-    list.innerHTML = captains.map(c => {
-      const isCurrent = c.id === order.captainId;
-      const loc = cachedCaptainLocations[c.id];
-      const isOnline = loc && (Date.now() - loc.timestamp) < 30000;
-      return `<div class="entity-card" ${!isCurrent ? `onclick="doReassign('${c.id}')" style="cursor:pointer"` : ''}>
-        <h4><span>🛵 ${c.name} ${isCurrent ? '(الحالي)' : ''}</span>
-        <span class="badge ${isOnline ? 'badge-success' : 'badge-cancelled'}">${isOnline ? 'متصل' : 'غير متصل'}</span></h4>
-        <div class="meta">${c.vehicle} • ⭐ ${c.rating || 5.0}</div></div>`;
-    }).join('');
-  }
-  document.getElementById('reassignModal').classList.add('show');
-};
-
-window.doReassign = async function(newCapId) {
-  const o = cachedOrders.find(x => x.id === reassignOrderId);
-  if (!o) return;
-  const newCap = cachedCaptains.find(c => c.id === newCapId);
-  if (!newCap) return;
-  try {
-    await window.fbFns.updateDoc(window.fbFns.doc(window.fb.db, 'orders', reassignOrderId), {
-      captainId: newCapId, captainName: newCap.name, status: 'pending', rejectedBy: [],
-      timeline: [...(o.timeline || []), { status: 'pending', time: nowTime(), text: `📢 الإدارة حولت إلى ${newCap.name}` }]
-    });
-    closeModal('reassignModal');
-    showToast(`✓ تم التحويل`);
-  } catch (err) { alert('خطأ: ' + err.message); }
-};
-
-// ============ ORDER DETAIL ============
-window.openOrderDetail = function(orderId) {
-  const o = cachedOrders.find(x => x.id === orderId);
-  if (!o) return;
-  const cap = cachedCaptains.find(c => c.id === o.captainId);
-  const capLoc = cap ? cachedCaptainLocations[cap.id] : null;
-
-  const elapsedMin = o.createdAtMs ? minutesAgo(o.createdAtMs) : 0;
-  const isLate = isOrderLate(o);
-
-  // ETA calculation
-  let etaText = '—';
-  if (capLoc && o.status === 'delivering') {
-    // Assume customer is somewhere near restaurant area
-    etaText = `حوالي ${Math.max(5, Math.round(20 - elapsedMin/2))} دقيقة`;
-  } else if (o.status === 'accepted' || o.status === 'pickup') {
-    etaText = `~${AVG_PREP_TIME_MIN + 15} دقيقة من القبول`;
-  }
-
-  // Build timeline
-  const timeline = (o.timeline || []).map((t, i, arr) => {
-    const isLast = i === arr.length - 1;
-    const isDone = o.status === 'delivered' || (!isLast);
-    const dotClass = isLast ? 'active' : 'done';
-    return `<div class="timeline-item">
-      <div class="timeline-dot ${dotClass}"></div>
-      <div class="timeline-content">
-        <strong>${statusText(t.status)}</strong>
-        <div>${t.text || ''}</div>
-        <div class="timeline-time">⏱️ ${t.time}</div>
-      </div>
-    </div>`;
-  }).join('');
-
-  document.getElementById('orderDetailTitle').textContent = `📋 ${o.id.substring(0,6).toUpperCase()}`;
-  document.getElementById('orderDetailContent').innerHTML = `
-    <div style="margin-bottom: 12px;">
-      ${statusBadge(o.status)}
-      ${isLate ? '<span class="badge badge-danger" style="margin-right:4px">⚠️ متأخر</span>' : ''}
-      <span class="order-timer ${isLate ? 'danger' : elapsedMin > 20 ? 'warning' : ''}" style="margin-right: 6px;">
-        ⏱️ ${formatDuration(elapsedMin)}
-      </span>
-    </div>
-    <div style="background: var(--panel-2); padding: 10px; border-radius: 10px; margin-bottom: 12px;">
-      <div class="order-detail-row"><span>🏪 المطعم</span><span>${o.restaurantName}</span></div>
-      <div class="order-detail-row"><span>👤 الزبون</span><span>${o.customer}</span></div>
-      <div class="order-detail-row"><span>📞 الهاتف</span><span><a href="tel:${o.phone}" style="color:var(--accent)">${o.phone}</a></span></div>
-      <div class="order-detail-row"><span>📍 العنوان</span><span style="font-size:11px">${o.address}</span></div>
-      <div class="order-detail-row"><span>🍔 تفاصيل</span><span style="font-size:11px">${o.notes}</span></div>
-      <div class="order-detail-row"><span>💰 قيمة الطلب</span><span>${fmt(o.value)} د.ع</span></div>
-      <div class="order-detail-row"><span>🛵 التوصيل</span><span>${fmt(o.fee)} د.ع</span></div>
-      <div class="order-detail-row"><span>💵 العمولة</span><span style="color:var(--success)">${fmt(o.commission)} د.ع</span></div>
-      <div class="order-detail-row"><span>🛵 الكابتن</span><span>${o.captainName || '—'}</span></div>
-      ${etaText !== '—' ? `<div class="order-detail-row"><span>⏰ متوقع</span><span class="eta-display">${etaText}</span></div>` : ''}
-    </div>
-    ${(o.timeline && o.timeline.length > 0) ? `
-      <div class="card-title" style="margin-top: 12px;"><span class="dot"></span> 📜 خط الزمن</div>
-      <div class="timeline">${timeline}</div>` : ''}
-    ${o.deliveryProof ? `
-      <div class="delivery-proof" style="margin-top: 14px;">
-        <strong style="color: var(--success); font-size: 13px;">📸 إثبات التسليم</strong>
-        <div style="font-size: 11px; color: var(--muted); margin: 4px 0;">${o.deliveryProof.capturedBy} - ${o.deliveryProof.time}</div>
-        <img src="${o.deliveryProof.image}" onclick="openImageFullscreen('${o.id}')">
-      </div>` : ''}
-    ${['pending','accepted','pickup','delivering'].includes(o.status) ? `
-      <button class="btn btn-ghost" onclick="closeModal('orderDetailModal'); openReassign('${o.id}')" style="margin-top: 12px;">🔄 تغيير الكابتن</button>
-      <button class="btn btn-ghost" onclick="cancelOrder('${o.id}')" style="margin-top: 8px; border-color: var(--warning); color: var(--warning);">🚫 إلغاء الطلب</button>` : ''}
-    <button class="btn btn-danger" onclick="deleteOrder('${o.id}')" style="margin-top: 8px;">🗑️ حذف الطلب نهائياً</button>
+// DASHBOARD
+function renderDash(){
+  const orders=allOrders;
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayOrders=orders.filter(o=>(o.createdAtMs||0)>=today.getTime());
+  const active=orders.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
+  const delivered=orders.filter(o=>o.status==='delivered');
+  const revenue=delivered.reduce((s,o)=>s+(o.value||0),0);
+  const statsHTML=`
+    <div class="stat"><div class="stat-v">${toA(orders.length)}</div><div class="stat-l">📦 الكل</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--yellow);">${toA(todayOrders.length)}</div><div class="stat-l">📅 اليوم</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--blue);">${toA(active.length)}</div><div class="stat-l">🔵 نشطة</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--green);">${toA(delivered.length)}</div><div class="stat-l">✅ مسلّمة</div></div>
+    ${isAdmin()?`<div class="stat"><div class="stat-v" style="color:var(--purple);">${toA(allRestaurants.length)}</div><div class="stat-l">🍽️ مطاعم</div></div>`:''}
+    <div class="stat"><div class="stat-v" style="color:var(--accent);">${toA(allCaptains.length)}</div><div class="stat-l">🛵 كباتن</div></div>
+    <div class="stat"><div class="stat-v" style="font-size:16px;">${fmt(revenue)}</div><div class="stat-l">💰 إجمالي (د.ع)</div></div>
   `;
-  document.getElementById('orderDetailModal').classList.add('show');
-};
-
-// ============ إلغاء / حذف الطلب ============
-window.cancelOrder = async function(orderId) {
-  const o = cachedOrders.find(x => x.id === orderId);
-  if (!o) return;
-  if (!confirm('🚫 إلغاء هذا الطلب؟\nسيبقى محفوظاً في السجل بحالة "ملغي".')) return;
-  try {
-    await window.fbFns.updateDoc(window.fbFns.doc(window.fb.db, 'orders', orderId), {
-      status: 'cancelled',
-      cancelledAt: nowTime(),
-      cancelledAtMs: Date.now(),
-      timeline: [...(o.timeline || []), { status: 'cancelled', time: nowTime(), text: '🚫 ألغت الإدارة الطلب' }]
-    });
-    closeModal('orderDetailModal');
-    showToast('🚫 تم إلغاء الطلب');
-  } catch (err) { alert('خطأ: ' + err.message); }
-};
-
-window.deleteOrder = async function(orderId) {
-  const o = cachedOrders.find(x => x.id === orderId);
-  if (!o) return;
-  if (!confirm('🗑️ حذف هذا الطلب نهائياً؟\n⚠️ لا يمكن التراجع، وسيُحذف من كل الحسابات والتحليلات.')) return;
-  try {
-    await window.fbFns.deleteDoc(window.fbFns.doc(window.fb.db, 'orders', orderId));
-    closeModal('orderDetailModal');
-    showToast('🗑️ تم حذف الطلب');
-  } catch (err) { alert('خطأ: ' + err.message); }
-};
-
-// ============ MAP ============
-function initMap() {
-  if (leafletMap) { leafletMap.invalidateSize(); return; }
-  leafletMap = L.map('liveMap').setView([33.3152, 44.3661], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(leafletMap);
-  updateMapMarkers();
+  document.getElementById('dashStats').innerHTML=statsHTML;
+  // Last 5 orders
+  const last5=allOrders.slice(0,5);
+  document.getElementById('dashOrders').innerHTML=last5.length?last5.map(o=>orderCard(o)).join(''):'<div style="text-align:center;color:var(--muted);padding:20px;">لا توجد طلبات</div>';
 }
 
-function updateMapMarkers() {
-  if (!leafletMap) return;
-  // Remove old
-  Object.keys(mapMarkers).forEach(key => {
-    leafletMap.removeLayer(mapMarkers[key]);
-    delete mapMarkers[key];
-  });
-  cachedCaptains.forEach(c => {
-    const loc = cachedCaptainLocations[c.id];
-    if (!loc) return;
-    const isStale = Date.now() - loc.timestamp > 30000;
-    const hasActiveOrder = cachedOrders.some(o => o.captainId === c.id && ['accepted','pickup','delivering'].includes(o.status));
-    let cls = '';
-    if (isStale) cls = 'offline';
-    else if (hasActiveOrder) cls = 'busy';
-    const icon = L.divIcon({
-      html: `<div class="captain-marker-icon ${cls}">🛵</div>`,
-      className: '', iconSize: [36, 36], iconAnchor: [18, 18]
-    });
-    mapMarkers['cap_' + c.id] = L.marker([loc.lat, loc.lng], { icon }).addTo(leafletMap)
-      .bindPopup(`<strong>🛵 ${c.name}</strong><br>📞 ${c.phone}<br>${c.vehicle}<br><small>${isStale ? '⚠️ غير متصل' : hasActiveOrder ? '🔵 مشغول' : '🟢 متصل'}</small>`);
-  });
-}
-
-function updateHeatmap() {
-  if (!leafletMap) return;
-  if (heatmapLayer) leafletMap.removeLayer(heatmapLayer);
-  // Heatmap from captain locations (where deliveries happen)
-  // Use all order points (using captain locations of orders)
-  const points = [];
-  cachedOrders.forEach(o => {
-    if (o.captainId && cachedCaptainLocations[o.captainId]) {
-      const loc = cachedCaptainLocations[o.captainId];
-      points.push([loc.lat, loc.lng, 0.7]);
-    }
-  });
-  cachedCaptains.forEach(c => {
-    const loc = cachedCaptainLocations[c.id];
-    if (loc) points.push([loc.lat, loc.lng, 0.5]);
-  });
-  if (points.length === 0) {
-    showToast('ℹ️ لا توجد بيانات كافية للخريطة الحرارية', 'ℹ️');
-    return;
-  }
-  heatmapLayer = L.heatLayer(points, {
-    radius: 30, blur: 25, maxZoom: 17,
-    gradient: { 0.0: 'blue', 0.5: 'lime', 0.7: 'yellow', 1.0: 'red' }
-  }).addTo(leafletMap);
-}
-
-function updateTracks() {
-  if (!leafletMap) return;
-  Object.keys(trackLayers).forEach(k => { leafletMap.removeLayer(trackLayers[k]); delete trackLayers[k]; });
-  // Draw line from each active captain to their position
-  cachedCaptains.forEach(c => {
-    const loc = cachedCaptainLocations[c.id];
-    if (!loc) return;
-    const hasActiveOrder = cachedOrders.some(o => o.captainId === c.id && ['pickup','delivering'].includes(o.status));
-    if (!hasActiveOrder) return;
-    // Find the order and restaurant
-    const order = cachedOrders.find(o => o.captainId === c.id && ['pickup','delivering'].includes(o.status));
-    if (!order) return;
-    const rest = cachedRestaurants.find(r => r.id === order.restaurantId);
-    // Draw track from captain history if available; for now, just show captain
-    const icon = L.divIcon({
-      html: `<div class="captain-marker-icon busy">🛵</div>`,
-      className: '', iconSize: [36, 36], iconAnchor: [18, 18]
-    });
-    trackLayers['cap_' + c.id] = L.marker([loc.lat, loc.lng], { icon }).addTo(leafletMap)
-      .bindPopup(`<strong>🛵 ${c.name}</strong><br>📦 طلب: ${order.id.substring(0,6)}<br>📍 ${order.address}`);
-  });
-  if (Object.keys(trackLayers).length === 0) {
-    showToast('ℹ️ لا توجد طلبات نشطة حالياً', 'ℹ️');
-  }
-}
-
-// ============ ALERTS ============
-function computeAlerts() {
-  const alerts = [];
-
-  // Late orders
-  cachedOrders.filter(o => isOrderLate(o)).forEach(o => {
-    const mins = minutesAgo(o.createdAtMs);
-    alerts.push({
-      type: 'danger', icon: '⚠️',
-      title: `طلب متأخر: ${o.id.substring(0,6).toUpperCase()}`,
-      desc: `مرّ ${formatDuration(mins)} منذ الإنشاء • ${o.restaurantName} → ${o.customer}`,
-      orderId: o.id
-    });
-  });
-
-  // Captains with active orders but offline
-  cachedCaptains.forEach(c => {
-    const loc = cachedCaptainLocations[c.id];
-    const isOffline = !loc || (Date.now() - loc.timestamp) > 60000;
-    const hasActive = cachedOrders.some(o => o.captainId === c.id && ['accepted','pickup','delivering'].includes(o.status));
-    if (isOffline && hasActive) {
-      alerts.push({
-        type: 'danger', icon: '📡',
-        title: `كابتن غير متصل: ${c.name}`,
-        desc: `عنده طلب نشط لكن GPS غير متصل ${loc ? `منذ ${formatDuration(minutesAgo(loc.timestamp))}` : ''}`,
-      });
-    }
-  });
-
-  // Pending orders without captain for > 5 min
-  cachedOrders.filter(o => o.status === 'pending' && o.createdAtMs && minutesAgo(o.createdAtMs) > 5).forEach(o => {
-    const mins = minutesAgo(o.createdAtMs);
-    alerts.push({
-      type: 'warning', icon: '🟡',
-      title: `طلب لم يقبل: ${o.id.substring(0,6).toUpperCase()}`,
-      desc: `بانتظار كابتن منذ ${formatDuration(mins)} • ${o.restaurantName}`,
-      orderId: o.id
-    });
-  });
-
-  // Restaurants without captains
-  cachedRestaurants.forEach(r => {
-    const caps = cachedCaptains.filter(c => c.restaurantId === r.id);
-    if (caps.length === 0) {
-      alerts.push({
-        type: 'info', icon: '🍽️',
-        title: `مطعم بدون كباتن: ${r.name}`,
-        desc: 'ما يقدر يستلم طلبات بدون كابتن'
-      });
-    }
-  });
-
-  alertsCache = alerts;
-  return alerts;
-}
-
-function renderAlerts() {
-  const alerts = computeAlerts();
-  const bell = document.getElementById('alertBell');
-  const countEl = document.getElementById('alertCount');
-  if (alerts.length > 0) {
-    bell.classList.add('has-alerts');
-    countEl.style.display = 'flex';
-    countEl.textContent = alerts.length;
-  } else {
-    bell.classList.remove('has-alerts');
-    countEl.style.display = 'none';
-  }
-  const list = document.getElementById('alertsList');
-  if (alerts.length === 0) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">✅</div><p>كل شي تمام<br><small>لا توجد مشاكل حالياً</small></p></div>';
-    return;
-  }
-  list.innerHTML = alerts.map(a => `
-    <div class="alert-item ${a.type}" ${a.orderId ? `onclick="openOrderDetail('${a.orderId}')" style="cursor:pointer"` : ''}>
-      <div class="alert-icon">${a.icon}</div>
-      <div class="alert-content">
-        <div class="alert-title">${a.title}</div>
-        <div class="alert-desc">${a.desc}</div>
-      </div>
+// ORDERS
+function orderCard(o){
+  const type=o.orderType||'delivery';
+  const typeBadge=type==='salon'?'<span class="badge b-salon">🪑 صالة</span>':type==='takeaway'?'<span class="badge b-takeaway">🥡 سفري</span>':'<span class="badge" style="background:rgba(77,171,247,.15);color:var(--blue)">🏍️ دلفري</span>';
+  const stB={pending:'b-pending',accepted:'b-accepted',pickup:'b-accepted',delivering:'b-delivering',delivered:'b-delivered',cancelled:'b-cancelled'};
+  const stL={pending:'🟡 ينتظر',accepted:'🔵 مقبول',pickup:'🟠 استلام',delivering:'🛵 توصيل',delivered:'✅ مسلّم',cancelled:'❌ ملغي'};
+  return`<div class="order-row">
+    <div class="order-head"><span class="order-id">${o.id.substring(0,6).toUpperCase()}</span><span class="order-time">${o.createdAt||''}</span></div>
+    <div style="margin-bottom:6px;">${typeBadge} <span class="badge ${stB[o.status]||'b-pending'}">${stL[o.status]||o.status}</span></div>
+    ${o.customer?`<div style="font-size:11px;color:var(--muted);">👤 ${o.customer} ${o.phone?'• 📞 '+o.phone:''}</div>`:''}
+    ${o.address?`<div style="font-size:11px;color:var(--muted);">📍 ${o.address}</div>`:''}
+    <div style="display:flex;justify-content:space-between;margin-top:6px;align-items:center;">
+      <span style="font-size:12px;font-weight:700;color:var(--accent2);">💰 ${fmt(o.value)} د.ع${o.fee?' + '+fmt(o.fee)+' توصيل':''}</span>
+      ${o.captainName?`<span style="font-size:11px;color:var(--muted);">🛵 ${o.captainName}</span>`:''}
+      ${isAdmin()&&o.restaurantName?`<span style="font-size:11px;color:var(--muted);">🍽️ ${o.restaurantName}</span>`:''}
     </div>
-  `).join('');
+  </div>`;
 }
 
-// ============ RENDER ============
-function renderAll() {
-  if (!currentUser) return;
-  renderDashboard();
-  renderAdminOrders();
-  renderRestaurantsList();
-  renderCaptainsList();
-  renderFinancial();
-  populateCaptainDropdown();
-  renderAlerts();
+window.setOF=function(f,btn){
+  orderFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderOrders();
+};
+
+function renderOrders(){
+  let fil=allOrders;
+  if(orderFilter==='delivery')fil=allOrders.filter(o=>!o.orderType||o.orderType==='delivery');
+  else if(orderFilter==='salon')fil=allOrders.filter(o=>o.orderType==='salon');
+  else if(orderFilter==='takeaway')fil=allOrders.filter(o=>o.orderType==='takeaway');
+  else if(orderFilter==='pending')fil=allOrders.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
+  else if(orderFilter==='delivered')fil=allOrders.filter(o=>o.status==='delivered');
+  document.getElementById('ordersList').innerHTML=fil.length?fil.map(o=>orderCard(o)).join(''):'<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد طلبات</div>';
 }
 
-function renderDashboard() {
-  // Live stats
-  const active = cachedOrders.filter(o => ['accepted','pickup','delivering'].includes(o.status)).length;
-  const pending = cachedOrders.filter(o => o.status === 'pending').length;
-  const online = cachedCaptains.filter(c => {
-    const loc = cachedCaptainLocations[c.id];
-    return loc && (Date.now() - loc.timestamp) < 30000;
-  }).length;
-  const late = cachedOrders.filter(o => isOrderLate(o)).length;
-
-  updateLiveStat('live-active', active, prevLiveStats.active);
-  updateLiveStat('live-pending', pending, prevLiveStats.pending);
-  updateLiveStat('live-online', online, prevLiveStats.online);
-  updateLiveStat('live-late', late, prevLiveStats.late);
-
-  prevLiveStats = { active, pending, online, late };
-
-  // Today stats
-  const today = new Date(); today.setHours(0,0,0,0);
-  const todayMs = today.getTime();
-  const todayOrders = cachedOrders.filter(o => o.createdAtMs >= todayMs);
-  const todayDelivered = todayOrders.filter(o => o.status === 'delivered');
-  const todayCancelled = todayOrders.filter(o => o.status === 'cancelled');
-  const todayRevenue = todayDelivered.reduce((s,o) => s + (o.commission||0), 0);
-
-  // Average delivery time
-  let avgTime = 0;
-  const timed = todayDelivered.filter(o => o.deliveredAtMs && o.createdAtMs);
-  if (timed.length > 0) {
-    avgTime = Math.round(timed.reduce((s,o) => s + (o.deliveredAtMs - o.createdAtMs), 0) / timed.length / 60000);
-  }
-
-  const successRate = todayOrders.length > 0 ? Math.round(todayDelivered.length / todayOrders.length * 100) : 0;
-
-  document.getElementById('today-orders').textContent = todayOrders.length;
-  document.getElementById('today-delivered').textContent = todayDelivered.length;
-  document.getElementById('today-revenue').textContent = fmt(todayRevenue);
-  document.getElementById('today-avg-time').textContent = avgTime;
-  document.getElementById('today-cancelled').textContent = todayCancelled.length;
-  document.getElementById('today-success').textContent = successRate + '%';
-
-  // Totals
-  document.getElementById('a-restaurants').textContent = cachedRestaurants.length;
-  document.getElementById('a-captains').textContent = cachedCaptains.length;
-  document.getElementById('a-total').textContent = cachedOrders.length;
-
-  // Recent activity
-  const recent = cachedOrders.slice(0, 6);
-  document.getElementById('recentActivity').innerHTML = recent.length === 0
-    ? '<div class="empty"><div class="empty-icon">📭</div><p>لا يوجد نشاط</p></div>'
-    : recent.map(o => `
-      <div class="order-item" onclick="openOrderDetail('${o.id}')">
-        <div class="order-row">
-          <strong>${o.id.substring(0, 6).toUpperCase()}</strong>
-          ${statusBadge(o.status)}
+// CAPTAINS STATS
+window.renderCapStats=function(){
+  const from=document.getElementById('capFrom')?.value;
+  const to=document.getElementById('capTo')?.value;
+  const start=from?new Date(from+'T00:00:00').getTime():0;
+  const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
+  const filtered=allOrders.filter(o=>{const t=o.createdAtMs||0;return t>=start&&t<end;});
+  const capMap={};
+  allCaptains.forEach(c=>{capMap[c.id]={name:c.name,phone:c.phone||'',count:0,delivered:0,total:0,fee:0};});
+  filtered.forEach(o=>{
+    if(!o.captainId)return;
+    if(!capMap[o.captainId])capMap[o.captainId]={name:o.captainName||o.captainId,phone:'',count:0,delivered:0,total:0,fee:0};
+    capMap[o.captainId].count++;
+    capMap[o.captainId].total+=(o.value||0);
+    capMap[o.captainId].fee+=(o.fee||0);
+    if(o.status==='delivered')capMap[o.captainId].delivered++;
+  });
+  const caps=Object.entries(capMap).map(([id,c])=>({id,...c})).sort((a,b)=>b.delivered-a.delivered);
+  const html=caps.length?caps.map(cap=>`
+    <div class="cap-stat-card">
+      <div class="cap-stat-head">
+        <div class="cap-av">🏍️</div>
+        <div style="flex:1">
+          <div style="font-weight:900;font-size:14px;">${cap.name}</div>
+          <div style="font-size:11px;color:var(--muted);">${cap.phone}</div>
         </div>
-        <div class="order-info">${o.restaurantName} → ${o.customer}</div>
-        <div class="order-info">🛵 ${o.captainName || 'بانتظار كابتن'}</div>
+        ${isRest()?`<button class="btn-sm btn-del" onclick="deleteCaptain('${cap.id}')">🗑️ حذف</button>`:''}
       </div>
-    `).join('');
+      <div class="cap-stats-g">
+        <div class="cap-stat-item"><div class="cap-stat-v">${toA(cap.count)}</div><div class="cap-stat-l">طلبات</div></div>
+        <div class="cap-stat-item"><div class="cap-stat-v" style="color:var(--green);">${toA(cap.delivered)}</div><div class="cap-stat-l">مسلّمة</div></div>
+        <div class="cap-stat-item"><div class="cap-stat-v" style="font-size:13px;">${fmt(cap.total)}</div><div class="cap-stat-l">د.ع مبيعات</div></div>
+        <div class="cap-stat-item"><div class="cap-stat-v" style="font-size:13px;">${fmt(cap.fee)}</div><div class="cap-stat-l">د.ع توصيل</div></div>
+        <div class="cap-stat-item"><div class="cap-stat-v" style="color:var(--yellow);">${toA(cap.count-cap.delivered)}</div><div class="cap-stat-l">غير مكتملة</div></div>
+        <div class="cap-stat-item"><div class="cap-stat-v">${cap.count?toA(Math.round(cap.delivered/cap.count*100))+'%':'—'}</div><div class="cap-stat-l">نسبة إنجاز</div></div>
+      </div>
+    </div>`).join(''):'<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد بيانات</div>';
+  document.getElementById('capStatsList').innerHTML=html;
+};
+
+// ADD CAPTAIN
+function populateCapRestSelect(){
+  const sel=document.getElementById('ncRest');
+  if(!sel||isRest())return;
+  sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
 }
 
-function updateLiveStat(id, newVal, oldVal) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = newVal;
-  if (newVal !== oldVal && oldVal !== undefined) {
-    el.parentElement.classList.add('flash');
-    setTimeout(() => el.parentElement.classList.remove('flash'), 600);
+window.addCaptain=async function(){
+  const restId=isRest()?currentUser.restaurantId:document.getElementById('ncRest').value;
+  const name=document.getElementById('ncName').value.trim();
+  const phone=document.getElementById('ncPhone').value.trim();
+  const email=document.getElementById('ncEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('ncPass').value;
+  if(!restId||!name||!phone||!email||!pass){toast('⚠️ أدخل كل البيانات','warn');return;}
+  try{
+    // Create user in secondary app (no logout)
+    const cred=await window._fb.createUserWithEmailAndPassword(window._fb.auth2,email,pass);
+    await window._fb.setDoc(window._fb.doc(window._fb.db,'users',cred.user.uid),{email,role:'captain',name});
+    await window._fb.addDoc(window._fb.collection(window._fb.db,'captains'),{
+      restaurantId:restId,userId:cred.user.uid,name,phone,email,available:true,createdAt:new Date().toISOString()
+    });
+    await window._fb.signOut(window._fb.auth2);
+    toast('✅ تم إضافة الكابتن: '+name);
+    ['ncRest','ncName','ncPhone','ncEmail','ncPass'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  }catch(e){
+    toast('❌ '+e.message,'error');
+    console.error(e);
   }
-}
+};
 
-function renderAdminOrders() {
-  let orders = cachedOrders;
-  if (currentOrderFilter === 'late') orders = orders.filter(o => isOrderLate(o));
-  else if (currentOrderFilter === 'pending') orders = orders.filter(o => o.status === 'pending');
-  else if (currentOrderFilter === 'active') orders = orders.filter(o => ['accepted','pickup','delivering'].includes(o.status));
-  else if (currentOrderFilter === 'delivered') orders = orders.filter(o => o.status === 'delivered');
+window.deleteCaptain=async function(id){
+  if(!confirm('حذف هذا الكابتن؟'))return;
+  try{
+    await window._fb.deleteDoc(window._fb.doc(window._fb.db,'captains',id));
+    toast('🗑️ تم الحذف');
+  }catch(e){toast('❌ '+e.message,'error');}
+};
 
-  const container = document.getElementById('adminOrders');
-  if (orders.length === 0) { container.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><p>لا توجد طلبات</p></div>'; return; }
-  container.innerHTML = orders.map(o => {
-    const isLate = isOrderLate(o);
-    const elapsedMin = o.createdAtMs ? minutesAgo(o.createdAtMs) : 0;
-    const isRecentlyDelivered = o.status === 'delivered' && o.deliveredAtMs && (Date.now() - o.deliveredAtMs) < 300000;
-    const cardStyle = isRecentlyDelivered ? 'border-color: var(--success); box-shadow: 0 0 0 1px var(--success);' : '';
-
-    const timerClass = isLate ? 'danger' : elapsedMin > 20 ? 'warning' : '';
-    const timerHtml = !['delivered','cancelled'].includes(o.status) ?
-      `<span class="order-timer ${timerClass}">⏱️ ${formatDuration(elapsedMin)}</span>` : '';
-
-    return `
-      <div class="order-item ${isLate ? 'late' : ''}" style="${cardStyle}" onclick="openOrderDetail('${o.id}')">
-        ${isLate ? '<div class="late-badge">⚠️ متأخر</div>' : ''}
-        <div class="order-row">
-          <strong>${o.id.substring(0, 6).toUpperCase()}</strong>
-          <div style="display: flex; gap: 4px; align-items: center;">
-            ${timerHtml}
-            ${statusBadge(o.status)}
-          </div>
-        </div>
-        <div class="order-info">🏪 ${o.restaurantName} → 👤 ${o.customer}</div>
-        <div class="order-info">📍 ${o.address}</div>
-        <div class="order-info">🛵 ${o.captainName || 'لم يتم التعيين'} • 💰 ${fmt(o.value)} د.ع</div>
-        ${isRecentlyDelivered ? `<div style="background: rgba(46,204,113,0.1); padding: 4px 8px; border-radius: 6px; font-size: 10px; color: var(--success); margin-top: 6px;">🎉 تم التسليم ${o.deliveredAt}</div>` : ''}
+// RESTAURANTS
+function renderRests(){
+  if(!isAdmin())return;
+  const list=document.getElementById('restList');
+  if(!allRestaurants.length){list.innerHTML='<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد مطاعم</div>';return;}
+  list.innerHTML=allRestaurants.map(r=>{
+    const myCaps=allCaptains.filter(c=>c.restaurantId===r.id);
+    const myOrders=allOrders.filter(o=>o.restaurantId===r.id);
+    const delivered=myOrders.filter(o=>o.status==='delivered');
+    return`<div class="entity">
+      <div class="entity-head">
+        <div class="entity-icon">🍽️</div>
+        <div><div class="entity-name">${r.name}</div><div class="entity-sub">📍 ${r.area||'—'} • 📧 ${r.email||'—'}</div></div>
       </div>
-    `;
-  }).join('');
-}
-
-function renderRestaurantsList() {
-  document.getElementById('restCount').textContent = cachedRestaurants.length;
-  if (cachedRestaurants.length === 0) { document.getElementById('restaurantsList').innerHTML = '<div class="empty"><div class="empty-icon">🏪</div><p>لا توجد مطاعم</p></div>'; return; }
-  document.getElementById('restaurantsList').innerHTML = cachedRestaurants.map(r => {
-    const myCaptains = cachedCaptains.filter(c => c.restaurantId === r.id);
-    const myOrders = cachedOrders.filter(o => o.restaurantId === r.id);
-    const delivered = myOrders.filter(o => o.status === 'delivered');
-    return `<div class="entity-card"><h4>🏪 ${r.name}</h4>
-      <div class="meta">📍 ${r.area}<br>📧 ${r.email}<br>${r.phone ? '📞 ' + r.phone + '<br>' : ''}
-      💰 ${fmt(r.subscription)} د.ع/شهر<br>🛵 ${myCaptains.length} كباتن • 📦 ${myOrders.length} طلبات (${delivered.length} مسلمة)</div>
+      <div class="entity-meta">
+        <div class="meta-item"><strong>${toA(myCaps.length)}</strong>كابتن</div>
+        <div class="meta-item"><strong>${toA(myOrders.length)}</strong>طلب</div>
+        <div class="meta-item"><strong>${toA(delivered.length)}</strong>مسلّمة</div>
+        <div class="meta-item"><strong>${fmt(r.subscription||0)}</strong>د.ع/شهر</div>
+      </div>
       <div class="entity-actions">
-        <button class="btn-sm btn" style="background:var(--info);border:none;color:#fff;border-radius:8px;padding:5px 12px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:12px;" onclick="openEditRest('${r.id}','${(r.name||'').replace(/'/g,'')}','${(r.email||'').replace(/'/g,'')}','${(r.phone||'').replace(/'/g,'')}')">✏️ تعديل</button>
-        <button class="btn-sm btn btn-danger" onclick="deleteRestaurant('${r.id}')">🗑️ حذف</button>
-      </div></div>`;
+        <button class="btn-sm btn-edit" onclick="openEditRest('${r.id}')">✏️ تعديل</button>
+        <button class="btn-sm btn-del" onclick="deleteRest('${r.id}','${r.name}')">🗑️ حذف</button>
+      </div>
+    </div>`;
   }).join('');
 }
 
-function renderCaptainsList() {
-  document.getElementById('capCount').textContent = cachedCaptains.length;
-  if (cachedCaptains.length === 0) { document.getElementById('captainsList').innerHTML = '<div class="empty"><div class="empty-icon">🛵</div><p>لا يوجد كباتن</p></div>'; return; }
-  document.getElementById('captainsList').innerHTML = cachedCaptains.map(c => {
-    const rest = cachedRestaurants.find(r => r.id === c.restaurantId);
-    const myOrders = cachedOrders.filter(o => o.captainId === c.id);
-    const delivered = myOrders.filter(o => o.status === 'delivered');
-    const earnings = delivered.reduce((s,o) => s + (o.fee||0), 0);
-    const loc = cachedCaptainLocations[c.id];
-    const isOnline = loc && (Date.now() - loc.timestamp) < 30000;
-    return `<div class="entity-card"><h4><span>🛵 ${c.name}</span>
-      <span class="badge ${isOnline ? 'badge-success' : 'badge-cancelled'}">${isOnline ? '🟢 متصل' : '⚫ غير متصل'}</span></h4>
-      <div class="meta">🏪 ${rest?.name || '—'}<br>📞 ${c.phone}<br>📧 ${c.email}<br>
-      ${c.vehicle === 'سيارة' ? '🚗' : '🏍️'} ${c.vehicle}<br>📦 ${myOrders.length} طلبات (${delivered.length} مسلمة) • 💰 ${fmt(earnings)} د.ع
-      ${loc ? `<br>📍 GPS: ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}` : ''}</div>
-      <div class="entity-actions"><button class="btn-sm btn btn-danger" onclick="deleteCaptain('${c.id}')">🗑️ حذف</button></div></div>`;
-  }).join('');
+function populateRestSelect(){
+  const sel=document.getElementById('ncRest');
+  if(sel) sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
 }
 
-function populateCaptainDropdown() {
-  const dropdown = document.getElementById('newCapRest');
-  if (!dropdown) return;
-  const current = dropdown.value;
-  dropdown.innerHTML = '<option value="">-- اختر المطعم --</option>' +
-    cachedRestaurants.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
-  dropdown.value = current;
-}
-
-function renderFinancial() {
-  const delivered = cachedOrders.filter(o => o.status === 'delivered');
-  const revenue = delivered.reduce((s,o) => s + (o.commission||0), 0);
-  const payouts = delivered.reduce((s,o) => s + (o.fee||0), 0);
-  const subsTotal = cachedRestaurants.reduce((s,r) => s + (r.subscription || 0), 0);
-  const dailySubShare = Math.round(subsTotal / 30);
-  document.getElementById('f-revenue').textContent = fmt(revenue);
-  document.getElementById('f-commission').textContent = fmt(revenue) + ' د.ع';
-  document.getElementById('f-subs').textContent = fmt(dailySubShare) + ' د.ع';
-  document.getElementById('f-payouts').textContent = fmt(payouts) + ' د.ع';
-  document.getElementById('f-net').textContent = fmt(revenue + dailySubShare - 15000);
-  // Render the new monthly accounting sections
-  setupMonthSelectors();
-  renderAccounting();
-  populateCustomerRestFilter();
-  renderCustomers();
-}
-
-// ============ الحسابات (نظام مرن) ============
-const ARABIC_MONTHS = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-let currentDateMode = 'month'; // day | month | range | all
-
-// عمولات مخصّصة محفوظة محلياً (وأيضاً في Firebase عبر حقل في المطعم/الكابتن)
-// نقرأها من الكائن نفسه: r.commissionType ('percent'|'fixed'), r.commissionValue
-// c.commissionType, c.commissionValue
-
-window.setDateMode = function(mode) {
-  currentDateMode = mode;
-  document.querySelectorAll('[data-datemode]').forEach(b =>
-    b.classList.toggle('active', b.dataset.datemode === mode));
-  document.querySelectorAll('.date-mode').forEach(d => d.style.display = 'none');
-  const el = document.getElementById('dateMode-' + mode);
-  if (el) el.style.display = 'block';
-  renderAccounting();
-};
-
-window.switchCommTab = function(tab) {
-  document.querySelectorAll('[data-commtab]').forEach(b =>
-    b.classList.toggle('active', b.dataset.commtab === tab));
-  document.querySelectorAll('.comm-tab').forEach(d => d.style.display = 'none');
-  const el = document.getElementById('commTab-' + tab);
-  if (el) el.style.display = 'block';
-};
-
-function setupMonthSelectors() {
-  const monthSel = document.getElementById('accMonth');
-  const yearSel = document.getElementById('accYear');
-  if (!monthSel || !yearSel) return;
-  if (monthSel.options.length === 0) {
-    monthSel.innerHTML = ARABIC_MONTHS.map((m,i) => `<option value="${i}">${m}</option>`).join('');
-    const now = new Date();
-    const years = [];
-    for (let y = now.getFullYear(); y >= now.getFullYear() - 2; y--) years.push(y);
-    yearSel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
-    monthSel.value = now.getMonth();
-    yearSel.value = now.getFullYear();
-  }
-  // اضبط اليوم الافتراضي = اليوم
-  const dayInput = document.getElementById('accDay');
-  if (dayInput && !dayInput.value) dayInput.value = new Date().toISOString().slice(0,10);
-}
-
-// يرجع {start, end, label} حسب وضع التاريخ المختار
-function getDateRange() {
-  const now = new Date();
-  if (currentDateMode === 'all') {
-    return { start: 0, end: Infinity, label: 'كل الفترات' };
-  }
-  if (currentDateMode === 'day') {
-    const v = document.getElementById('accDay')?.value;
-    const d = v ? new Date(v + 'T00:00:00') : new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const start = d.getTime();
-    const end = start + 86400000;
-    return { start, end, label: '📅 ' + d.toLocaleDateString('en-GB') };
-  }
-  if (currentDateMode === 'range') {
-    const fromV = document.getElementById('accFrom')?.value;
-    const toV = document.getElementById('accTo')?.value;
-    if (!fromV || !toV) return { start: 0, end: Infinity, label: 'اختر تاريخ البداية والنهاية' };
-    const start = new Date(fromV + 'T00:00:00').getTime();
-    const end = new Date(toV + 'T00:00:00').getTime() + 86400000;
-    return { start, end, label: `📆 ${new Date(fromV).toLocaleDateString('en-GB')} ← ${new Date(toV).toLocaleDateString('en-GB')}` };
-  }
-  // month (افتراضي)
-  const month = parseInt(document.getElementById('accMonth')?.value ?? now.getMonth());
-  const year = parseInt(document.getElementById('accYear')?.value ?? now.getFullYear());
-  const start = new Date(year, month, 1).getTime();
-  const end = new Date(year, month + 1, 1).getTime();
-  return { start, end, label: `🗓️ ${ARABIC_MONTHS[month]} ${year}` };
-}
-
-function getRangeOrders() {
-  const { start, end } = getDateRange();
-  return cachedOrders.filter(o => o.createdAtMs >= start && o.createdAtMs < end);
-}
-
-function getRangeLabel() { return getDateRange().label; }
-
-function renderAccounting() {
-  setupMonthSelectors();
-  const lbl = document.getElementById('dateRangeLabel');
-  if (lbl) lbl.textContent = getRangeLabel();
-  renderCommissionSettings();
-  renderRestaurantAccounting();
-  renderCaptainSalaries();
-}
-
-// ===== حساب العمولة لكل طلب =====
-// عمولة المطعم: حسب إعدادات المطعم (نسبة من قيمة الطلب أو مبلغ ثابت لكل طلب)
-function restCommissionForOrder(order, rest) {
-  const type = rest?.commissionType || 'percent';
-  const val = rest?.commissionValue != null ? rest.commissionValue : 10; // افتراضي 10%
-  if (type === 'fixed') return val;                 // مبلغ ثابت لكل طلب
-  return Math.round((order.value || 0) * val / 100); // نسبة %
-}
-// عمولة الكابتن (راتبه): نسبة من قيمة الطلب أو مبلغ ثابت لكل توصيلة
-function capCommissionForOrder(order, cap) {
-  const type = cap?.commissionType || 'fixed';
-  const val = cap?.commissionValue != null ? cap.commissionValue : (order.fee || 0);
-  if (type === 'percent') return Math.round((order.value || 0) * val / 100);
-  // مبلغ ثابت لكل توصيلة؛ إذا لم يُحدّد، استخدم أجرة التوصيل الأصلية
-  return cap?.commissionValue != null ? val : (order.fee || 0);
-}
-
-// ===== إعدادات العمولة (واجهة التعديل) =====
-function renderCommissionSettings() {
-  // المطاعم
-  const rList = document.getElementById('restCommissionList');
-  if (rList) {
-    if (cachedRestaurants.length === 0) rList.innerHTML = '<div class="empty"><p>لا توجد مطاعم</p></div>';
-    else rList.innerHTML = cachedRestaurants.map(r => {
-      const type = r.commissionType || 'percent';
-      const val = r.commissionValue != null ? r.commissionValue : 10;
-      return `<div class="entity-card">
-        <h4>🏪 ${r.name}</h4>
-        <div style="display:flex; gap:6px; align-items:center; margin-top:6px;">
-          <select class="form-input" style="flex:1;" onchange="updateRestCommission('${r.id}', this.value, null)">
-            <option value="percent" ${type==='percent'?'selected':''}>نسبة %</option>
-            <option value="fixed" ${type==='fixed'?'selected':''}>مبلغ ثابت/طلب</option>
-          </select>
-          <input type="number" class="form-input" style="width:90px;" value="${val}"
-            onchange="updateRestCommission('${r.id}', null, this.value)">
-          <span style="font-size:12px; color:var(--muted);">${type==='percent'?'%':'د.ع'}</span>
-        </div>
-      </div>`;
-    }).join('');
-  }
-  // الكباتن
-  const cList = document.getElementById('capCommissionList');
-  if (cList) {
-    if (cachedCaptains.length === 0) cList.innerHTML = '<div class="empty"><p>لا يوجد كباتن</p></div>';
-    else cList.innerHTML = cachedCaptains.map(c => {
-      const rest = cachedRestaurants.find(r => r.id === c.restaurantId);
-      const type = c.commissionType || 'fixed';
-      const val = c.commissionValue != null ? c.commissionValue : 0;
-      return `<div class="entity-card">
-        <h4>🛵 ${c.name}</h4>
-        <div style="font-size:11px; color:var(--muted);">🏪 ${rest?.name || '—'}</div>
-        <div style="display:flex; gap:6px; align-items:center; margin-top:6px;">
-          <select class="form-input" style="flex:1;" onchange="updateCapCommission('${c.id}', this.value, null)">
-            <option value="fixed" ${type==='fixed'?'selected':''}>مبلغ ثابت/توصيلة</option>
-            <option value="percent" ${type==='percent'?'selected':''}>نسبة %</option>
-          </select>
-          <input type="number" class="form-input" style="width:90px;" value="${val}"
-            onchange="updateCapCommission('${c.id}', null, this.value)">
-          <span style="font-size:12px; color:var(--muted);">${type==='percent'?'%':'د.ع'}</span>
-        </div>
-      </div>`;
-    }).join('');
-  }
-}
-
-window.updateRestCommission = async function(restId, newType, newValue) {
-  const rest = cachedRestaurants.find(r => r.id === restId);
-  if (!rest) return;
-  const update = {};
-  if (newType !== null) update.commissionType = newType;
-  if (newValue !== null) update.commissionValue = parseFloat(newValue) || 0;
-  try {
-    await window.fbFns.updateDoc(window.fbFns.doc(window.fb.db, 'restaurants', restId), update);
-    showToast('✓ تم تحديث عمولة المطعم');
-  } catch (e) { alert('خطأ: ' + e.message); }
-};
-
-window.updateCapCommission = async function(capId, newType, newValue) {
-  const cap = cachedCaptains.find(c => c.id === capId);
-  if (!cap) return;
-  const update = {};
-  if (newType !== null) update.commissionType = newType;
-  if (newValue !== null) update.commissionValue = parseFloat(newValue) || 0;
-  try {
-    await window.fbFns.updateDoc(window.fbFns.doc(window.fb.db, 'captains', capId), update);
-    showToast('✓ تم تحديث عمولة الكابتن');
-  } catch (e) { alert('خطأ: ' + e.message); }
-};
-
-// ===== حسابات المطاعم =====
-function computeRestaurantAccounting() {
-  const orders = getRangeOrders();
-  return cachedRestaurants.map(r => {
-    const myOrders = orders.filter(o => o.restaurantId === r.id);
-    const delivered = myOrders.filter(o => o.status === 'delivered');
-    const commission = delivered.reduce((s,o) => s + restCommissionForOrder(o, r), 0);
-    const ordersValue = delivered.reduce((s,o) => s + (o.value || 0), 0);
-    const sub = r.subscription || 0;
-    const totalDue = commission + sub;
-    const type = r.commissionType || 'percent';
-    const val = r.commissionValue != null ? r.commissionValue : 10;
-    return {
-      name: r.name, area: r.area || '', phone: r.phone || '',
-      commType: type === 'percent' ? `${val}%` : `${fmt(val)} د.ع/طلب`,
-      ordersCount: myOrders.length, deliveredCount: delivered.length,
-      ordersValue, commission, subscription: sub, totalDue
-    };
-  });
-}
-
-function renderRestaurantAccounting() {
-  const list = document.getElementById('restAccountingList');
-  if (!list) return;
-  const data = computeRestaurantAccounting();
-  if (data.length === 0) { list.innerHTML = '<div class="empty"><div class="empty-icon">🏪</div><p>لا توجد مطاعم</p></div>'; return; }
-  const totalCommission = data.reduce((s,d) => s + d.commission, 0);
-  const totalSub = data.reduce((s,d) => s + d.subscription, 0);
-  const grandTotal = data.reduce((s,d) => s + d.totalDue, 0);
-  list.innerHTML = data.map(d => `
-    <div class="entity-card">
-      <h4>🏪 ${d.name}</h4>
-      <div class="meta">
-        📦 ${d.deliveredCount} طلب مسلّم (من ${d.ordersCount})<br>
-        🧮 نوع العمولة: ${d.commType}<br>
-        💵 العمولات: <span style="color:var(--success)">${fmt(d.commission)} د.ع</span><br>
-        📅 الاشتراك: <span style="color:var(--info)">${fmt(d.subscription)} د.ع</span><br>
-        <strong style="color:var(--accent)">💰 المستحق: ${fmt(d.totalDue)} د.ع</strong>
-      </div>
-    </div>`).join('') + `
-    <div class="entity-card" style="border-color:var(--accent);">
-      <h4>📊 الإجمالي — ${getRangeLabel()}</h4>
-      <div class="meta">
-        💵 إجمالي العمولات: <span style="color:var(--success)">${fmt(totalCommission)} د.ع</span><br>
-        📅 إجمالي الاشتراكات: <span style="color:var(--info)">${fmt(totalSub)} د.ع</span><br>
-        <strong style="color:var(--accent)">💰 المجموع الكلي: ${fmt(grandTotal)} د.ع</strong>
-      </div>
-    </div>`;
-}
-
-// ===== رواتب الكباتن =====
-function computeCaptainSalaries() {
-  const orders = getRangeOrders();
-  return cachedCaptains.map(c => {
-    const rest = cachedRestaurants.find(r => r.id === c.restaurantId);
-    const delivered = orders.filter(o => o.captainId === c.id && o.status === 'delivered');
-    const salary = delivered.reduce((s,o) => s + capCommissionForOrder(o, c), 0);
-    const type = c.commissionType || 'fixed';
-    const val = c.commissionValue != null ? c.commissionValue : 0;
-    return {
-      name: c.name, phone: c.phone || '', restaurant: rest?.name || '—',
-      vehicle: c.vehicle || '',
-      commType: type === 'percent' ? `${val}%` : (c.commissionValue != null ? `${fmt(val)} د.ع/توصيلة` : 'أجرة الطلب'),
-      deliveredCount: delivered.length, salary
-    };
-  });
-}
-
-function renderCaptainSalaries() {
-  const list = document.getElementById('capSalaryList');
-  if (!list) return;
-  const data = computeCaptainSalaries();
-  if (data.length === 0) { list.innerHTML = '<div class="empty"><div class="empty-icon">🛵</div><p>لا يوجد كباتن</p></div>'; return; }
-  const totalSalary = data.reduce((s,d) => s + d.salary, 0);
-  data.sort((a,b) => b.salary - a.salary);
-  list.innerHTML = data.map(d => `
-    <div class="entity-card">
-      <h4>🛵 ${d.name}</h4>
-      <div class="meta">
-        🏪 ${d.restaurant}<br>
-        📦 ${d.deliveredCount} توصيلة مسلّمة<br>
-        🧮 العمولة: ${d.commType}<br>
-        <strong style="color:var(--success)">💰 الراتب: ${fmt(d.salary)} د.ع</strong>
-      </div>
-    </div>`).join('') + `
-    <div class="entity-card" style="border-color:var(--accent);">
-      <h4>📊 إجمالي الرواتب — ${getRangeLabel()}</h4>
-      <div class="meta"><strong style="color:var(--success)">💰 ${fmt(totalSalary)} د.ع</strong></div>
-    </div>`;
-}
-
-// ============ تحليل الزبائن ============
-function populateCustomerRestFilter() {
-  const sel = document.getElementById('custRestFilter');
-  if (!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="">كل المطاعم</option>' +
-    cachedRestaurants.map(r => `<option value="${r.id}">${r.name}</option>`).join('');
-  sel.value = current;
-}
-
-function computeCustomers() {
-  const restFilter = document.getElementById('custRestFilter')?.value || '';
-  const map = {};
-  cachedOrders.forEach(o => {
-    if (restFilter && o.restaurantId !== restFilter) return;
-    const key = (o.phone || '').trim() || (o.customer || '').trim();
-    if (!key) return;
-    if (!map[key]) {
-      map[key] = { name: o.customer || '—', phone: o.phone || '—', count: 0, delivered: 0, totalValue: 0, lastOrder: 0, restaurants: new Set() };
-    }
-    const c = map[key];
-    c.count++;
-    if (o.status === 'delivered') { c.delivered++; c.totalValue += (o.value || 0); }
-    if (o.createdAtMs > c.lastOrder) c.lastOrder = o.createdAtMs;
-    const rest = cachedRestaurants.find(r => r.id === o.restaurantId);
-    if (rest) c.restaurants.add(rest.name);
-    if (o.customer && o.customer !== '—') c.name = o.customer;
-  });
-  return Object.values(map).map(c => ({ ...c, restaurants: Array.from(c.restaurants).join('، ') }));
-}
-
-function renderCustomers() {
-  const list = document.getElementById('customersList');
-  if (!list) return;
-  const search = (document.getElementById('custSearch')?.value || '').trim().toLowerCase();
-  let data = computeCustomers();
-  if (search) {
-    data = data.filter(c =>
-      c.name.toLowerCase().includes(search) ||
-      c.phone.toLowerCase().includes(search)
-    );
-  }
-  data.sort((a,b) => b.count - a.count);
-  if (data.length === 0) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">👥</div><p>لا توجد نتائج</p></div>';
-    return;
-  }
-  list.innerHTML = `<div style="color:var(--muted); font-size:11px; margin-bottom:8px;">عدد الزبائن: ${data.length}</div>` +
-    data.slice(0, 100).map(c => {
-      const lastDate = c.lastOrder ? new Date(c.lastOrder).toLocaleDateString('en-GB') : '—';
-      return `<div class="entity-card">
-        <h4><span>👤 ${c.name}</span><span class="badge badge-success">${c.count} طلب</span></h4>
-        <div class="meta">
-          📞 <a href="tel:${c.phone}" style="color:var(--accent)">${c.phone}</a><br>
-          ✅ مسلّم: ${c.delivered} • 💰 إجمالي الصرف: ${fmt(c.totalValue)} د.ع<br>
-          🏪 ${c.restaurants || '—'}<br>
-          🕐 آخر طلب: ${lastDate}
-        </div>
-      </div>`;
-    }).join('');
-}
-
-// ============ تصدير Excel ============
-function downloadExcel(rows, sheetName, fileName) {
-  if (typeof XLSX === 'undefined') { alert('⚠️ مكتبة Excel لم تُحمّل، تحقق من الإنترنت'); return; }
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, sheetName);
-  XLSX.writeFile(wb, fileName);
-}
-
-window.exportRestaurantsExcel = function() {
-  const data = computeRestaurantAccounting();
-  if (data.length === 0) { alert('لا توجد بيانات'); return; }
-  const rows = data.map(d => ({
-    'المطعم': d.name, 'المنطقة': d.area, 'الهاتف': d.phone, 'نوع العمولة': d.commType,
-    'عدد الطلبات': d.ordersCount, 'المسلّمة': d.deliveredCount,
-    'قيمة الطلبات': d.ordersValue, 'العمولات': d.commission,
-    'الاشتراك': d.subscription, 'المستحق الكلي': d.totalDue
-  }));
-  downloadExcel(rows, 'حسابات المطاعم', `حسابات_المطاعم.xlsx`);
-};
-
-window.exportCaptainsExcel = function() {
-  const data = computeCaptainSalaries();
-  if (data.length === 0) { alert('لا توجد بيانات'); return; }
-  const rows = data.map(d => ({
-    'الكابتن': d.name, 'الهاتف': d.phone, 'المطعم': d.restaurant,
-    'المركبة': d.vehicle, 'نوع العمولة': d.commType,
-    'عدد التوصيلات': d.deliveredCount, 'الراتب': d.salary
-  }));
-  downloadExcel(rows, 'رواتب الكباتن', `رواتب_الكباتن.xlsx`);
-};
-
-window.exportCustomersExcel = function() {
-  const search = (document.getElementById('custSearch')?.value || '').trim().toLowerCase();
-  let data = computeCustomers();
-  if (search) data = data.filter(c => c.name.toLowerCase().includes(search) || c.phone.toLowerCase().includes(search));
-  if (data.length === 0) { alert('لا توجد بيانات'); return; }
-  data.sort((a,b) => b.count - a.count);
-  const rows = data.map(c => ({
-    'الزبون': c.name, 'الهاتف': c.phone, 'عدد الطلبات': c.count,
-    'المسلّمة': c.delivered, 'إجمالي الصرف': c.totalValue,
-    'المطاعم': c.restaurants, 'آخر طلب': c.lastOrder ? new Date(c.lastOrder).toLocaleDateString('en-GB') : ''
-  }));
-  downloadExcel(rows, 'الزبائن', `تحليل_الزبائن.xlsx`);
-};
-
-
-// ============ ANALYTICS ============
-function renderAnalytics() {
-  renderOrdersChart();
-  renderRevenueChart();
-  renderStatusChart();
-  renderCaptainLeaderboard();
-  renderRestaurantLeaderboard();
-  renderTimingAnalysis();
-}
-
-// ============ تحليل أوقات المطاعم ============
-// يحسب متوسط الفروق الزمنية بين مراحل الطلب
-function renderTimingAnalysis() {
-  const el = document.getElementById('timingAnalysis');
-  if (!el) return;
-
-  // دالة مساعدة: متوسط فرق زمني بالدقائق بين حقلين
-  function avgDiffMin(orders, fromField, toField) {
-    const diffs = [];
-    orders.forEach(o => {
-      const a = o[fromField], b = o[toField];
-      if (a && b && b > a) diffs.push((b - a) / 60000);
+// ADD RESTAURANT
+window.addRestaurant=async function(){
+  const name=document.getElementById('nrName').value.trim();
+  const area=document.getElementById('nrArea').value.trim();
+  const email=document.getElementById('nrEmail').value.trim().toLowerCase();
+  const phone=document.getElementById('nrPhone').value.trim();
+  const pass=document.getElementById('nrPass').value;
+  const sub=parseInt(document.getElementById('nrSub').value)||50000;
+  if(!name||!area||!email||!pass){toast('⚠️ أدخل الاسم والمنطقة والإيميل وكلمة المرور','warn');return;}
+  if(pass.length<6){toast('⚠️ كلمة المرور 6 أحرف على الأقل','warn');return;}
+  const btn=document.getElementById('addRestBtn');
+  btn.innerHTML='<div class="spin"></div>';btn.disabled=true;
+  try{
+    // Create Firebase Auth user in secondary app
+    const cred=await window._fb.createUserWithEmailAndPassword(window._fb.auth2,email,pass);
+    const uid=cred.user.uid;
+    // Add to users collection
+    await window._fb.setDoc(window._fb.doc(window._fb.db,'users',uid),{email,role:'restaurant',name});
+    // Add to restaurants collection
+    await window._fb.addDoc(window._fb.collection(window._fb.db,'restaurants'),{
+      name,area,email,phone,subscription:sub,userId:uid,
+      createdAt:new Date().toISOString(),createdAtMs:Date.now()
     });
-    if (diffs.length === 0) return null;
-    return Math.round(diffs.reduce((s,x) => s + x, 0) / diffs.length);
-  }
+    // Sign out secondary
+    await window._fb.signOut(window._fb.auth2);
+    toast('✅ تم إضافة المطعم: '+name);
+    ['nrName','nrArea','nrEmail','nrPhone','nrPass'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('nrSub').value='50000';
+  }catch(e){
+    if(e.code==='auth/email-already-in-use') toast('❌ هذا الإيميل مستخدم مسبقاً','error');
+    else toast('❌ '+e.message,'error');
+    console.error(e);
+  }finally{btn.innerHTML='➕ إضافة المطعم';btn.disabled=false;}
+};
 
-  const rows = cachedRestaurants.map(r => {
-    const delivered = cachedOrders.filter(o => o.restaurantId === r.id && o.status === 'delivered');
-    return {
-      name: r.name,
-      count: delivered.length,
-      accept: avgDiffMin(delivered, 'createdAtMs', 'acceptedAtMs'),   // الطلب → القبول
-      prep:   avgDiffMin(delivered, 'acceptedAtMs', 'pickupAtMs'),     // القبول → الاستلام (تجهيز)
-      deliver:avgDiffMin(delivered, 'deliveringAtMs', 'deliveredAtMs'),// الانطلاق → التسليم
-      total:  avgDiffMin(delivered, 'createdAtMs', 'deliveredAtMs')    // الطلب → التسليم (كلي)
-    };
-  }).filter(r => r.count > 0);
+// EDIT RESTAURANT
+window.openEditRest=async function(id){
+  const r=allRestaurants.find(x=>x.id===id);
+  if(!r)return;
+  document.getElementById('erId').value=id;
+  document.getElementById('erName').value=r.name||'';
+  document.getElementById('erArea').value=r.area||'';
+  document.getElementById('erEmail').value=r.email||'';
+  document.getElementById('erPhone').value=r.phone||'';
+  document.getElementById('erSub').value=r.subscription||50000;
+  document.getElementById('erPass').value='';
+  document.getElementById('editRestMo').classList.add('open');
+};
 
-  if (rows.length === 0) {
-    el.innerHTML = '<div class="empty"><div class="empty-icon">⏱️</div><p>لا توجد طلبات مكتملة بعد<br><small>ستظهر الأوقات بعد إتمام طلبات جديدة</small></p></div>';
-    return;
-  }
+window.saveRest=async function(){
+  const id=document.getElementById('erId').value;
+  const name=document.getElementById('erName').value.trim();
+  const area=document.getElementById('erArea').value.trim();
+  const email=document.getElementById('erEmail').value.trim().toLowerCase();
+  const phone=document.getElementById('erPhone').value.trim();
+  const sub=parseInt(document.getElementById('erSub').value)||50000;
+  const pass=document.getElementById('erPass').value;
+  if(!name||!email){toast('⚠️ أدخل الاسم والإيميل','warn');return;}
+  try{
+    // Update restaurants doc
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{name,area,email,phone,subscription:sub});
+    // Update users doc if userId exists
+    const restDoc=await window._fb.getDoc(window._fb.doc(window._fb.db,'restaurants',id));
+    if(restDoc.exists()&&restDoc.data().userId){
+      await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',restDoc.data().userId),{email,name}).catch(()=>{});
+    }
+    if(pass&&pass.length>=6){
+      toast('✅ تم التحديث! لتغيير كلمة المرور يجب من Firebase Console','warn');
+    }else{
+      toast('✅ تم تحديث بيانات المطعم!');
+    }
+    document.getElementById('editRestMo').classList.remove('open');
+  }catch(e){toast('❌ '+e.message,'error');}
+};
 
-  const fmtMin = (v) => v == null ? '—' : `${v} د`;
+window.deleteRest=async function(id,name){
+  if(!confirm(`⚠️ حذف مطعم "${name}" وكل بياناته؟`))return;
+  try{
+    // Delete captains
+    const caps=await window._fb.getDocs(window._fb.query(window._fb.collection(window._fb.db,'captains'),window._fb.where('restaurantId','==',id)));
+    await Promise.all(caps.docs.map(d=>window._fb.deleteDoc(d.ref)));
+    await window._fb.deleteDoc(window._fb.doc(window._fb.db,'restaurants',id));
+    toast('🗑️ تم حذف المطعم');
+  }catch(e){toast('❌ '+e.message,'error');}
+};
 
-  el.innerHTML = rows.map(r => `
-    <div class="entity-card">
-      <h4><span>🏪 ${r.name}</span><span class="badge badge-success">${r.count} طلب</span></h4>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px;">
-        <div class="order-detail-row" style="background:var(--panel); padding:8px; border-radius:8px;">
-          <span>📞 قبول الطلب</span><span style="color:var(--info)">${fmtMin(r.accept)}</span></div>
-        <div class="order-detail-row" style="background:var(--panel); padding:8px; border-radius:8px;">
-          <span>🍔 تجهيز المطعم</span><span style="color:var(--accent-2)">${fmtMin(r.prep)}</span></div>
-        <div class="order-detail-row" style="background:var(--panel); padding:8px; border-radius:8px;">
-          <span>🛵 التوصيل</span><span style="color:var(--accent)">${fmtMin(r.deliver)}</span></div>
-        <div class="order-detail-row" style="background:var(--panel); padding:8px; border-radius:8px;">
-          <span>⏱️ الكلي</span><strong style="color:var(--success)">${fmtMin(r.total)}</strong></div>
-      </div>
-    </div>`).join('');
-
-  // ملخص عام لكل المطاعم
-  const allDelivered = cachedOrders.filter(o => o.status === 'delivered');
-  const gAccept = avgDiffMin(allDelivered, 'createdAtMs', 'acceptedAtMs');
-  const gPrep = avgDiffMin(allDelivered, 'acceptedAtMs', 'pickupAtMs');
-  const gDeliver = avgDiffMin(allDelivered, 'deliveringAtMs', 'deliveredAtMs');
-  const gTotal = avgDiffMin(allDelivered, 'createdAtMs', 'deliveredAtMs');
-  el.innerHTML += `
-    <div class="entity-card" style="border-color:var(--accent);">
-      <h4>📊 المتوسط العام (كل المطاعم)</h4>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:8px;">
-        <div class="order-detail-row" style="background:var(--panel); padding:8px; border-radius:8px;">
-          <span>📞 قبول</span><span style="color:var(--info)">${fmtMin(gAccept)}</span></div>
-        <div class="order-detail-row" style="background:var(--panel); padding:8px; border-radius:8px;">
-          <span>🍔 تجهيز</span><span style="color:var(--accent-2)">${fmtMin(gPrep)}</span></div>
-        <div class="order-detail-row" style="background:var(--panel); padding:8px; border-radius:8px;">
-          <span>🛵 توصيل</span><span style="color:var(--accent)">${fmtMin(gDeliver)}</span></div>
-        <div class="order-detail-row" style="background:var(--panel); padding:8px; border-radius:8px;">
-          <span>⏱️ الكلي</span><strong style="color:var(--success)">${fmtMin(gTotal)}</strong></div>
-      </div>
-    </div>`;
-}
-
-function getDailyData(days) {
-  const result = [];
-  const today = new Date(); today.setHours(0,0,0,0);
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const start = d.getTime();
-    const end = start + 86400000;
-    const dayOrders = cachedOrders.filter(o => o.createdAtMs >= start && o.createdAtMs < end);
-    const delivered = dayOrders.filter(o => o.status === 'delivered');
-    result.push({
-      date: d,
-      label: `${d.getDate()}/${d.getMonth()+1}`,
-      total: dayOrders.length,
-      delivered: delivered.length,
-      revenue: delivered.reduce((s,o) => s + (o.commission||0), 0)
+// ANALYTICS
+window.renderAnalytics=function(){
+  const from=document.getElementById('anFrom')?.value;
+  const to=document.getElementById('anTo')?.value;
+  const start=from?new Date(from+'T00:00:00').getTime():0;
+  const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
+  const fil=allOrders.filter(o=>{const t=o.createdAtMs||0;return t>=start&&t<end;});
+  const delivered=fil.filter(o=>o.status==='delivered');
+  const total=fil.reduce((s,o)=>s+(o.value||0),0);
+  const fees=fil.reduce((s,o)=>s+(o.fee||0),0);
+  const deliveryCount=fil.filter(o=>!o.orderType||o.orderType==='delivery').length;
+  const salonCount=fil.filter(o=>o.orderType==='salon').length;
+  const takeCount=fil.filter(o=>o.orderType==='takeaway').length;
+  let restStats='';
+  if(isAdmin()){
+    const restMap={};
+    fil.forEach(o=>{
+      if(!o.restaurantId)return;
+      if(!restMap[o.restaurantId])restMap[o.restaurantId]={name:o.restaurantName||o.restaurantId,count:0,total:0};
+      restMap[o.restaurantId].count++;restMap[o.restaurantId].total+=(o.value||0);
     });
+    restStats=`<div class="card"><div class="card-title"><span class="dot"></span> تفاصيل المطاعم</div>`+
+      Object.values(restMap).sort((a,b)=>b.total-a.total).map(r=>`
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;">
+          <span>🍽️ ${r.name}</span>
+          <span style="color:var(--accent2);font-weight:700;">${toA(r.count)} طلب — ${fmt(r.total)} د.ع</span>
+        </div>`).join('')+'</div>';
   }
-  return result;
-}
+  document.getElementById('analyticsContent').innerHTML=`
+    <div class="stats" style="grid-template-columns:repeat(2,1fr);">
+      <div class="stat"><div class="stat-v">${toA(fil.length)}</div><div class="stat-l">📦 إجمالي الطلبات</div></div>
+      <div class="stat"><div class="stat-v" style="color:var(--green);">${toA(delivered.length)}</div><div class="stat-l">✅ مسلّمة</div></div>
+      <div class="stat"><div class="stat-v" style="color:var(--blue);">${toA(deliveryCount)}</div><div class="stat-l">🏍️ دلفري</div></div>
+      <div class="stat"><div class="stat-v" style="color:var(--purple);">${toA(salonCount)}</div><div class="stat-l">🪑 صالة</div></div>
+      <div class="stat"><div class="stat-v" style="color:var(--yellow);">${toA(takeCount)}</div><div class="stat-l">🥡 سفري</div></div>
+      <div class="stat"><div class="stat-v" style="font-size:14px;">${fmt(total)}</div><div class="stat-l">💰 المبيعات (د.ع)</div></div>
+      <div class="stat"><div class="stat-v" style="font-size:14px;color:var(--accent);">${fmt(fees)}</div><div class="stat-l">🚗 التوصيل (د.ع)</div></div>
+      <div class="stat"><div class="stat-v" style="font-size:14px;">${fil.length?fmt(Math.round(total/fil.length)):0}</div><div class="stat-l">⌀ متوسط الطلب</div></div>
+    </div>
+    ${restStats}`;
+};
 
-function renderOrdersChart() {
-  const data = getDailyData(currentPeriod);
-  const ctx = document.getElementById('chartOrders').getContext('2d');
-  if (charts.orders) charts.orders.destroy();
-  charts.orders = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: data.map(d => d.label),
-      datasets: [{
-        label: 'كل الطلبات', data: data.map(d => d.total),
-        borderColor: '#ff6b3d', backgroundColor: 'rgba(255, 107, 61, 0.1)',
-        tension: 0.3, fill: true, borderWidth: 2
-      }, {
-        label: 'المسلّمة', data: data.map(d => d.delivered),
-        borderColor: '#2ecc71', backgroundColor: 'rgba(46, 204, 113, 0.1)',
-        tension: 0.3, fill: true, borderWidth: 2
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: {
-        legend: { labels: { color: '#e8eaf0', font: { family: 'Tajawal', size: 11 } } }
-      },
-      scales: {
-        x: { ticks: { color: '#8a93a6', font: { family: 'Tajawal' } }, grid: { color: '#262b38' } },
-        y: { ticks: { color: '#8a93a6', font: { family: 'Tajawal' } }, grid: { color: '#262b38' }, beginAtZero: true }
-      }
-    }
-  });
-}
-
-function renderRevenueChart() {
-  const data = getDailyData(currentPeriod);
-  const ctx = document.getElementById('chartRevenue').getContext('2d');
-  if (charts.revenue) charts.revenue.destroy();
-  charts.revenue = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: data.map(d => d.label),
-      datasets: [{
-        label: 'العمولات (د.ع)', data: data.map(d => d.revenue),
-        backgroundColor: 'rgba(255, 184, 77, 0.7)',
-        borderColor: '#ffb84d', borderWidth: 1, borderRadius: 6
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#e8eaf0', font: { family: 'Tajawal' } } } },
-      scales: {
-        x: { ticks: { color: '#8a93a6', font: { family: 'Tajawal' } }, grid: { color: '#262b38' } },
-        y: { ticks: { color: '#8a93a6', font: { family: 'Tajawal' }, callback: (v) => v.toLocaleString() }, grid: { color: '#262b38' }, beginAtZero: true }
-      }
-    }
-  });
-}
-
-function renderStatusChart() {
-  const cutoffMs = Date.now() - currentPeriod * 86400000;
-  const orders = cachedOrders.filter(o => o.createdAtMs >= cutoffMs);
-  const counts = { pending: 0, accepted: 0, pickup: 0, delivering: 0, delivered: 0, cancelled: 0 };
-  orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
-  const ctx = document.getElementById('chartStatus').getContext('2d');
-  if (charts.status) charts.status.destroy();
-  charts.status = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['ينتظر', 'مقبول', 'في المطعم', 'يتوصل', 'مسلّم', 'ملغي'],
-      datasets: [{
-        data: [counts.pending, counts.accepted, counts.pickup, counts.delivering, counts.delivered, counts.cancelled],
-        backgroundColor: ['#ffc83d', '#4dabf7', '#ff6b3d', '#ffb84d', '#2ecc71', '#ff4757'],
-        borderColor: '#161922', borderWidth: 2
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { color: '#e8eaf0', font: { family: 'Tajawal', size: 11 }, padding: 10 } } }
-    }
-  });
-}
-
-function renderCaptainLeaderboard() {
-  const cutoffMs = Date.now() - currentPeriod * 86400000;
-  const stats = cachedCaptains.map(c => {
-    const myOrders = cachedOrders.filter(o => o.captainId === c.id && o.createdAtMs >= cutoffMs);
-    const delivered = myOrders.filter(o => o.status === 'delivered');
-    const rejected = cachedOrders.filter(o => (o.rejectedBy || []).includes(c.id) && o.createdAtMs >= cutoffMs).length;
-    const earnings = delivered.reduce((s,o) => s + (o.fee||0), 0);
-
-    // Calculate rating from delivery time and rejection rate
-    let avgTime = 0;
-    const timed = delivered.filter(o => o.deliveredAtMs && o.createdAtMs);
-    if (timed.length > 0) avgTime = timed.reduce((s,o) => s + (o.deliveredAtMs - o.createdAtMs), 0) / timed.length / 60000;
-
-    let stars = 5;
-    if (avgTime > 45) stars -= 1;
-    if (avgTime > 60) stars -= 1;
-    if (rejected > delivered.length * 0.3) stars -= 1;
-    if (delivered.length === 0 && myOrders.length === 0) stars = 0;
-    stars = Math.max(0, stars);
-
-    return { ...c, deliveredCount: delivered.length, totalOrders: myOrders.length, rejected, earnings, avgTime, stars };
-  }).filter(c => c.totalOrders > 0).sort((a,b) => b.deliveredCount - a.deliveredCount);
-
-  const list = document.getElementById('captainLeaderboard');
-  if (stats.length === 0) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">🛵</div><p>لا توجد بيانات</p></div>';
-    return;
-  }
-  list.innerHTML = stats.slice(0, 10).map((c, i) => {
-    let rankClass = '';
-    if (i === 0) rankClass = 'gold';
-    else if (i === 1) rankClass = 'silver';
-    else if (i === 2) rankClass = 'bronze';
-    const starsHtml = Array.from({length: 5}, (_, idx) =>
-      `<span class="${idx < c.stars ? 'full' : 'empty'}">★</span>`).join('');
-    return `<div class="leaderboard-item">
-      <div class="leaderboard-rank ${rankClass}">${i + 1}</div>
-      <div class="leaderboard-info">
-        <div class="leaderboard-name">🛵 ${c.name}</div>
-        <div class="leaderboard-meta">
-          <span class="leaderboard-stars">${starsHtml}</span>
-          • ${c.deliveredCount} توصيلة • ${c.avgTime > 0 ? Math.round(c.avgTime) + ' دق متوسط' : '—'}
-        </div>
-      </div>
-      <div class="leaderboard-value">${fmt(c.earnings)} د.ع</div>
-    </div>`;
-  }).join('');
-}
-
-function renderRestaurantLeaderboard() {
-  const cutoffMs = Date.now() - currentPeriod * 86400000;
-  const stats = cachedRestaurants.map(r => {
-    const myOrders = cachedOrders.filter(o => o.restaurantId === r.id && o.createdAtMs >= cutoffMs);
-    const delivered = myOrders.filter(o => o.status === 'delivered');
-    const revenue = delivered.reduce((s,o) => s + (o.value||0), 0);
-    const commission = delivered.reduce((s,o) => s + (o.commission||0), 0);
-    return { ...r, totalOrders: myOrders.length, deliveredCount: delivered.length, revenue, commission };
-  }).filter(r => r.totalOrders > 0).sort((a,b) => b.totalOrders - a.totalOrders);
-
-  const list = document.getElementById('restaurantLeaderboard');
-  if (stats.length === 0) {
-    list.innerHTML = '<div class="empty"><div class="empty-icon">🍽️</div><p>لا توجد بيانات</p></div>';
-    return;
-  }
-  list.innerHTML = stats.slice(0, 10).map((r, i) => {
-    let rankClass = '';
-    if (i === 0) rankClass = 'gold';
-    else if (i === 1) rankClass = 'silver';
-    else if (i === 2) rankClass = 'bronze';
-    return `<div class="leaderboard-item">
-      <div class="leaderboard-rank ${rankClass}">${i + 1}</div>
-      <div class="leaderboard-info">
-        <div class="leaderboard-name">🏪 ${r.name}</div>
-        <div class="leaderboard-meta">${r.deliveredCount}/${r.totalOrders} • عمولات: ${fmt(r.commission)} د.ع</div>
-      </div>
-      <div class="leaderboard-value">${r.totalOrders} طلب</div>
-    </div>`;
-  }).join('');
-}
-
-// Auto refresh every 5 seconds
-
-
-// Desktop nav
-document.querySelectorAll('.desktop-nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const screen = btn.dataset.dscreen;
-    if(!screen) return;
-    // Click matching mobile nav button
-    const mobileBtn = document.querySelector(`.nav-btn[data-screen="${screen}"]`);
-    if(mobileBtn) mobileBtn.click();
-    // Update desktop active state
-    document.querySelectorAll('.desktop-nav-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  });
-});
-// Sync mobile → desktop
-document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const screen = btn.dataset.screen;
-    document.querySelectorAll('.desktop-nav-btn').forEach(b => b.classList.remove('active'));
-    const dBtn = document.querySelector(`.desktop-nav-btn[data-dscreen="${screen}"]`);
-    if(dBtn) dBtn.classList.add('active');
-  });
+// MODAL
+window.closeMo=id=>document.getElementById(id).classList.remove('open');
+document.addEventListener('click',e=>{
+  document.querySelectorAll('.modal-ov.open').forEach(mo=>{if(e.target===mo)mo.classList.remove('open');});
 });
 
-
-setInterval(() => { if (currentUser) renderAll(); }, 5000);
+// SW
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
-
-<script>
-);
-}
-</script>
-
-<!-- Edit Restaurant Modal -->
-<div id="editRestModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:5000;align-items:center;justify-content:center;padding:20px;">
-  <div style="background:var(--panel);border-radius:20px;padding:24px;width:100%;max-width:400px;border:1px solid var(--line);">
-    <div style="font-size:16px;font-weight:900;margin-bottom:16px;">✏️ تعديل بيانات المطعم</div>
-    <input type="hidden" id="editRestId">
-    <div style="margin-bottom:10px;">
-      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">اسم المطعم</label>
-      <input type="text" id="editRestName" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;">
-    </div>
-    <div style="margin-bottom:10px;">
-      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">الإيميل الجديد</label>
-      <input type="email" id="editRestEmail" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;">
-    </div>
-    <div style="margin-bottom:10px;">
-      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">رقم الهاتف</label>
-      <input type="tel" id="editRestPhone" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;">
-    </div>
-    <div style="margin-bottom:16px;">
-      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">كلمة المرور الجديدة (اتركها فارغة إذا لا تريد تغييرها)</label>
-      <input type="password" id="editRestPass" placeholder="••••••" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;">
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="saveEditRest()" style="flex:1;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">✅ حفظ</button>
-      <button onclick="document.getElementById('editRestModal').style.display='none'" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:13px;cursor:pointer;">إلغاء</button>
-    </div>
-  </div>
-</div>
 </body>
 </html>
