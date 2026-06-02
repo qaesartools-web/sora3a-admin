@@ -18,6 +18,21 @@
   --success: #2ecc71; --danger: #ff4757; --info: #4dabf7; --warning: #ffc83d;
   --purple: #a855f7; --pink: #ec4899; --role-color: #ff6b3d;
 }
+
+/* ── SPLASH ── */
+#splash{position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0f1115 0%,#1a0a05 50%,#0f1115 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .6s;}
+#splash.hide{opacity:0;pointer-events:none;}
+.sp-logo{width:90px;height:90px;background:linear-gradient(135deg,#ff6b3d,#ffb84d);border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:40px;box-shadow:0 0 60px rgba(255,107,61,.5);animation:spPulse 1.5s ease-in-out infinite;margin-bottom:20px;}
+@keyframes spPulse{0%,100%{transform:scale(1);box-shadow:0 0 40px rgba(255,107,61,.4);}50%{transform:scale(1.06);box-shadow:0 0 80px rgba(255,107,61,.7);}}
+.sp-title{font-size:32px;font-weight:900;background:linear-gradient(135deg,#ff6b3d,#ffb84d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:fadeUp .8s ease both;}
+.sp-sub{font-size:13px;color:#8a93a6;margin-top:6px;animation:fadeUp .8s ease .2s both;}
+.sp-dots{display:flex;gap:8px;margin-top:28px;animation:fadeUp .8s ease .4s both;}
+.sp-dot{width:8px;height:8px;border-radius:50%;background:#ff6b3d;animation:dotB 1.2s ease infinite;}
+.sp-dot:nth-child(2){animation-delay:.2s;background:#ffb84d;}
+.sp-dot:nth-child(3){animation-delay:.4s;background:rgba(255,107,61,.4);}
+@keyframes dotB{0%,100%{transform:translateY(0);}50%{transform:translateY(-10px);}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px);}to{opacity:1;transform:translateY(0);}}
+
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 body { font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 80px; }
 .login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
@@ -575,7 +590,7 @@ header {
   </div>
 
   <div class="sub-screen active" id="manage-restaurants">
-    <div class="card">
+    <div class="card superadmin-only">
       <div class="card-title"><span class="dot"></span> 🍽️ تسجيل مطعم جديد</div>
       <div class="hint hint-success">✨ ستبقى مسجل دخول كإدارة!</div>
       <div class="form-group"><label>اسم المطعم *</label><input type="text" id="newRestName"></div>
@@ -788,6 +803,17 @@ window.fbFns = { initializeApp, deleteApp, signInWithEmailAndPassword, createUse
 
 document.getElementById('loginScreen').style.display = 'flex';
 window.dispatchEvent(new Event('firebaseReady'));
+
+// Splash
+setTimeout(()=>{
+  const sp=document.getElementById('splash');
+  sp.classList.add('hide');
+  setTimeout(()=>{
+    sp.style.display='none';
+    document.querySelector('.login-screen').style.display='flex';
+  },600);
+},2500);
+
 </script>
 
 <script>
@@ -955,30 +981,37 @@ function setupAuthListener() {
         // إذا مطعم، نجيب restaurantId
         if (userData.role === 'restaurant') {
           try {
-            const restSnap = await window.fbFns.getDocs(
+            // Search by email first (most reliable after email update)
+            let restSnap = await window.fbFns.getDocs(
               window.fbFns.query(
                 window.fbFns.collection(window.fb.db, 'restaurants'),
-                window.fbFns.where('userId', '==', user.uid)
+                window.fbFns.where('email', '==', user.email)
               )
             );
+            // If not found by email, try userId
+            if (restSnap.empty) {
+              restSnap = await window.fbFns.getDocs(
+                window.fbFns.query(
+                  window.fbFns.collection(window.fb.db, 'restaurants'),
+                  window.fbFns.where('userId', '==', user.uid)
+                )
+              );
+            }
             if (!restSnap.empty) {
               currentUser.restaurantId = restSnap.docs[0].id;
               currentUser.restaurantName = restSnap.docs[0].data().name;
-            } else {
-              // إذا ما لقى مطعم، نبحث بالإيميل
-              const restByEmail = await window.fbFns.getDocs(
-                window.fbFns.query(
-                  window.fbFns.collection(window.fb.db, 'restaurants'),
-                  window.fbFns.where('email', '==', user.email)
-                )
-              );
-              if (!restByEmail.empty) {
-                currentUser.restaurantId = restByEmail.docs[0].id;
-                currentUser.restaurantName = restByEmail.docs[0].data().name;
+              // Auto-update userId if changed
+              if(restSnap.docs[0].data().userId !== user.uid) {
+                window.fbFns.updateDoc(window.fbFns.doc(window.fb.db,'restaurants',restSnap.docs[0].id),{userId:user.uid}).catch(()=>{});
               }
+            } else {
+              await window.fbFns.signOut(window.fb.auth);
+              document.getElementById('loginError').textContent = '❌ هذا الحساب غير مرتبط بمطعم';
+              document.getElementById('loginError').style.display = 'block';
+              return;
             }
           } catch (e) {
-            console.warn('restaurantId fetch failed, continuing:', e.message);
+            console.warn('restaurantId fetch failed:', e.message);
           }
         }
         
@@ -1833,7 +1866,10 @@ function renderRestaurantsList() {
     return `<div class="entity-card"><h4>🏪 ${r.name}</h4>
       <div class="meta">📍 ${r.area}<br>📧 ${r.email}<br>${r.phone ? '📞 ' + r.phone + '<br>' : ''}
       💰 ${fmt(r.subscription)} د.ع/شهر<br>🛵 ${myCaptains.length} كباتن • 📦 ${myOrders.length} طلبات (${delivered.length} مسلمة)</div>
-      <div class="entity-actions"><button class="btn-sm btn btn-danger" onclick="deleteRestaurant('${r.id}')">🗑️ حذف</button></div></div>`;
+      <div class="entity-actions">
+        <button class="btn-sm btn" style="background:var(--info);border:none;color:#fff;border-radius:8px;padding:5px 12px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:12px;" onclick="openEditRest('${r.id}','${(r.name||'').replace(/'/g,'')}','${(r.email||'').replace(/'/g,'')}','${(r.phone||'').replace(/'/g,'')}')">✏️ تعديل</button>
+        <button class="btn-sm btn btn-danger" onclick="deleteRestaurant('${r.id}')">🗑️ حذف</button>
+      </div></div>`;
   }).join('');
 }
 
@@ -2559,5 +2595,33 @@ setInterval(() => { if (currentUser) renderAll(); }, 5000);
 );
 }
 </script>
+
+<!-- Edit Restaurant Modal -->
+<div id="editRestModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:5000;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--panel);border-radius:20px;padding:24px;width:100%;max-width:400px;border:1px solid var(--line);">
+    <div style="font-size:16px;font-weight:900;margin-bottom:16px;">✏️ تعديل بيانات المطعم</div>
+    <input type="hidden" id="editRestId">
+    <div style="margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">اسم المطعم</label>
+      <input type="text" id="editRestName" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;">
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">الإيميل الجديد</label>
+      <input type="email" id="editRestEmail" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;">
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">رقم الهاتف</label>
+      <input type="tel" id="editRestPhone" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;">
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:4px;">كلمة المرور الجديدة (اتركها فارغة إذا لا تريد تغييرها)</label>
+      <input type="password" id="editRestPass" placeholder="••••••" style="width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;">
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="saveEditRest()" style="flex:1;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;">✅ حفظ</button>
+      <button onclick="document.getElementById('editRestModal').style.display='none'" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:13px;cursor:pointer;">إلغاء</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
