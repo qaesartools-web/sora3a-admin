@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>سرعة — الإدارة</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <style>
 :root{
   --bg:#0f1115; --panel:#161922; --panel2:#1d2230; --line:#262b38;
@@ -191,6 +192,52 @@ body.rest-mode .admin-only{display:none!important;}
 /* Install btn */
 #installBtn{display:none;position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;border:none;border-radius:20px;padding:8px 18px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;z-index:7000;box-shadow:0 4px 20px rgba(255,107,61,.5);}
 
+/* ── STAFF MODE ── */
+body.staff-mode .manage-only{display:none!important;}
+.staff-banner{background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(168,85,247,.05));border:1px solid rgba(168,85,247,.3);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-weight:700;color:var(--purple);text-align:center;display:none;}
+body.staff-mode .staff-banner{display:block;}
+.role-staff{background:rgba(168,85,247,.2);color:var(--purple);}
+
+/* ── SUBSCRIPTION BADGE ── */
+.sub-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;font-size:10px;font-weight:800;}
+.sub-active{background:rgba(46,204,113,.15);color:var(--green);}
+.sub-warn{background:rgba(255,200,61,.15);color:#ffc83d;}
+.sub-expired{background:rgba(255,71,87,.15);color:var(--red);}
+.sub-off{background:rgba(138,147,166,.15);color:var(--muted);}
+
+/* ── TOGGLE SWITCH ── */
+.tgl{position:relative;display:inline-block;width:40px;height:22px;flex-shrink:0;}
+.tgl input{opacity:0;width:0;height:0;}
+.tgl-slider{position:absolute;cursor:pointer;inset:0;background:var(--line);transition:.25s;border-radius:22px;}
+.tgl-slider::before{position:absolute;content:"";height:16px;width:16px;left:3px;bottom:3px;background:#fff;transition:.25s;border-radius:50%;}
+.tgl input:checked + .tgl-slider{background:var(--green);}
+.tgl input:checked + .tgl-slider::before{transform:translateX(-18px);}
+
+/* ── SEARCH BOX ── */
+.search-box{position:relative;margin-bottom:12px;}
+.search-box input{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;transition:border-color .2s;}
+.search-box input:focus{border-color:var(--accent);}
+
+/* ── CHART CARD ── */
+.chart-wrap{position:relative;height:240px;margin-top:4px;}
+
+/* ── EXPORT BTN ── */
+.btn-export{background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.3);padding:8px 16px;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s;}
+.btn-export:hover{background:rgba(46,204,113,.22);}
+
+/* ── NOTIF PULSE ── */
+@keyframes notifPulse{0%{box-shadow:0 0 0 0 rgba(255,107,61,.5);}70%{box-shadow:0 0 0 12px rgba(255,107,61,0);}100%{box-shadow:0 0 0 0 rgba(255,107,61,0);}}
+.notif-pulse{animation:notifPulse 1.4s ease-out 2;}
+
+/* ── MODERN CARD HOVER (visual polish) ── */
+.card{transition:box-shadow .25s, transform .25s;}
+.card:hover{box-shadow:0 12px 40px rgba(0,0,0,.25);}
+.stat{cursor:default;}
+.entity{position:relative;overflow:hidden;}
+.entity::before{content:'';position:absolute;inset:0 auto 0 0;width:3px;background:linear-gradient(180deg,var(--accent),var(--accent2));opacity:0;transition:opacity .25s;}
+.entity:hover::before{opacity:1;}
+.btn-primary{position:relative;overflow:hidden;}
+
 /* Scrollbar */
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
 </style>
@@ -242,6 +289,7 @@ body.rest-mode .admin-only{display:none!important;}
     <!-- Dashboard -->
     <div class="screen on" id="scDash">
       <div class="rest-banner" id="restBanner">🍽️ أنت تشوف بيانات مطعمك فقط</div>
+      <div class="staff-banner">👥 وضع الموظف — عرض فقط بدون صلاحية تعديل أو حذف</div>
       <div class="stats" id="dashStats"></div>
       <div class="card">
         <div class="card-title"><span class="dot"></span> آخر الطلبات</div>
@@ -251,8 +299,9 @@ body.rest-mode .admin-only{display:none!important;}
 
     <!-- Orders -->
     <div class="screen" id="scOrders">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-  <button class="btn-sm btn-del" onclick="deleteAllOrders()" style="font-size:12px;padding:6px 12px;">🗑️ حذف الكل</button>
+      <div class="search-box"><input id="orderSearch" placeholder="🔍 بحث بالاسم أو رقم الهاتف..." oninput="renderOrders()"></div>
+<div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+  <button class="btn-sm btn-del manage-only" onclick="deleteAllOrders()" style="font-size:12px;padding:6px 12px;">🗑️ حذف الكل</button>
 </div>
 <div class="filter-row" id="ordersFilter">
         <button class="filter-btn on" onclick="setOF('all',this)">📋 الكل</button>
@@ -274,7 +323,7 @@ body.rest-mode .admin-only{display:none!important;}
       </div>
       <div id="capStatsList"></div>
       <!-- Add Captain Form -->
-      <div class="card" id="addCapForm">
+      <div class="card manage-only" id="addCapForm">
         <div class="card-title"><span class="dot"></span> ➕ إضافة كابتن</div>
         <div class="form-group admin-only"><label>المطعم *</label><select class="form-sel" id="ncRest"><option value="">-- اختر --</option></select></div>
         <div class="form-row">
@@ -306,6 +355,7 @@ body.rest-mode .admin-only{display:none!important;}
           <div class="form-group"><label>كلمة المرور *</label><input class="form-inp" id="nrPass" type="password" placeholder="••••••"></div>
           <div class="form-group"><label>الاشتراك (د.ع/شهر)</label><input class="form-inp" id="nrSub" type="number" placeholder="50000" value="50000"></div>
         </div>
+        <div class="form-group"><label>تاريخ انتهاء الاشتراك</label><input class="form-inp" id="nrExpiry" type="date"></div>
         <button class="btn-primary" id="addRestBtn" onclick="addRestaurant()">➕ إضافة المطعم</button>
       </div>
       <!-- List -->
@@ -336,7 +386,25 @@ body.rest-mode .admin-only{display:none!important;}
         <input type="date" id="anTo">
         <button onclick="renderAnalytics()">🔍 بحث</button>
       </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        <button class="btn-export" onclick="exportCSV()">⬇️ تصدير CSV</button>
+      </div>
+      <div class="card"><div class="card-title"><span class="dot"></span> 📈 الطلبات اليومية</div><div class="chart-wrap"><canvas id="ordersChart"></canvas></div></div>
       <div id="analyticsContent"></div>
+    </div>
+
+    <!-- Staff (admin only) -->
+    <div class="screen admin-only" id="scStaff">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> ➕ إضافة موظف (صلاحية عرض فقط)</div>
+        <div class="form-row">
+          <div class="form-group"><label>الاسم *</label><input class="form-inp" id="nsName" placeholder="اسم الموظف"></div>
+          <div class="form-group"><label>الإيميل *</label><input class="form-inp" id="nsEmail" type="email" placeholder="staff@sora3a.com"></div>
+        </div>
+        <div class="form-group"><label>كلمة المرور *</label><input class="form-inp" id="nsPass" type="password" placeholder="••••••"></div>
+        <button class="btn-primary" id="addStaffBtn" onclick="addStaff()">➕ إضافة الموظف</button>
+      </div>
+      <div id="staffList"></div>
     </div>
   </div>
 
@@ -354,10 +422,27 @@ body.rest-mode .admin-only{display:none!important;}
     <div class="form-group"><label>الإيميل الجديد *</label><input class="form-inp" id="erEmail" type="email"></div>
     <div class="form-group"><label>الهاتف</label><input class="form-inp" id="erPhone" type="tel"></div>
     <div class="form-group"><label>الاشتراك (د.ع/شهر)</label><input class="form-inp" id="erSub" type="number"></div>
+    <div class="form-group"><label>تاريخ انتهاء الاشتراك</label><input class="form-inp" id="erExpiry" type="date"></div>
+    <div class="form-group" style="display:flex;align-items:center;justify-content:space-between;"><label style="margin:0;">حالة المطعم</label><label class="tgl"><input type="checkbox" id="erActive" checked><span class="tgl-slider"></span></label></div>
     <div class="form-group"><label>كلمة المرور الجديدة (اتركها فارغة إذا لا تريد تغييرها)</label><input class="form-inp" id="erPass" type="password" placeholder="••••••"></div>
     <div class="modal-btns">
       <button class="btn-save" onclick="saveRest()">✅ حفظ</button>
       <button class="btn-cancel" onclick="closeMo('editRestMo')">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Captain Modal -->
+<div class="modal-ov" id="editCapMo">
+  <div class="modal">
+    <div class="modal-title">✏️ تعديل بيانات الكابتن</div>
+    <input type="hidden" id="ecId">
+    <div class="form-group"><label>الاسم *</label><input class="form-inp" id="ecName"></div>
+    <div class="form-group"><label>الهاتف</label><input class="form-inp" id="ecPhone" type="tel"></div>
+    <div class="form-group"><label>الإيميل</label><input class="form-inp" id="ecEmail" type="email"></div>
+    <div class="modal-btns">
+      <button class="btn-save" onclick="saveCaptain()">✅ حفظ</button>
+      <button class="btn-cancel" onclick="closeMo('editCapMo')">إلغاء</button>
     </div>
   </div>
 </div>
@@ -405,13 +490,37 @@ window.dispatchEvent(new Event('fbReady'));
 'use strict';
 
 let currentUser=null, restData=null;
-let allOrders=[], allCaptains=[], allRestaurants=[];
+let allOrders=[], allCaptains=[], allRestaurants=[], allStaff=[];
 let unsubs=[], orderFilter='all', installPrompt=null, toastT;
 
 const fmt=n=>Number(n||0).toLocaleString('ar-IQ');
 const toA=n=>n.toString().replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
 const isAdmin=()=>currentUser?.role==='admin';
 const isRest=()=>currentUser?.role==='restaurant';
+const isStaff=()=>currentUser?.role==='staff';
+const canManage=()=>isAdmin()||isRest();
+let prevPendingCount=null, notifReady=false;
+function playNotifSound(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.connect(g);g.connect(ctx.destination);
+    o.frequency.value=880;o.type='sine';
+    g.gain.setValueAtTime(.001,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(.25,ctx.currentTime+.02);
+    g.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.35);
+    o.start();o.stop(ctx.currentTime+.36);
+    setTimeout(()=>{
+      const o2=ctx.createOscillator(), g2=ctx.createGain();
+      o2.connect(g2);g2.connect(ctx.destination);
+      o2.frequency.value=1160;o2.type='sine';
+      g2.gain.setValueAtTime(.001,ctx.currentTime);
+      g2.gain.exponentialRampToValueAtTime(.25,ctx.currentTime+.02);
+      g2.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.3);
+      o2.start();o2.stop(ctx.currentTime+.31);
+    },160);
+  }catch(e){}
+}
 
 function toast(msg,type='success'){
   const t=document.getElementById('toast');
@@ -450,7 +559,7 @@ window.addEventListener('fbReady',()=>{
         const udoc=await fb.getDoc(fb.doc(fb.db,'users',user.uid));
         if(!udoc.exists()){await fb.signOut(fb.auth);return;}
         const ud=udoc.data();
-        if(ud.role!=='admin'&&ud.role!=='restaurant'){
+        if(ud.role!=='admin'&&ud.role!=='restaurant'&&ud.role!=='staff'){
           await fb.signOut(fb.auth);
           showErr('❌ هذا الحساب غير مصرح له');return;
         }
@@ -517,10 +626,11 @@ window.doLogout=async()=>{
 function enterApp(){
   document.getElementById('loginPage').style.display='none';
   document.getElementById('appPage').style.display='block';
-  document.getElementById('hdrName').textContent=currentUser.restaurantName||currentUser.email;
-  document.getElementById('hdrRole').className='hdr-role '+(isAdmin()?'role-admin':'role-rest');
-  document.getElementById('hdrRole').textContent=isAdmin()?'👑 إدارة عليا':'🍽️ مطعم';
+  document.getElementById('hdrName').textContent=currentUser.restaurantName||currentUser.name||currentUser.email;
+  document.getElementById('hdrRole').className='hdr-role '+(isAdmin()?'role-admin':isStaff()?'role-staff':'role-rest');
+  document.getElementById('hdrRole').textContent=isAdmin()?'👑 إدارة عليا':isStaff()?'👥 موظف':'🍽️ مطعم';
   if(isRest()) document.body.classList.add('rest-mode');
+  if(isStaff()) document.body.classList.add('staff-mode');
   buildNavs();
   startListeners();
 }
@@ -533,6 +643,7 @@ const tabs=[
   {id:'rests',label:'المطاعم',icon:'🍽️',screen:'scRests',adminOnly:true},
   {id:'map',label:'الخريطة',icon:'🗺️',screen:'scMap',adminOnly:false},
   {id:'analytics',label:'التحليلات',icon:'📊',screen:'scAnalytics',adminOnly:false},
+  {id:'staff',label:'الموظفين',icon:'👥',screen:'scStaff',adminOnly:true},
 ];
 
 function buildNavs(){
@@ -554,6 +665,7 @@ window.goTab=function(screenId,btn){
   if(screenId==='scMap')initMap();
   if(screenId==='scAnalytics')renderAnalytics();
   if(screenId==='scRests')renderRests();
+  if(screenId==='scStaff')renderStaffList();
 };
 
 // LISTENERS
@@ -564,6 +676,15 @@ function startListeners(){
     : fb.query(fb.collection(fb.db,'orders'));
   unsubs.push(fb.onSnapshot(ordersQ,snap=>{
     allOrders=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0));
+    const pendingCount=allOrders.filter(o=>o.status==='pending').length;
+    if(notifReady&&prevPendingCount!==null&&pendingCount>prevPendingCount){
+      playNotifSound();
+      toast('🔔 طلب جديد وصل!','success');
+      const hb=document.querySelector('.hdr-logo');
+      if(hb){hb.classList.add('notif-pulse');setTimeout(()=>hb.classList.remove('notif-pulse'),3000);}
+    }
+    prevPendingCount=pendingCount;
+    notifReady=true;
     renderDash();renderOrders();
   }));
   const capsQ=isRest()
@@ -578,6 +699,10 @@ function startListeners(){
       allRestaurants=snap.docs.map(d=>({id:d.id,...d.data()}));
       renderRests();
       populateRestSelect();
+    }));
+    unsubs.push(fb.onSnapshot(fb.collection(fb.db,'staff'),snap=>{
+      allStaff=snap.docs.map(d=>({id:d.id,...d.data()}));
+      renderStaffList();
     }));
   }
 }
@@ -621,11 +746,36 @@ function orderCard(o){
       ${o.captainName?`<span style="font-size:11px;color:var(--muted);">🛵 ${o.captainName}</span>`:''}
       ${isAdmin()&&o.restaurantName?`<span style="font-size:11px;color:var(--muted);">🍽️ ${o.restaurantName}</span>`:''}
     </div>
-    <div style="display:flex;gap:6px;margin-top:8px;">
+    <div style="display:flex;gap:6px;margin-top:8px;" class="manage-only">
       <button class="btn-sm btn-del" onclick="deleteOrder('${o.id}')">🗑️ حذف</button>
+      <button class="btn-sm btn-edit" onclick="printOrder('${o.id}')">🖨️ طباعة</button>
     </div>
   </div>`;
 }
+
+window.printOrder=function(id){
+  const o=allOrders.find(x=>x.id===id);
+  if(!o)return;
+  const w=window.open('','_blank','width=380,height=600');
+  const type=o.orderType||'delivery';
+  const typeLabel=type==='salon'?'صالة':type==='takeaway'?'سفري':'دلفري';
+  w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>فاتورة ${o.id.substring(0,6).toUpperCase()}</title>
+  <style>body{font-family:Tajawal,sans-serif;padding:20px;color:#111;}h2{text-align:center;margin-bottom:4px;}
+  .l{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #ccc;font-size:14px;}
+  .tot{font-weight:900;font-size:16px;margin-top:10px;}</style></head><body>
+  <h2>🚀 سرعة</h2><p style="text-align:center;color:#666;">فاتورة طلب #${o.id.substring(0,6).toUpperCase()}</p>
+  <div class="l"><span>النوع</span><span>${typeLabel}</span></div>
+  <div class="l"><span>الزبون</span><span>${o.customer||'—'}</span></div>
+  <div class="l"><span>الهاتف</span><span>${o.phone||'—'}</span></div>
+  <div class="l"><span>العنوان</span><span>${o.address||'—'}</span></div>
+  <div class="l"><span>المطعم</span><span>${o.restaurantName||'—'}</span></div>
+  <div class="l"><span>الكابتن</span><span>${o.captainName||'—'}</span></div>
+  <div class="l"><span>التاريخ</span><span>${o.createdAt||''}</span></div>
+  <div class="l tot"><span>المبلغ</span><span>${fmt(o.value)} د.ع</span></div>
+  ${o.fee?`<div class="l"><span>التوصيل</span><span>${fmt(o.fee)} د.ع</span></div>`:''}
+  <script>window.print();<\/script></body></html>`);
+  w.document.close();
+};
 
 window.setOF=function(f,btn){
   orderFilter=f;
@@ -636,11 +786,13 @@ window.setOF=function(f,btn){
 
 function renderOrders(){
   let fil=allOrders;
-  if(orderFilter==='delivery')fil=allOrders.filter(o=>!o.orderType||o.orderType==='delivery');
-  else if(orderFilter==='salon')fil=allOrders.filter(o=>o.orderType==='salon');
-  else if(orderFilter==='takeaway')fil=allOrders.filter(o=>o.orderType==='takeaway');
-  else if(orderFilter==='pending')fil=allOrders.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
-  else if(orderFilter==='delivered')fil=allOrders.filter(o=>o.status==='delivered');
+  if(orderFilter==='delivery')fil=fil.filter(o=>!o.orderType||o.orderType==='delivery');
+  else if(orderFilter==='salon')fil=fil.filter(o=>o.orderType==='salon');
+  else if(orderFilter==='takeaway')fil=fil.filter(o=>o.orderType==='takeaway');
+  else if(orderFilter==='pending')fil=fil.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
+  else if(orderFilter==='delivered')fil=fil.filter(o=>o.status==='delivered');
+  const q=(document.getElementById('orderSearch')?.value||'').trim().toLowerCase();
+  if(q)fil=fil.filter(o=>(o.customer||'').toLowerCase().includes(q)||(o.phone||'').includes(q));
   document.getElementById('ordersList').innerHTML=fil.length?fil.map(o=>orderCard(o)).join(''):'<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد طلبات</div>';
 }
 
@@ -670,7 +822,10 @@ window.renderCapStats=function(){
           <div style="font-weight:900;font-size:14px;">${cap.name}</div>
           <div style="font-size:11px;color:var(--muted);">${cap.phone}</div>
         </div>
-        ${isRest()?`<button class="btn-sm btn-del" onclick="deleteCaptain('${cap.id}')">🗑️ حذف</button>`:''}
+        <div class="manage-only" style="display:flex;gap:6px;">
+          <button class="btn-sm btn-edit" onclick="openEditCap('${cap.id}')">✏️</button>
+          <button class="btn-sm btn-del" onclick="deleteCaptain('${cap.id}')">🗑️</button>
+        </div>
       </div>
       <div class="cap-stats-g">
         <div class="cap-stat-item"><div class="cap-stat-v">${toA(cap.count)}</div><div class="cap-stat-l">طلبات</div></div>
@@ -748,6 +903,71 @@ window.deleteCaptain=async function(id){
   }catch(e){toast('❌ '+e.message,'error');}
 };
 
+// EDIT CAPTAIN
+window.openEditCap=function(id){
+  const cap=allCaptains.find(x=>x.id===id);
+  if(!cap)return;
+  document.getElementById('ecId').value=id;
+  document.getElementById('ecName').value=cap.name||'';
+  document.getElementById('ecPhone').value=cap.phone||'';
+  document.getElementById('ecEmail').value=cap.email||'';
+  document.getElementById('editCapMo').classList.add('open');
+};
+window.saveCaptain=async function(){
+  const id=document.getElementById('ecId').value;
+  const name=document.getElementById('ecName').value.trim();
+  const phone=document.getElementById('ecPhone').value.trim();
+  const email=document.getElementById('ecEmail').value.trim().toLowerCase();
+  if(!name){toast('⚠️ أدخل الاسم','warn');return;}
+  try{
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'captains',id),{name,phone,email});
+    toast('✅ تم تحديث بيانات الكابتن');
+    document.getElementById('editCapMo').classList.remove('open');
+  }catch(e){toast('❌ '+e.message,'error');}
+};
+
+// STAFF
+window.addStaff=async function(){
+  const name=document.getElementById('nsName').value.trim();
+  const email=document.getElementById('nsEmail').value.trim().toLowerCase();
+  const pass=document.getElementById('nsPass').value;
+  if(!name||!email||!pass){toast('⚠️ أدخل كل البيانات','warn');return;}
+  if(pass.length<6){toast('⚠️ كلمة المرور 6 أحرف على الأقل','warn');return;}
+  const btn=document.getElementById('addStaffBtn');
+  btn.innerHTML='<div class="spin"></div>';btn.disabled=true;
+  try{
+    const cred=await window._fb.createUserWithEmailAndPassword(window._fb.auth2,email,pass);
+    const uid=cred.user.uid;
+    await window._fb.setDoc(window._fb.doc(window._fb.db,'users',uid),{email,role:'staff',name});
+    await window._fb.setDoc(window._fb.doc(window._fb.db,'staff',uid),{name,email,createdAt:new Date().toISOString()});
+    await window._fb.signOut(window._fb.auth2);
+    toast('✅ تم إضافة الموظف: '+name);
+    ['nsName','nsEmail','nsPass'].forEach(id=>document.getElementById(id).value='');
+  }catch(e){
+    if(e.code==='auth/email-already-in-use') toast('❌ هذا الإيميل مستخدم مسبقاً','error');
+    else toast('❌ '+e.message,'error');
+  }finally{btn.innerHTML='➕ إضافة الموظف';btn.disabled=false;}
+};
+function renderStaffList(){
+  const list=document.getElementById('staffList');
+  if(!list)return;
+  if(!allStaff.length){list.innerHTML='<div style="text-align:center;color:var(--muted);padding:24px;">لا يوجد موظفين بعد</div>';return;}
+  list.innerHTML=allStaff.map(s=>`<div class="entity">
+    <div class="entity-head">
+      <div class="entity-icon">👥</div>
+      <div style="flex:1"><div class="entity-name">${s.name}</div><div class="entity-sub">📧 ${s.email}</div></div>
+      <button class="btn-sm btn-del" onclick="deleteStaff('${s.id}')">🗑️ حذف</button>
+    </div>
+  </div>`).join('');
+}
+window.deleteStaff=async function(id){
+  if(!confirm('حذف هذا الموظف؟ (صلاحية الدخول تبقى لازم تُلغى يدوياً من Firebase)'))return;
+  try{
+    await window._fb.deleteDoc(window._fb.doc(window._fb.db,'staff',id));
+    toast('🗑️ تم حذف الموظف من القائمة');
+  }catch(e){toast('❌ '+e.message,'error');}
+};
+
 // RESTAURANTS
 function renderRests(){
   if(!isAdmin())return;
@@ -757,10 +977,20 @@ function renderRests(){
     const myCaps=allCaptains.filter(c=>c.restaurantId===r.id);
     const myOrders=allOrders.filter(o=>o.restaurantId===r.id);
     const delivered=myOrders.filter(o=>o.status==='delivered');
+    const active=r.active!==false;
+    let subBadge='';
+    if(!active){subBadge='<span class="sub-badge sub-off">⏸️ متوقف</span>';}
+    else if(r.expiry){
+      const daysLeft=Math.ceil((new Date(r.expiry+'T00:00:00').getTime()-Date.now())/86400000);
+      if(daysLeft<0)subBadge='<span class="sub-badge sub-expired">⛔ منتهي</span>';
+      else if(daysLeft<=7)subBadge=`<span class="sub-badge sub-warn">⚠️ ${toA(daysLeft)} يوم متبقي</span>`;
+      else subBadge='<span class="sub-badge sub-active">✅ نشط</span>';
+    }else{subBadge='<span class="sub-badge sub-active">✅ نشط</span>';}
     return`<div class="entity">
       <div class="entity-head">
         <div class="entity-icon">🍽️</div>
-        <div><div class="entity-name">${r.name}</div><div class="entity-sub">📍 ${r.area||'—'} • 📧 ${r.email||'—'}</div></div>
+        <div style="flex:1"><div class="entity-name">${r.name} ${subBadge}</div><div class="entity-sub">📍 ${r.area||'—'} • 📧 ${r.email||'—'}</div></div>
+        <label class="tgl" title="تفعيل/إيقاف"><input type="checkbox" ${active?'checked':''} onchange="toggleRestActive('${r.id}',this.checked)"><span class="tgl-slider"></span></label>
       </div>
       <div class="entity-meta">
         <div class="meta-item"><strong>${toA(myCaps.length)}</strong>كابتن</div>
@@ -800,14 +1030,15 @@ window.addRestaurant=async function(){
     // Add to users collection
     await window._fb.setDoc(window._fb.doc(window._fb.db,'users',uid),{email,role:'restaurant',name});
     // Add to restaurants collection
+    const expiry=document.getElementById('nrExpiry').value||'';
     await window._fb.addDoc(window._fb.collection(window._fb.db,'restaurants'),{
-      name,area,email,phone,subscription:sub,userId:uid,
+      name,area,email,phone,subscription:sub,userId:uid,active:true,expiry,
       createdAt:new Date().toISOString(),createdAtMs:Date.now()
     });
     // Sign out secondary
     await window._fb.signOut(window._fb.auth2);
     toast('✅ تم إضافة المطعم: '+name);
-    ['nrName','nrArea','nrEmail','nrPhone','nrPass'].forEach(id=>document.getElementById(id).value='');
+    ['nrName','nrArea','nrEmail','nrPhone','nrPass','nrExpiry'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('nrSub').value='50000';
   }catch(e){
     if(e.code==='auth/email-already-in-use') toast('❌ هذا الإيميل مستخدم مسبقاً','error');
@@ -826,6 +1057,8 @@ window.openEditRest=async function(id){
   document.getElementById('erEmail').value=r.email||'';
   document.getElementById('erPhone').value=r.phone||'';
   document.getElementById('erSub').value=r.subscription||50000;
+  document.getElementById('erExpiry').value=r.expiry||'';
+  document.getElementById('erActive').checked=r.active!==false;
   document.getElementById('erPass').value='';
   document.getElementById('editRestMo').classList.add('open');
 };
@@ -837,11 +1070,13 @@ window.saveRest=async function(){
   const email=document.getElementById('erEmail').value.trim().toLowerCase();
   const phone=document.getElementById('erPhone').value.trim();
   const sub=parseInt(document.getElementById('erSub').value)||50000;
+  const expiry=document.getElementById('erExpiry').value||'';
+  const active=document.getElementById('erActive').checked;
   const pass=document.getElementById('erPass').value;
   if(!name||!email){toast('⚠️ أدخل الاسم والإيميل','warn');return;}
   try{
     // Update restaurants doc
-    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{name,area,email,phone,subscription:sub});
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{name,area,email,phone,subscription:sub,expiry,active});
     // Update users doc if userId exists
     const restDoc=await window._fb.getDoc(window._fb.doc(window._fb.db,'restaurants',id));
     if(restDoc.exists()&&restDoc.data().userId){
@@ -853,6 +1088,13 @@ window.saveRest=async function(){
       toast('✅ تم تحديث بيانات المطعم!');
     }
     document.getElementById('editRestMo').classList.remove('open');
+  }catch(e){toast('❌ '+e.message,'error');}
+};
+
+window.toggleRestActive=async function(id,active){
+  try{
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{active});
+    toast(active?'✅ تم تفعيل المطعم':'⏸️ تم إيقاف المطعم');
   }catch(e){toast('❌ '+e.message,'error');}
 };
 
@@ -881,7 +1123,7 @@ window.renderAnalytics=function(){
   const salonCount=fil.filter(o=>o.orderType==='salon').length;
   const takeCount=fil.filter(o=>o.orderType==='takeaway').length;
   let restStats='';
-  if(isAdmin()){
+  if(isAdmin()||isStaff()){
     const restMap={};
     fil.forEach(o=>{
       if(!o.restaurantId)return;
@@ -907,6 +1149,50 @@ window.renderAnalytics=function(){
       <div class="stat"><div class="stat-v" style="font-size:14px;">${fil.length?fmt(Math.round(total/fil.length)):0}</div><div class="stat-l">⌀ متوسط الطلب</div></div>
     </div>
     ${restStats}`;
+  renderChart(fil);
+  window._lastAnalyticsOrders=fil;
+};
+
+let ordersChartInstance=null;
+function renderChart(fil){
+  const canvas=document.getElementById('ordersChart');
+  if(!canvas||typeof Chart==='undefined')return;
+  const dayMap={};
+  fil.forEach(o=>{
+    const d=new Date(o.createdAtMs||Date.now());
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    dayMap[key]=(dayMap[key]||0)+1;
+  });
+  const days=Object.keys(dayMap).sort();
+  const values=days.map(d=>dayMap[d]);
+  const labels=days.map(d=>{const p=d.split('-');return p[2]+'/'+p[1];});
+  if(ordersChartInstance)ordersChartInstance.destroy();
+  ordersChartInstance=new Chart(canvas.getContext('2d'),{
+    type:'bar',
+    data:{labels,datasets:[{label:'عدد الطلبات',data:values,backgroundColor:'rgba(255,107,61,.7)',borderRadius:6,maxBarThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#8a93a6',font:{family:'Tajawal'}},grid:{color:'rgba(255,255,255,.05)'}},
+        y:{ticks:{color:'#8a93a6',font:{family:'Tajawal'},precision:0},grid:{color:'rgba(255,255,255,.05)'}}
+      }}
+  });
+}
+
+window.exportCSV=function(){
+  const fil=window._lastAnalyticsOrders||[];
+  if(!fil.length){toast('لا توجد بيانات للتصدير','warn');return;}
+  const rows=[['رقم الطلب','النوع','الحالة','المطعم','الكابتن','المبلغ','التوصيل','التاريخ']];
+  fil.forEach(o=>{
+    rows.push([o.id.substring(0,6).toUpperCase(),o.orderType||'delivery',o.status||'',o.restaurantName||'',o.captainName||'',o.value||0,o.fee||0,o.createdAt||'']);
+  });
+  const csv='\uFEFF'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`تقرير-سرعة-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  toast('✅ تم تصدير التقرير');
 };
 
 // MODAL
