@@ -734,8 +734,8 @@ function renderDash(){
 function orderCard(o){
   const type=o.orderType||'delivery';
   const typeBadge=type==='salon'?'<span class="badge b-salon">🪑 صالة</span>':type==='takeaway'?'<span class="badge b-takeaway">🥡 سفري</span>':'<span class="badge" style="background:rgba(77,171,247,.15);color:var(--blue)">🏍️ دلفري</span>';
-  const stB={pending:'b-pending',accepted:'b-accepted',pickup:'b-accepted',delivering:'b-delivering',delivered:'b-delivered',cancelled:'b-cancelled'};
-  const stL={pending:'🟡 ينتظر',accepted:'🔵 مقبول',pickup:'🟠 استلام',delivering:'🛵 توصيل',delivered:'✅ مسلّم',cancelled:'❌ ملغي'};
+  const stB={pending:'b-pending',accepted:'b-accepted',pickup:'b-accepted',delivering:'b-delivering',delivered:'b-delivered',cancelled:'b-cancelled',preparing:'b-accepted',ready:'b-delivered'};
+  const stL={pending:'🟡 ينتظر',accepted:'🔵 مقبول',pickup:'🟠 استلام',delivering:'🛵 توصيل',delivered:'✅ مسلّم',cancelled:'❌ ملغي',preparing:'🍳 قيد التحضير',ready:'✅ جاهز'};
   return`<div class="order-row">
     <div class="order-head"><span class="order-id">${o.id.substring(0,6).toUpperCase()}</span><span class="order-time">${o.createdAt||''}</span></div>
     <div style="margin-bottom:6px;">${typeBadge} <span class="badge ${stB[o.status]||'b-pending'}">${stL[o.status]||o.status}</span></div>
