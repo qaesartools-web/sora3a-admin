@@ -1,0 +1,242 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────
+//  منظومة سرعة — قواعد الحماية الموحّدة لكل التطبيقات
+//  (الإدارة • المطعم/الكاشير • الكابتن • صفحة التتبع)
+//
+//  مصدر الصلاحية الوحيد هو مستند users/{uid}، ولا يستطيع أي
+//  مستخدم تعديل مستنده بنفسه. الأدوار:
+//    admin       إدارة عليا — كل شيء
+//    staff       موظف إدارة — قراءة فقط
+//    restaurant  مطعم — بيانات مطعمه فقط (users.restaurantId)
+//    captain     كابتن — طلباته + الطلبات المعلّقة لمطعمه (users.captainId)
+// ─────────────────────────────────────────────────────────────
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ─────────────────────────────────────────────
+    function signedIn() { return request.auth != null; }
+    function userPath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function hasProfile() { return signedIn() && exists(userPath()); }
+    function me() { return get(userPath()).data; }
+    function active() { return hasProfile() && me().get('disabled', false) != true; }
+    function role() { return me().role; }
+
+    function isAdmin() { return active() && role() == 'admin'; }
+    function isStaff() { return active() && role() == 'staff'; }
+    function isOffice() { return isAdmin() || isStaff(); }
+
+    function restDoc(rid) { return get(/databases/$(database)/documents/restaurants/$(rid)).data; }
+    // المطعم يجب أن يكون مفعّلاً وغير منتهي الاشتراك
+    function restaurantOpen(rid) {
+      let r = restDoc(rid);
+      return r.get('active', true) != false
+        && (r.get('expiryMs', 0) == 0 || r.get('expiryMs', 0) > request.time.toMillis());
+    }
+    function isRestaurant() {
+      return active() && role() == 'restaurant'
+        && me().get('restaurantId', '') != ''
+        && restaurantOpen(me().restaurantId);
+    }
+    function myRest() { return me().restaurantId; }
+    function ownsRest(rid) { return isRestaurant() && myRest() == rid; }
+
+    function isCaptain() {
+      return active() && role() == 'captain'
+        && me().get('captainId', '') != ''
+        && me().get('restaurantId', '') != '';
+    }
+    function myCap() { return me().captainId; }
+
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function onlyChanged(keys) { return changed().hasOnly(keys); }
+    function str(v, max) { return v is string && v.size() <= max; }
+    function optStr(d, k, max) { return !(k in d) || d[k] == null || str(d[k], max); }
+    function optNum(d, k) { return !(k in d) || d[k] == null || d[k] is number; }
+
+    // ── users ───────────────────────────────────────────────
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isOffice());
+      allow list: if isOffice();
+
+      allow create, update, delete: if isAdmin();
+
+      // المطعم ينشئ حسابات الكباتن التابعين له فقط
+      allow create: if isRestaurant()
+        && request.resource.data.role == 'captain'
+        && request.resource.data.restaurantId == myRest()
+        && str(request.resource.data.captainId, 64)
+        && request.resource.data.keys().hasOnly(['email','role','name','restaurantId','captainId','createdAtMs']);
+      allow update: if isRestaurant()
+        && resource.data.role == 'captain' && resource.data.restaurantId == myRest()
+        && onlyChanged(['name','email','disabled']);
+      allow delete: if isRestaurant()
+        && resource.data.role == 'captain' && resource.data.restaurantId == myRest();
+    }
+
+    // ── staff (قائمة موظفي الإدارة) ──────────────────────────
+    match /staff/{id} {
+      allow read: if isOffice();
+      allow write: if isAdmin();
+    }
+
+    // ── restaurants ─────────────────────────────────────────
+    match /restaurants/{rid} {
+      allow read: if isOffice()
+        || (active() && role() == 'restaurant' && me().get('restaurantId', '') == rid)
+        || (isCaptain() && me().restaurantId == rid);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        // المطعم لا يستطيع تعديل الاشتراك أو التفعيل أو ربط الحساب
+        || (ownsRest(rid) && !changed().hasAny(
+             ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs']));
+
+      // المنيو والإعدادات المتزامنة بين أجهزة المطعم
+      //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
+      match /{coll}/{d=**} {
+        allow read: if isOffice() || ownsRest(rid) || (isCaptain() && me().restaurantId == rid);
+        allow write: if isAdmin() || ownsRest(rid);
+      }
+    }
+
+    // ── captains ────────────────────────────────────────────
+    match /captains/{cid} {
+      allow read: if isOffice()
+        || (isRestaurant() && resource.data.restaurantId == myRest())
+        || (isCaptain() && cid == myCap());
+      allow create: if isAdmin()
+        || (isRestaurant() && request.resource.data.restaurantId == myRest());
+      allow update: if isAdmin()
+        || (isRestaurant() && resource.data.restaurantId == myRest()
+            && request.resource.data.restaurantId == myRest())
+        // الكابتن يغيّر حالة التوفر فقط
+        || (isCaptain() && cid == myCap() && onlyChanged(['available','lastSeenMs']));
+      allow delete: if isAdmin() || (isRestaurant() && resource.data.restaurantId == myRest());
+    }
+
+    // ── captainLocations ────────────────────────────────────
+    match /captainLocations/{cid} {
+      allow read: if isOffice()
+        || (isRestaurant() && resource.data.restaurantId == myRest())
+        || (isCaptain() && cid == myCap());
+      allow write: if isCaptain() && cid == myCap()
+        && request.resource.data.captainId == cid
+        && request.resource.data.restaurantId == me().restaurantId
+        && request.resource.data.lat is number && request.resource.data.lng is number;
+      allow delete: if isAdmin();
+    }
+
+    // ── orders ──────────────────────────────────────────────
+    match /orders/{oid} {
+      function capField() { return resource.data.get('captainId', null); }
+      function validNew(d) {
+        return d.restaurantId == myRest()
+          && d.value is number && d.value >= 0
+          && optNum(d, 'fee')
+          && optStr(d, 'customer', 120) && optStr(d, 'phone', 30)
+          && optStr(d, 'address', 400) && optStr(d, 'notes', 2000);
+      }
+
+      allow read: if isOffice()
+        || (isRestaurant() && resource.data.restaurantId == myRest())
+        // الكابتن: طلباته فقط + الطلبات المعلّقة في مطعمه
+        //  (الاستعلامات: where captainId == X  أو  where restaurantId == R && status == 'pending')
+        || (isCaptain() && resource.data.captainId == myCap())
+        || (isCaptain() && resource.data.status == 'pending' && resource.data.restaurantId == me().restaurantId);
+
+      allow create: if isAdmin() || (isRestaurant() && validNew(request.resource.data));
+
+      allow update: if isAdmin()
+        || (isRestaurant() && resource.data.restaurantId == myRest()
+            && request.resource.data.restaurantId == myRest())
+
+        // قبول الطلب: مرة واحدة فقط (يُنفَّذ داخل transaction)
+        || (isCaptain()
+            && resource.data.restaurantId == me().restaurantId
+            && resource.data.status == 'pending'
+            && (capField() == null || capField() == myCap())
+            && !(myCap() in resource.data.get('rejectedBy', []))
+            && request.resource.data.status == 'accepted'
+            && request.resource.data.captainId == myCap()
+            && onlyChanged(['status','captainId','captainName','acceptedAtMs','timeline']))
+
+        // رفض الطلب: يضيف نفسه لقائمة الرافضين فقط
+        || (isCaptain()
+            && resource.data.restaurantId == me().restaurantId
+            && resource.data.status == 'pending'
+            && (capField() == null || capField() == myCap())
+            && request.resource.data.get('rejectedBy', []).hasAll(resource.data.get('rejectedBy', []))
+            && request.resource.data.get('rejectedBy', []).size() == resource.data.get('rejectedBy', []).size() + 1
+            && (myCap() in request.resource.data.get('rejectedBy', []))
+            && onlyChanged(['rejectedBy','rejectNotice','timeline']))
+
+        // تقدّم التوصيل: بالتسلسل وبواسطة الكابتن المعيّن فقط
+        || (isCaptain() && capField() == myCap()
+            && (
+              (resource.data.status == 'accepted' && request.resource.data.status == 'pickup')
+              || (resource.data.status == 'pickup' && request.resource.data.status == 'delivering')
+              || (resource.data.status == 'delivering' && request.resource.data.status == 'delivered')
+            )
+            && onlyChanged(['status','pickupAtMs','deliveringAtMs','deliveredAt','deliveredAtMs','hasProof','timeline']));
+
+      allow delete: if isAdmin();
+    }
+
+    // ── deliveryProofs (صور إثبات التسليم، منفصلة عن الطلب) ──
+    match /deliveryProofs/{oid} {
+      function ord() { return get(/databases/$(database)/documents/orders/$(oid)).data; }
+      allow read: if isOffice()
+        || (isRestaurant() && ord().restaurantId == myRest())
+        || (isCaptain() && ord().get('captainId', null) == myCap());
+      allow create: if isCaptain() && ord().get('captainId', null) == myCap()
+        && request.resource.data.image is string && request.resource.data.image.size() < 400000;
+      allow delete: if isAdmin();
+    }
+
+    // ── tracking (صفحة تتبع الزبون — بيانات محدودة للعامة) ──
+    //  لا يوجد هنا هاتف ولا عنوان الزبون. القراءة بالمعرّف فقط (لا list).
+    match /tracking/{oid} {
+      function ord() { return get(/databases/$(database)/documents/orders/$(oid)).data; }
+      function safeKeys() {
+        return request.resource.data.keys().hasOnly(
+          ['status','restaurantName','captainName','value','fee','lat','lng','locTs','updatedAtMs','restaurantId','captainId']);
+      }
+      allow get: if true;
+      allow list: if false;
+      allow write: if safeKeys() && (
+        isAdmin()
+        || (isRestaurant() && ord().restaurantId == myRest())
+        || (isCaptain() && ord().get('captainId', null) == myCap()));
+      allow delete: if isAdmin() || (isRestaurant() && ord().restaurantId == myRest());
+    }
+
+    // ── accounting (مخزون وحسابات المطعم) ─────────────────────
+    match /accounting/{rid} {
+      allow read: if isOffice() || ownsRest(rid);
+      allow write: if isAdmin() || ownsRest(rid);
+    }
+
+    // ── pushTokens (توكنات الإشعارات — كل مستخدم يكتب توكنه فقط) ──
+    //  تقرأها Cloud Functions فقط (Admin SDK يتجاوز القواعد).
+    match /pushTokens/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if hasProfile() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['tokens','role','captainId','restaurantId','updatedAtMs'])
+        && request.resource.data.tokens is list && request.resource.data.tokens.size() <= 10
+        && request.resource.data.get('role', '') == role()
+        && request.resource.data.get('captainId', '') == me().get('captainId', '')
+        && request.resource.data.get('restaurantId', '') == me().get('restaurantId', '');
+    }
+
+    // ── auditLog (سجل العمليات الحساسة — إضافة فقط) ──────────
+    match /auditLog/{id} {
+      allow read: if isOffice();
+      allow create: if active() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // أي شيء آخر ممنوع
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
