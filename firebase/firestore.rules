@@ -10,6 +10,8 @@ rules_version = '2';
 //    staff       موظف إدارة — قراءة فقط
 //    restaurant  مطعم — بيانات مطعمه فقط (users.restaurantId)
 //    captain     كابتن — طلباته + الطلبات المعلّقة لمطعمه (users.captainId)
+//    cashier     كاشير — يعمل على كاشير مطعمه فقط، وصلاحياته (users.perms)
+//                يحددها صاحب المطعم: menu, settings, inventory, reports, cancel, discount
 // ─────────────────────────────────────────────────────────────
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -40,6 +42,17 @@ service cloud.firestore {
     }
     function myRest() { return me().restaurantId; }
     function ownsRest(rid) { return isRestaurant() && myRest() == rid; }
+
+    function isCashier() {
+      return active() && role() == 'cashier'
+        && me().get('restaurantId', '') != ''
+        && restaurantOpen(me().restaurantId);
+    }
+    function perm(p) { return me().get('perms', {}).get(p, false) == true; }
+    // صاحب المطعم أو كاشير تابع له
+    function isRestStaff() { return isRestaurant() || isCashier(); }
+    function staffOf(rid) { return isRestStaff() && myRest() == rid; }
+    function cashierOf(rid) { return isCashier() && myRest() == rid; }
 
     function isCaptain() {
       return active() && role() == 'captain'
@@ -72,6 +85,20 @@ service cloud.firestore {
         && onlyChanged(['name','email','disabled']);
       allow delete: if isRestaurant()
         && resource.data.role == 'captain' && resource.data.restaurantId == myRest();
+
+      // صاحب المطعم يدير حسابات الكاشيرية وصلاحياتهم
+      allow read: if isRestaurant() && resource.data.role == 'cashier' && resource.data.restaurantId == myRest();
+      allow create: if isRestaurant()
+        && request.resource.data.role == 'cashier'
+        && request.resource.data.restaurantId == myRest()
+        && request.resource.data.get('perms', {}) is map
+        && request.resource.data.keys().hasOnly(['email','role','name','restaurantId','perms','createdAtMs']);
+      allow update: if isRestaurant()
+        && resource.data.role == 'cashier' && resource.data.restaurantId == myRest()
+        && request.resource.data.get('perms', {}) is map
+        && onlyChanged(['name','perms','disabled']);
+      allow delete: if isRestaurant()
+        && resource.data.role == 'cashier' && resource.data.restaurantId == myRest();
     }
 
     // ── staff (قائمة موظفي الإدارة) ──────────────────────────
@@ -83,7 +110,7 @@ service cloud.firestore {
     // ── restaurants ─────────────────────────────────────────
     match /restaurants/{rid} {
       allow read: if isOffice()
-        || (active() && role() == 'restaurant' && me().get('restaurantId', '') == rid)
+        || (active() && role() in ['restaurant', 'cashier'] && me().get('restaurantId', '') == rid)
         || (isCaptain() && me().restaurantId == rid);
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
@@ -94,15 +121,19 @@ service cloud.firestore {
       // المنيو والإعدادات المتزامنة بين أجهزة المطعم
       //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
       match /{coll}/{d=**} {
-        allow read: if isOffice() || ownsRest(rid) || (isCaptain() && me().restaurantId == rid);
-        allow write: if isAdmin() || ownsRest(rid);
+        allow read: if isOffice() || staffOf(rid) || (isCaptain() && me().restaurantId == rid);
+        allow write: if isAdmin() || ownsRest(rid)
+          // الكاشير: البيع يحدّث المخزون الجاهز بالمنيو + الورديات + سجل الزبائن
+          || (cashierOf(rid) && (coll in ['menu', 'shifts', 'customers']
+              || (coll == 'settings' && perm('settings'))
+              || (coll == 'menuImages' && perm('menu'))));
       }
     }
 
     // ── captains ────────────────────────────────────────────
     match /captains/{cid} {
       allow read: if isOffice()
-        || (isRestaurant() && resource.data.restaurantId == myRest())
+        || (isRestStaff() && resource.data.restaurantId == myRest())
         || (isCaptain() && cid == myCap());
       allow create: if isAdmin()
         || (isRestaurant() && request.resource.data.restaurantId == myRest());
@@ -117,7 +148,7 @@ service cloud.firestore {
     // ── captainLocations ────────────────────────────────────
     match /captainLocations/{cid} {
       allow read: if isOffice()
-        || (isRestaurant() && resource.data.restaurantId == myRest())
+        || (isRestStaff() && resource.data.restaurantId == myRest())
         || (isCaptain() && cid == myCap());
       allow write: if isCaptain() && cid == myCap()
         && request.resource.data.captainId == cid
@@ -138,16 +169,16 @@ service cloud.firestore {
       }
 
       allow read: if isOffice()
-        || (isRestaurant() && resource.data.restaurantId == myRest())
+        || (isRestStaff() && resource.data.restaurantId == myRest())
         // الكابتن: طلباته فقط + الطلبات المعلّقة في مطعمه
         //  (الاستعلامات: where captainId == X  أو  where restaurantId == R && status == 'pending')
         || (isCaptain() && resource.data.captainId == myCap())
         || (isCaptain() && resource.data.status == 'pending' && resource.data.restaurantId == me().restaurantId);
 
-      allow create: if isAdmin() || (isRestaurant() && validNew(request.resource.data));
+      allow create: if isAdmin() || (isRestStaff() && validNew(request.resource.data));
 
       allow update: if isAdmin()
-        || (isRestaurant() && resource.data.restaurantId == myRest()
+        || (isRestStaff() && resource.data.restaurantId == myRest()
             && request.resource.data.restaurantId == myRest())
 
         // قبول الطلب: مرة واحدة فقط (يُنفَّذ داخل transaction)
@@ -186,7 +217,7 @@ service cloud.firestore {
     match /deliveryProofs/{oid} {
       function ord() { return get(/databases/$(database)/documents/orders/$(oid)).data; }
       allow read: if isOffice()
-        || (isRestaurant() && ord().restaurantId == myRest())
+        || (isRestStaff() && ord().restaurantId == myRest())
         || (isCaptain() && ord().get('captainId', null) == myCap());
       allow create: if isCaptain() && ord().get('captainId', null) == myCap()
         && request.resource.data.image is string && request.resource.data.image.size() < 400000;
@@ -205,15 +236,51 @@ service cloud.firestore {
       allow list: if false;
       allow write: if safeKeys() && (
         isAdmin()
-        || (isRestaurant() && ord().restaurantId == myRest())
+        || (isRestStaff() && ord().restaurantId == myRest())
         || (isCaptain() && ord().get('captainId', null) == myCap()));
-      allow delete: if isAdmin() || (isRestaurant() && ord().restaurantId == myRest());
+      allow delete: if isAdmin() || (isRestStaff() && ord().restaurantId == myRest());
     }
 
     // ── accounting (مخزون وحسابات المطعم) ─────────────────────
     match /accounting/{rid} {
-      allow read: if isOffice() || ownsRest(rid);
-      allow write: if isAdmin() || ownsRest(rid);
+      // الكاشير يحتاجها لخصم المواد عند كل بيع (عرضها بالواجهة حسب صلاحية inventory)
+      allow read: if isOffice() || staffOf(rid);
+      allow write: if isAdmin() || staffOf(rid);
+    }
+
+    // ── lineTokens (توكن جوكر لكل خط اتصال — حتى 10 خطوط للمطعم) ──
+    //  معرّف المستند = التوكن السري نفسه. الجهاز يستخدمه لإرسال رقم المتصل.
+    match /lineTokens/{token} {
+      function lineOk(d) {
+        return d.keys().hasOnly(['restaurantId','line','label','active','createdAtMs'])
+          && str(d.line, 20) && str(d.get('label', ''), 40) && d.active is bool;
+      }
+      allow read: if isAdmin() || (isRestaurant() && resource.data.restaurantId == myRest());
+      allow create: if token.size() >= 24 && lineOk(request.resource.data)
+        && (isAdmin() || ownsRest(request.resource.data.restaurantId));
+      allow update: if lineOk(request.resource.data)
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && (isAdmin() || ownsRest(resource.data.restaurantId));
+      allow delete: if isAdmin() || ownsRest(resource.data.restaurantId);
+    }
+
+    // ── incomingCalls (مكالمة واردة ← تظهر فوراً بكاشير المطعم) ──
+    //  الإنشاء بدون تسجيل دخول لكن بتوكن خط صالح ومفعّل لنفس المطعم.
+    match /incomingCalls/{id} {
+      function lt() { return get(/databases/$(database)/documents/lineTokens/$(request.resource.data.token)).data; }
+      allow create: if request.resource.data.keys().hasOnly(['token','restaurantId','line','number','status','ts'])
+        && str(request.resource.data.token, 80) && request.resource.data.token.size() >= 24
+        && str(request.resource.data.restaurantId, 64)
+        && str(request.resource.data.number, 24) && request.resource.data.number.size() >= 3
+        && optStr(request.resource.data, 'line', 20)
+        && request.resource.data.status == 'ringing'
+        && exists(/databases/$(database)/documents/lineTokens/$(request.resource.data.token))
+        && lt().active == true
+        && lt().restaurantId == request.resource.data.restaurantId;
+      allow read: if isOffice() || (isRestStaff() && resource.data.restaurantId == myRest());
+      allow update: if isRestStaff() && resource.data.restaurantId == myRest()
+        && onlyChanged(['status','takenBy','takenAtMs']);
+      allow delete: if isAdmin() || (isRestaurant() && resource.data.restaurantId == myRest());
     }
 
     // ── pushTokens (توكنات الإشعارات — كل مستخدم يكتب توكنه فقط) ──

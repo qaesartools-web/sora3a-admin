@@ -37,6 +37,11 @@ beforeEach(async () => {
     await setDoc(doc(db, 'orders/O2'), { restaurantId: 'R2', status: 'pending', value: 10000, rejectedBy: [] });
     await setDoc(doc(db, 'orders/O3'), { restaurantId: 'R1', status: 'accepted', value: 9000, captainId: 'C2', rejectedBy: [] });
     await setDoc(doc(db, 'tracking/O1'), { status: 'pending', restaurantName: 'R1' });
+    await setDoc(doc(db, 'users/cash1'), { role: 'cashier', restaurantId: 'R1', perms: { reports: false } });
+    await setDoc(doc(db, 'users/cash2'), { role: 'cashier', restaurantId: 'R1', perms: { settings: true, menu: true } });
+    await setDoc(doc(db, 'users/cashExp'), { role: 'cashier', restaurantId: 'R3', perms: {} });
+    await setDoc(doc(db, 'lineTokens/TOKEN_R1_LINE1_xxxxxxxxxxxxxxxx'), { restaurantId: 'R1', line: '1', label: 'خط 1', active: true });
+    await setDoc(doc(db, 'lineTokens/TOKEN_R1_OFF_xxxxxxxxxxxxxxxxxxx'), { restaurantId: 'R1', line: '2', active: false });
   });
 });
 
@@ -167,4 +172,71 @@ test('المطعم يكتب منيو مطعمه فقط، والكابتن يقر
   await assertFails(setDoc(doc(as('rest1'), 'restaurants/R2/menu/main'), { cats: [] }));
   await assertSucceeds(getDoc(doc(as('cap1'), 'restaurants/R1/menu/main')));
   await assertFails(setDoc(doc(as('cap1'), 'restaurants/R1/menu/main'), { cats: [] }));
+});
+
+
+// ── الكاشير ──
+test('الكاشير يقرأ وينشئ طلبات مطعمه فقط', async () => {
+  await assertSucceeds(getDocs(query(collection(as('cash1'), 'orders'), where('restaurantId', '==', 'R1'))));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'orders/NC'), { restaurantId: 'R1', status: 'delivered', value: 5 }));
+  await assertFails(setDoc(doc(as('cash1'), 'orders/NC2'), { restaurantId: 'R2', status: 'delivered', value: 5 }));
+  await assertFails(getDoc(doc(as('cash1'), 'orders/O2')));
+  await assertFails(deleteDoc(doc(as('cash1'), 'orders/O1')));
+});
+test('الكاشير لا يعدّل المطعم أو الكباتن أو الحسابات', async () => {
+  await assertFails(updateDoc(doc(as('cash1'), 'restaurants/R1'), { phone: '1' }));
+  await assertFails(updateDoc(doc(as('cash1'), 'captains/C1'), { name: 'x' }));
+  await assertFails(setDoc(doc(as('cash1'), 'users/newc'), { role: 'captain', restaurantId: 'R1', captainId: 'C' }));
+  await assertFails(updateDoc(doc(as('cash1'), 'users/cash1'), { perms: { reports: true } }));
+});
+test('الإعدادات حسب الصلاحية، والورديات والمنيو للبيع مسموحة', async () => {
+  await assertFails(setDoc(doc(as('cash1'), 'restaurants/R1/settings/main'), { taxPct: 0 }));
+  await assertSucceeds(setDoc(doc(as('cash2'), 'restaurants/R1/settings/main'), { taxPct: 0 }));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'restaurants/R1/shifts/s1'), { status: 'open' }));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'restaurants/R1/customers/0770'), { name: 'x' }));
+  await assertFails(setDoc(doc(as('cash1'), 'restaurants/R1/menuImages/i1'), { data: 'x' }));
+  await assertFails(setDoc(doc(as('cash1'), 'restaurants/R2/shifts/s1'), { status: 'open' }));
+});
+test('كاشير مطعم منتهي الاشتراك ممنوع', async () => {
+  await assertFails(setDoc(doc(as('cashExp'), 'orders/NX'), { restaurantId: 'R3', status: 'delivered', value: 1 }));
+});
+test('صاحب المطعم يدير كاشيريته فقط', async () => {
+  await assertSucceeds(setDoc(doc(as('rest1'), 'users/newcash'), { role: 'cashier', restaurantId: 'R1', name: 'n', email: 'e', perms: { menu: false } }));
+  await assertFails(setDoc(doc(as('rest1'), 'users/newcash2'), { role: 'cashier', restaurantId: 'R2', perms: {} }));
+  await assertFails(setDoc(doc(as('rest1'), 'users/newcash3'), { role: 'admin', restaurantId: 'R1', perms: {} }));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'users/cash1'), { perms: { reports: true } }));
+  await assertFails(updateDoc(doc(as('rest1'), 'users/cash1'), { role: 'admin' }));
+  await assertSucceeds(getDocs(query(collection(as('rest1'), 'users'), where('restaurantId', '==', 'R1'), where('role', '==', 'cashier'))));
+  await assertFails(updateDoc(doc(as('rest2'), 'users/cash1'), { perms: {} }));
+});
+
+// ── خطوط الاتصال والمكالمات ──
+const call = (o) => ({ token: 'TOKEN_R1_LINE1_xxxxxxxxxxxxxxxx', restaurantId: 'R1', line: '1', number: '07701234567', status: 'ringing', ...o });
+test('جهاز الخط يرسل المكالمة بالتوكن بدون تسجيل دخول', async () => {
+  await assertSucceeds(setDoc(doc(anon(), 'incomingCalls/c1'), call({})));
+});
+test('توكن خاطئ أو موقوف أو لمطعم آخر مرفوض', async () => {
+  await assertFails(setDoc(doc(anon(), 'incomingCalls/c2'), call({ token: 'WRONG_TOKEN_xxxxxxxxxxxxxxxxxxx' })));
+  await assertFails(setDoc(doc(anon(), 'incomingCalls/c3'), call({ token: 'TOKEN_R1_OFF_xxxxxxxxxxxxxxxxxxx' })));
+  await assertFails(setDoc(doc(anon(), 'incomingCalls/c4'), call({ restaurantId: 'R2' })));
+  await assertFails(setDoc(doc(anon(), 'incomingCalls/c5'), call({ extra: 'x' })));
+});
+test('الزائر لا يقرأ المكالمات ولا التوكنات', async () => {
+  await assertFails(getDoc(doc(anon(), 'lineTokens/TOKEN_R1_LINE1_xxxxxxxxxxxxxxxx')));
+  await assertFails(getDocs(collection(anon(), 'incomingCalls')));
+});
+test('كاشير المطعم يرى ويستلم المكالمة، ومطعم آخر لا', async () => {
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'incomingCalls/k1'), call({})); });
+  await assertSucceeds(getDocs(query(collection(as('cash1'), 'incomingCalls'), where('restaurantId', '==', 'R1'), where('status', '==', 'ringing'))));
+  await assertSucceeds(updateDoc(doc(as('cash1'), 'incomingCalls/k1'), { status: 'taken', takenBy: 'd', takenAtMs: 1 }));
+  await assertFails(updateDoc(doc(as('cash1'), 'incomingCalls/k1'), { number: '1' }));
+  await assertFails(getDoc(doc(as('rest2'), 'incomingCalls/k1')));
+});
+test('صاحب المطعم فقط يدير التوكنات', async () => {
+  const t = 'NEW_TOKEN_' + 'x'.repeat(24);
+  await assertSucceeds(setDoc(doc(as('rest1'), 'lineTokens/' + t), { restaurantId: 'R1', line: '3', label: 'خط 3', active: true }));
+  await assertFails(setDoc(doc(as('rest1'), 'lineTokens/SHORT'), { restaurantId: 'R1', line: '3', active: true }));
+  await assertFails(setDoc(doc(as('rest2'), 'lineTokens/' + t + 'y'), { restaurantId: 'R1', line: '3', active: true }));
+  await assertFails(getDoc(doc(as('cash1'), 'lineTokens/' + t)));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'lineTokens/' + t), { active: false }));
 });
