@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>سرعة — الإدارة</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js" integrity="sha384-G436+Z2nlA8+PNoeRvWdxKbvOf8E/y+lYxqht2iBwNHTQDV5CJr3+AGVj8fGZi5t" crossorigin="anonymous"></script>
 <style>
 :root{
   --bg:#f3f7f4; --panel:#ffffff; --panel2:#eef3ef; --line:#e1e8e3;
@@ -406,6 +406,32 @@ body.staff-mode .staff-banner{display:block;}
       </div>
       <div id="staffList"></div>
     </div>
+
+    <!-- Security (admin only) -->
+    <div class="screen admin-only" id="scSecurity">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> 🛡️ ربط الحسابات بنظام الحماية الجديد</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:12px;">
+          نظام الحماية الجديد يحدد صلاحية كل حساب من ملفه فقط (الدور + المطعم + الكابتن).<br>
+          هذه الأداة تفحص كل المطاعم والكباتن والموظفين وتربط حساباتهم بشكل صحيح، وتجهّز صفحات التتبع للطلبات الجارية.<br>
+          <b>شغّلها مرة واحدة قبل نشر قواعد الحماية</b>، وأي وقت تريد التأكد أن كل شيء سليم.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-primary" style="flex:1;min-width:140px;" id="secScanBtn" onclick="secScan()">🔍 فحص</button>
+          <button class="btn-primary" style="flex:1;min-width:140px;" id="secFixBtn" onclick="secApply()" disabled>✅ تطبيق الإصلاحات</button>
+        </div>
+        <div id="secReport" style="margin-top:14px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> 👑 حسابات الإدارة العليا</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;">راجع القائمة — أي حساب لا تعرفه أوقفه فوراً.</div>
+        <div id="secAdmins"><div style="color:var(--muted);font-size:12px;">اضغط "فحص" لعرض القائمة</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> 📜 سجل العمليات الحساسة</div>
+        <div id="secAudit"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Mobile Nav -->
@@ -447,6 +473,16 @@ body.staff-mode .staff-banner{display:block;}
   </div>
 </div>
 
+<!-- Delivery proof modal -->
+<div class="modal-ov" id="proofMo">
+  <div class="modal" style="text-align:center;">
+    <div class="modal-title">📸 إثبات التسليم</div>
+    <img id="proofImg" alt="" style="max-width:100%;max-height:60vh;border-radius:12px;">
+    <div id="proofMeta" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
+    <div class="modal-btns"><button class="btn-cancel" onclick="closeMo('proofMo')">إغلاق</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- FIREBASE -->
@@ -456,7 +492,7 @@ import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-  query, where, orderBy, onSnapshot, serverTimestamp }
+  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch }
   from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
@@ -482,7 +518,7 @@ const auth = initializeAuth(app,{persistence:[indexedDBLocalPersistence,browserL
 const auth2 = initializeAuth(app2,{persistence:[]});
 const db = getFirestore(app);
 window._fb={auth,auth2,db,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged,
-  collection,doc,addDoc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,query,where,orderBy,onSnapshot,serverTimestamp};
+  collection,doc,addDoc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,query,where,orderBy,limit,onSnapshot,serverTimestamp,writeBatch};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -495,6 +531,12 @@ let unsubs=[], orderFilter='all', installPrompt=null, toastT;
 
 const fmt=n=>Number(n||0).toLocaleString('ar-IQ');
 const toA=n=>n.toString().replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+// كل نص قادم من قاعدة البيانات يمر من هنا قبل إدراجه في HTML
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dayEndMs=ymd=>ymd?new Date(ymd+'T23:59:59').getTime():0;
+function audit(action,details){
+  try{window._fb.addDoc(window._fb.collection(window._fb.db,'auditLog'),{uid:currentUser.uid,email:currentUser.email||'',role:currentUser.role,action,details:details||{},atMs:Date.now()}).catch(()=>{});}catch(e){}
+}
 const isAdmin=()=>currentUser?.role==='admin';
 const isRest=()=>currentUser?.role==='restaurant';
 const isStaff=()=>currentUser?.role==='staff';
@@ -555,25 +597,28 @@ window.addEventListener('fbReady',()=>{
     hideSplash();
     if(user){
       try{
-        // Check users collection
+        // الصلاحية من users/{uid} فقط — لا بحث بالإيميل ولا إعادة ربط تلقائية
         const udoc=await fb.getDoc(fb.doc(fb.db,'users',user.uid));
-        if(!udoc.exists()){await fb.signOut(fb.auth);return;}
-        const ud=udoc.data();
-        if(ud.role!=='admin'&&ud.role!=='restaurant'&&ud.role!=='staff'){
+        const ud=udoc.exists()?udoc.data():null;
+        if(!ud||ud.disabled||!['admin','restaurant','staff'].includes(ud.role)){
           await fb.signOut(fb.auth);
           showErr('❌ هذا الحساب غير مصرح له');return;
         }
         currentUser={uid:user.uid,email:user.email,...ud};
         if(ud.role==='restaurant'){
-          // Find restaurant by email first, then userId
-          let rs=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('email','==',user.email)));
-          if(rs.empty) rs=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('userId','==',user.uid)));
-          if(rs.empty){await fb.signOut(fb.auth);showErr('❌ هذا الحساب غير مرتبط بمطعم');return;}
-          restData={id:rs.docs[0].id,...rs.docs[0].data()};
+          let restId=ud.restaurantId;
+          if(!restId){
+            // حسابات قديمة قبل "ربط الحسابات": الربط عبر userId الذي وضعته الإدارة (ليس بالإيميل)
+            try{const q=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('userId','==',user.uid)));if(!q.empty)restId=q.docs[0].id;}catch(e){}
+          }
+          if(!restId){await fb.signOut(fb.auth);showErr('⚠️ الحساب غير مرتبط بمطعم — تواصل مع الإدارة');return;}
+          const rs=await fb.getDoc(fb.doc(fb.db,'restaurants',restId));
+          if(!rs.exists()||rs.data().userId!==user.uid){await fb.signOut(fb.auth);showErr('❌ هذا الحساب غير مرتبط بمطعم');return;}
+          restData={id:rs.id,...rs.data()};
+          if(restData.active===false){await fb.signOut(fb.auth);showErr('⏸️ حساب المطعم موقوف — تواصل مع الإدارة');return;}
+          if(restData.expiryMs&&restData.expiryMs<Date.now()){await fb.signOut(fb.auth);showErr('⛔ انتهى الاشتراك — تواصل مع الإدارة للتجديد');return;}
           currentUser.restaurantId=restData.id;
           currentUser.restaurantName=restData.name;
-          // Update userId if changed
-          if(restData.userId!==user.uid) fb.updateDoc(fb.doc(fb.db,'restaurants',restData.id),{userId:user.uid}).catch(()=>{});
         }
         enterApp();
       }catch(e){console.error(e);await fb.signOut(fb.auth);}
@@ -582,7 +627,7 @@ window.addEventListener('fbReady',()=>{
       unsubs.forEach(u=>u&&u());unsubs=[];
       document.getElementById('loginPage').style.display='flex';
       document.getElementById('appPage').style.display='none';
-      document.body.classList.remove('rest-mode');
+      document.body.classList.remove('rest-mode','staff-mode');
       resetLoginBtn();
     }
   });
@@ -629,8 +674,8 @@ function enterApp(){
   document.getElementById('hdrName').textContent=currentUser.restaurantName||currentUser.name||currentUser.email;
   document.getElementById('hdrRole').className='hdr-role '+(isAdmin()?'role-admin':isStaff()?'role-staff':'role-rest');
   document.getElementById('hdrRole').textContent=isAdmin()?'👑 إدارة عليا':isStaff()?'👥 موظف':'🍽️ مطعم';
-  if(isRest()) document.body.classList.add('rest-mode');
-  if(isStaff()) document.body.classList.add('staff-mode');
+  document.body.classList.toggle('rest-mode',isRest());
+  document.body.classList.toggle('staff-mode',isStaff());
   buildNavs();
   startListeners();
 }
@@ -644,6 +689,7 @@ const tabs=[
   {id:'map',label:'الخريطة',icon:'🗺️',screen:'scMap',adminOnly:false},
   {id:'analytics',label:'التحليلات',icon:'📊',screen:'scAnalytics',adminOnly:false},
   {id:'staff',label:'الموظفين',icon:'👥',screen:'scStaff',adminOnly:true},
+  {id:'security',label:'الأمان',icon:'🛡️',screen:'scSecurity',adminOnly:true},
 ];
 
 function buildNavs(){
@@ -666,6 +712,7 @@ window.goTab=function(screenId,btn){
   if(screenId==='scAnalytics')renderAnalytics();
   if(screenId==='scRests')renderRests();
   if(screenId==='scStaff')renderStaffList();
+  if(screenId==='scSecurity')secLoadAudit();
 };
 
 // LISTENERS
@@ -693,6 +740,8 @@ function startListeners(){
   unsubs.push(fb.onSnapshot(capsQ,snap=>{
     allCaptains=snap.docs.map(d=>({id:d.id,...d.data()}));
     populateCapRestSelect();
+    if(document.getElementById('scCaptains').classList.contains('on'))renderCapStats();
+    renderDash();
   }));
   if(isAdmin()){
     unsubs.push(fb.onSnapshot(fb.collection(fb.db,'restaurants'),snap=>{
@@ -736,22 +785,38 @@ function orderCard(o){
   const typeBadge=type==='salon'?'<span class="badge b-salon">🪑 صالة</span>':type==='takeaway'?'<span class="badge b-takeaway">🥡 سفري</span>':'<span class="badge" style="background:rgba(77,171,247,.15);color:var(--blue)">🏍️ دلفري</span>';
   const stB={pending:'b-pending',accepted:'b-accepted',pickup:'b-accepted',delivering:'b-delivering',delivered:'b-delivered',cancelled:'b-cancelled',preparing:'b-accepted',ready:'b-delivered'};
   const stL={pending:'🟡 ينتظر',accepted:'🔵 مقبول',pickup:'🟠 استلام',delivering:'🛵 توصيل',delivered:'✅ مسلّم',cancelled:'❌ ملغي',preparing:'🍳 قيد التحضير',ready:'✅ جاهز'};
+  const id=esc(o.id);
   return`<div class="order-row">
-    <div class="order-head"><span class="order-id">${o.id.substring(0,6).toUpperCase()}</span><span class="order-time">${o.createdAt||''}</span></div>
-    <div style="margin-bottom:6px;">${typeBadge} <span class="badge ${stB[o.status]||'b-pending'}">${stL[o.status]||o.status}</span></div>
-    ${o.customer?`<div style="font-size:11px;color:var(--muted);">👤 ${o.customer} ${o.phone?'• 📞 '+o.phone:''}</div>`:''}
-    ${o.address?`<div style="font-size:11px;color:var(--muted);">📍 ${o.address}</div>`:''}
+    <div class="order-head"><span class="order-id">${esc(o.id.substring(0,6).toUpperCase())}</span><span class="order-time">${esc(o.createdAt||'')}</span></div>
+    <div style="margin-bottom:6px;">${typeBadge} <span class="badge ${stB[o.status]||'b-pending'}">${stL[o.status]||esc(o.status)}</span></div>
+    ${o.customer?`<div style="font-size:11px;color:var(--muted);">👤 ${esc(o.customer)} ${o.phone?'• 📞 '+esc(o.phone):''}</div>`:''}
+    ${o.address?`<div style="font-size:11px;color:var(--muted);">📍 ${esc(o.address)}</div>`:''}
     <div style="display:flex;justify-content:space-between;margin-top:6px;align-items:center;">
       <span style="font-size:12px;font-weight:700;color:var(--accent2);">💰 ${fmt(o.value)} د.ع${o.fee?' + '+fmt(o.fee)+' توصيل':''}</span>
-      ${o.captainName?`<span style="font-size:11px;color:var(--muted);">🛵 ${o.captainName}</span>`:''}
-      ${isAdmin()&&o.restaurantName?`<span style="font-size:11px;color:var(--muted);">🍽️ ${o.restaurantName}</span>`:''}
+      ${o.captainName?`<span style="font-size:11px;color:var(--muted);">🛵 ${esc(o.captainName)}</span>`:''}
+      ${(isAdmin()||isStaff())&&o.restaurantName?`<span style="font-size:11px;color:var(--muted);">🍽️ ${esc(o.restaurantName)}</span>`:''}
     </div>
-    <div style="display:flex;gap:6px;margin-top:8px;" class="manage-only">
-      <button class="btn-sm btn-del" onclick="deleteOrder('${o.id}')">🗑️ حذف</button>
-      <button class="btn-sm btn-edit" onclick="printOrder('${o.id}')">🖨️ طباعة</button>
+    <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+      ${o.hasProof?`<button class="btn-sm btn-cap" onclick="viewProof('${id}')">📸 إثبات التسليم</button>`:''}
+      <button class="btn-sm btn-edit" onclick="printOrder('${id}')">🖨️ طباعة</button>
+      ${isAdmin()?`<button class="btn-sm btn-del" onclick="deleteOrder('${id}')">🗑️ حذف</button>`:''}
     </div>
   </div>`;
 }
+
+window.viewProof=async function(id){
+  try{
+    const s=await window._fb.getDoc(window._fb.doc(window._fb.db,'deliveryProofs',id));
+    if(!s.exists()){toast('لا توجد صورة','warn');return;}
+    const d=s.data();
+    const src=String(d.image||'');
+    if(!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src)){toast('صورة غير صالحة','error');return;}
+    const mo=document.getElementById('proofMo');
+    document.getElementById('proofImg').src=src;
+    document.getElementById('proofMeta').textContent=`🛵 ${d.captainName||''} • ${d.capturedAtMs?new Date(d.capturedAtMs).toLocaleString('ar-IQ'):''}`;
+    mo.classList.add('open');
+  }catch(e){toast('❌ تعذّر تحميل الصورة','error');}
+};
 
 window.printOrder=function(id){
   const o=allOrders.find(x=>x.id===id);
@@ -759,18 +824,20 @@ window.printOrder=function(id){
   const w=window.open('','_blank','width=380,height=600');
   const type=o.orderType||'delivery';
   const typeLabel=type==='salon'?'صالة':type==='takeaway'?'سفري':'دلفري';
-  w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>فاتورة ${o.id.substring(0,6).toUpperCase()}</title>
+  if(!w){toast('⚠️ اسمح بالنوافذ المنبثقة للطباعة','warn');return;}
+  const sid=esc(o.id.substring(0,6).toUpperCase());
+  w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>فاتورة ${sid}</title>
   <style>body{font-family:Tajawal,sans-serif;padding:20px;color:#111;}h2{text-align:center;margin-bottom:4px;}
   .l{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #ccc;font-size:14px;}
   .tot{font-weight:900;font-size:16px;margin-top:10px;}</style></head><body>
-  <h2>🚀 سرعة</h2><p style="text-align:center;color:#666;">فاتورة طلب #${o.id.substring(0,6).toUpperCase()}</p>
+  <h2>🚀 سرعة</h2><p style="text-align:center;color:#666;">فاتورة طلب #${sid}</p>
   <div class="l"><span>النوع</span><span>${typeLabel}</span></div>
-  <div class="l"><span>الزبون</span><span>${o.customer||'—'}</span></div>
-  <div class="l"><span>الهاتف</span><span>${o.phone||'—'}</span></div>
-  <div class="l"><span>العنوان</span><span>${o.address||'—'}</span></div>
-  <div class="l"><span>المطعم</span><span>${o.restaurantName||'—'}</span></div>
-  <div class="l"><span>الكابتن</span><span>${o.captainName||'—'}</span></div>
-  <div class="l"><span>التاريخ</span><span>${o.createdAt||''}</span></div>
+  <div class="l"><span>الزبون</span><span>${esc(o.customer||'—')}</span></div>
+  <div class="l"><span>الهاتف</span><span>${esc(o.phone||'—')}</span></div>
+  <div class="l"><span>العنوان</span><span>${esc(o.address||'—')}</span></div>
+  <div class="l"><span>المطعم</span><span>${esc(o.restaurantName||'—')}</span></div>
+  <div class="l"><span>الكابتن</span><span>${esc(o.captainName||'—')}</span></div>
+  <div class="l"><span>التاريخ</span><span>${esc(o.createdAt||'')}</span></div>
   <div class="l tot"><span>المبلغ</span><span>${fmt(o.value)} د.ع</span></div>
   ${o.fee?`<div class="l"><span>التوصيل</span><span>${fmt(o.fee)} د.ع</span></div>`:''}
   <script>window.print();<\/script></body></html>`);
@@ -804,7 +871,7 @@ window.renderCapStats=function(){
   const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
   const filtered=allOrders.filter(o=>{const t=o.createdAtMs||0;return t>=start&&t<end;});
   const capMap={};
-  allCaptains.forEach(c=>{capMap[c.id]={name:c.name,phone:c.phone||'',count:0,delivered:0,total:0,fee:0};});
+  allCaptains.forEach(c=>{capMap[c.id]={name:c.name,phone:c.phone||'',known:true,count:0,delivered:0,total:0,fee:0};});
   filtered.forEach(o=>{
     if(!o.captainId)return;
     if(!capMap[o.captainId])capMap[o.captainId]={name:o.captainName||o.captainId,phone:'',count:0,delivered:0,total:0,fee:0};
@@ -819,13 +886,13 @@ window.renderCapStats=function(){
       <div class="cap-stat-head">
         <div class="cap-av">🏍️</div>
         <div style="flex:1">
-          <div style="font-weight:900;font-size:14px;">${cap.name}</div>
-          <div style="font-size:11px;color:var(--muted);">${cap.phone}</div>
+          <div style="font-weight:900;font-size:14px;">${esc(cap.name)}</div>
+          <div style="font-size:11px;color:var(--muted);">${esc(cap.phone)}</div>
         </div>
-        <div class="manage-only" style="display:flex;gap:6px;">
-          <button class="btn-sm btn-edit" onclick="openEditCap('${cap.id}')">✏️</button>
-          <button class="btn-sm btn-del" onclick="deleteCaptain('${cap.id}')">🗑️</button>
-        </div>
+        ${cap.known?`<div class="manage-only" style="display:flex;gap:6px;">
+          <button class="btn-sm btn-edit" onclick="openEditCap('${esc(cap.id)}')">✏️</button>
+          <button class="btn-sm btn-del" onclick="deleteCaptain('${esc(cap.id)}')">🗑️</button>
+        </div>`:''}
       </div>
       <div class="cap-stats-g">
         <div class="cap-stat-item"><div class="cap-stat-v">${toA(cap.count)}</div><div class="cap-stat-l">طلبات</div></div>
@@ -844,7 +911,7 @@ window.renderCapStats=function(){
 function populateCapRestSelect(){
   const sel=document.getElementById('ncRest');
   if(!sel||isRest())return;
-  sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
 }
 
 window.addCaptain=async function(){
@@ -854,34 +921,45 @@ window.addCaptain=async function(){
   const email=document.getElementById('ncEmail').value.trim().toLowerCase();
   const pass=document.getElementById('ncPass').value;
   if(!restId||!name||!phone||!email||!pass){toast('⚠️ أدخل كل البيانات','warn');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('⚠️ الإيميل غير صحيح','warn');return;}
+  if(pass.length<8){toast('⚠️ كلمة المرور 8 أحرف على الأقل','warn');return;}
+  const fb=window._fb;
   try{
-    // Create user in secondary app (no logout)
-    const cred=await window._fb.createUserWithEmailAndPassword(window._fb.auth2,email,pass);
-    await window._fb.setDoc(window._fb.doc(window._fb.db,'users',cred.user.uid),{email,role:'captain',name});
-    await window._fb.addDoc(window._fb.collection(window._fb.db,'captains'),{
-      restaurantId:restId,userId:cred.user.uid,name,phone,email,available:true,createdAt:new Date().toISOString()
-    });
-    await window._fb.signOut(window._fb.auth2);
+    // الحساب يُنشأ بتطبيق ثانوي حتى لا يخرج المدير
+    const cred=await fb.createUserWithEmailAndPassword(fb.auth2,email,pass);
+    await fb.signOut(fb.auth2);
+    const capRef=fb.doc(fb.collection(fb.db,'captains'));
+    await fb.setDoc(capRef,{restaurantId:restId,userId:cred.user.uid,name,phone,email,available:true,createdAt:new Date().toISOString(),createdAtMs:Date.now()});
+    // ربط الحساب: الدور + المطعم + معرّف الكابتن (يستخدمها نظام الحماية)
+    await fb.setDoc(fb.doc(fb.db,'users',cred.user.uid),{email,role:'captain',name,restaurantId:restId,captainId:capRef.id,createdAtMs:Date.now()});
+    audit('captain.create',{captainId:capRef.id,restaurantId:restId,email});
     toast('✅ تم إضافة الكابتن: '+name);
     ['ncRest','ncName','ncPhone','ncEmail','ncPass'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   }catch(e){
-    toast('❌ '+e.message,'error');
+    if(e.code==='auth/email-already-in-use') toast('❌ هذا الإيميل مستخدم مسبقاً','error');
+    else if(e.code==='auth/weak-password') toast('❌ كلمة المرور ضعيفة','error');
+    else toast('❌ تعذّرت الإضافة: '+(e.code||e.message),'error');
     console.error(e);
   }
 };
 
 window.deleteOrder=async function(id){
+  if(!isAdmin())return;
   if(!confirm('حذف هذا الطلب نهائياً؟'))return;
   try{
     await window._fb.deleteDoc(window._fb.doc(window._fb.db,'orders',id));
+    window._fb.deleteDoc(window._fb.doc(window._fb.db,'tracking',id)).catch(()=>{});
+    audit('order.delete',{orderId:id});
     toast('🗑️ تم حذف الطلب');
-  }catch(e){alert('خطأ: '+e.message);}
+  }catch(e){toast('❌ تعذّر الحذف','error');}
 };
 
 window.deleteAllOrders=async function(){
+  if(!isAdmin())return;
   const fil=document.querySelectorAll('#ordersList .order-row');
   if(!fil.length){toast('لا توجد طلبات');return;}
   if(!confirm(`⚠️ حذف ${fil.length} طلب؟ هذا لا يمكن التراجع عنه!`))return;
+  if(prompt('للتأكيد اكتب: حذف')!=='حذف'){toast('أُلغيت العملية','warn');return;}
   try{
     // get visible order ids from current filter
     let orders=allOrders;
@@ -890,17 +968,25 @@ window.deleteAllOrders=async function(){
     else if(orderFilter==='takeaway')orders=allOrders.filter(o=>o.orderType==='takeaway');
     else if(orderFilter==='pending')orders=allOrders.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
     else if(orderFilter==='delivered')orders=allOrders.filter(o=>o.status==='delivered');
+    const q=(document.getElementById('orderSearch')?.value||'').trim().toLowerCase();
+    if(q)orders=orders.filter(o=>(o.customer||'').toLowerCase().includes(q)||(o.phone||'').includes(q));
     await Promise.all(orders.map(o=>window._fb.deleteDoc(window._fb.doc(window._fb.db,'orders',o.id))));
+    audit('order.deleteMany',{count:orders.length,filter:orderFilter});
     toast('🗑️ تم حذف '+orders.length+' طلب');
-  }catch(e){alert('خطأ: '+e.message);}
+  }catch(e){toast('❌ تعذّر الحذف','error');}
 };
 
 window.deleteCaptain=async function(id){
-  if(!confirm('حذف هذا الكابتن؟'))return;
+  const cap=allCaptains.find(c=>c.id===id);
+  if(!confirm('حذف هذا الكابتن وإلغاء صلاحية دخوله؟'))return;
+  const fb=window._fb;
   try{
-    await window._fb.deleteDoc(window._fb.doc(window._fb.db,'captains',id));
-    toast('🗑️ تم الحذف');
-  }catch(e){toast('❌ '+e.message,'error');}
+    // حذف users/{uid} يلغي الصلاحية فوراً (نظام الحماية يرفض أي حساب بدون ملف)
+    if(cap?.userId) await fb.deleteDoc(fb.doc(fb.db,'users',cap.userId)).catch(()=>{});
+    await fb.deleteDoc(fb.doc(fb.db,'captains',id));
+    audit('captain.delete',{captainId:id,email:cap?.email||''});
+    toast('🗑️ تم الحذف وإلغاء الصلاحية');
+  }catch(e){toast('❌ تعذّر الحذف','error');}
 };
 
 // EDIT CAPTAIN
@@ -920,7 +1006,9 @@ window.saveCaptain=async function(){
   const email=document.getElementById('ecEmail').value.trim().toLowerCase();
   if(!name){toast('⚠️ أدخل الاسم','warn');return;}
   try{
-    await window._fb.updateDoc(window._fb.doc(window._fb.db,'captains',id),{name,phone,email});
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'captains',id),{name,phone});
+    const cap=allCaptains.find(c=>c.id===id);
+    if(cap?.userId) window._fb.updateDoc(window._fb.doc(window._fb.db,'users',cap.userId),{name}).catch(()=>{});
     toast('✅ تم تحديث بيانات الكابتن');
     document.getElementById('editCapMo').classList.remove('open');
   }catch(e){toast('❌ '+e.message,'error');}
@@ -932,15 +1020,16 @@ window.addStaff=async function(){
   const email=document.getElementById('nsEmail').value.trim().toLowerCase();
   const pass=document.getElementById('nsPass').value;
   if(!name||!email||!pass){toast('⚠️ أدخل كل البيانات','warn');return;}
-  if(pass.length<6){toast('⚠️ كلمة المرور 6 أحرف على الأقل','warn');return;}
+  if(pass.length<8){toast('⚠️ كلمة المرور 8 أحرف على الأقل','warn');return;}
   const btn=document.getElementById('addStaffBtn');
   btn.innerHTML='<div class="spin"></div>';btn.disabled=true;
   try{
     const cred=await window._fb.createUserWithEmailAndPassword(window._fb.auth2,email,pass);
     const uid=cred.user.uid;
-    await window._fb.setDoc(window._fb.doc(window._fb.db,'users',uid),{email,role:'staff',name});
-    await window._fb.setDoc(window._fb.doc(window._fb.db,'staff',uid),{name,email,createdAt:new Date().toISOString()});
     await window._fb.signOut(window._fb.auth2);
+    await window._fb.setDoc(window._fb.doc(window._fb.db,'users',uid),{email,role:'staff',name,createdAtMs:Date.now()});
+    await window._fb.setDoc(window._fb.doc(window._fb.db,'staff',uid),{name,email,createdAt:new Date().toISOString()});
+    audit('staff.create',{uid,email});
     toast('✅ تم إضافة الموظف: '+name);
     ['nsName','nsEmail','nsPass'].forEach(id=>document.getElementById(id).value='');
   }catch(e){
@@ -955,17 +1044,19 @@ function renderStaffList(){
   list.innerHTML=allStaff.map(s=>`<div class="entity">
     <div class="entity-head">
       <div class="entity-icon">👥</div>
-      <div style="flex:1"><div class="entity-name">${s.name}</div><div class="entity-sub">📧 ${s.email}</div></div>
-      <button class="btn-sm btn-del" onclick="deleteStaff('${s.id}')">🗑️ حذف</button>
+      <div style="flex:1"><div class="entity-name">${esc(s.name)}</div><div class="entity-sub">📧 ${esc(s.email)}</div></div>
+      <button class="btn-sm btn-del" onclick="deleteStaff('${esc(s.id)}')">🗑️ حذف</button>
     </div>
   </div>`).join('');
 }
 window.deleteStaff=async function(id){
-  if(!confirm('حذف هذا الموظف؟ (صلاحية الدخول تبقى لازم تُلغى يدوياً من Firebase)'))return;
+  if(!confirm('حذف هذا الموظف وإلغاء صلاحية دخوله؟'))return;
   try{
+    await window._fb.deleteDoc(window._fb.doc(window._fb.db,'users',id)).catch(()=>{});
     await window._fb.deleteDoc(window._fb.doc(window._fb.db,'staff',id));
-    toast('🗑️ تم حذف الموظف من القائمة');
-  }catch(e){toast('❌ '+e.message,'error');}
+    audit('staff.delete',{uid:id});
+    toast('🗑️ تم حذف الموظف وإلغاء صلاحيته');
+  }catch(e){toast('❌ تعذّر الحذف','error');}
 };
 
 // RESTAURANTS
@@ -981,7 +1072,7 @@ function renderRests(){
     let subBadge='';
     if(!active){subBadge='<span class="sub-badge sub-off">⏸️ متوقف</span>';}
     else if(r.expiry){
-      const daysLeft=Math.ceil((new Date(r.expiry+'T00:00:00').getTime()-Date.now())/86400000);
+      const daysLeft=Math.ceil(((r.expiryMs||dayEndMs(r.expiry))-Date.now())/86400000);
       if(daysLeft<0)subBadge='<span class="sub-badge sub-expired">⛔ منتهي</span>';
       else if(daysLeft<=7)subBadge=`<span class="sub-badge sub-warn">⚠️ ${toA(daysLeft)} يوم متبقي</span>`;
       else subBadge='<span class="sub-badge sub-active">✅ نشط</span>';
@@ -989,8 +1080,8 @@ function renderRests(){
     return`<div class="entity">
       <div class="entity-head">
         <div class="entity-icon">🍽️</div>
-        <div style="flex:1"><div class="entity-name">${r.name} ${subBadge}</div><div class="entity-sub">📍 ${r.area||'—'} • 📧 ${r.email||'—'}</div></div>
-        <label class="tgl" title="تفعيل/إيقاف"><input type="checkbox" ${active?'checked':''} onchange="toggleRestActive('${r.id}',this.checked)"><span class="tgl-slider"></span></label>
+        <div style="flex:1"><div class="entity-name">${esc(r.name)} ${subBadge}</div><div class="entity-sub">📍 ${esc(r.area||'—')} • 📧 ${esc(r.email||'—')}${r.userId?'':' • <span style="color:var(--red)">⚠️ غير مرتبط بحساب</span>'}</div></div>
+        <label class="tgl" title="تفعيل/إيقاف"><input type="checkbox" ${active?'checked':''} onchange="toggleRestActive('${esc(r.id)}',this.checked)"><span class="tgl-slider"></span></label>
       </div>
       <div class="entity-meta">
         <div class="meta-item"><strong>${toA(myCaps.length)}</strong>كابتن</div>
@@ -999,8 +1090,8 @@ function renderRests(){
         <div class="meta-item"><strong>${fmt(r.subscription||0)}</strong>د.ع/شهر</div>
       </div>
       <div class="entity-actions">
-        <button class="btn-sm btn-edit" onclick="openEditRest('${r.id}')">✏️ تعديل</button>
-        <button class="btn-sm btn-del" onclick="deleteRest('${r.id}','${r.name}')">🗑️ حذف</button>
+        <button class="btn-sm btn-edit" onclick="openEditRest('${esc(r.id)}')">✏️ تعديل</button>
+        <button class="btn-sm btn-del" onclick="deleteRest('${esc(r.id)}')">🗑️ حذف</button>
       </div>
     </div>`;
   }).join('');
@@ -1008,7 +1099,7 @@ function renderRests(){
 
 function populateRestSelect(){
   const sel=document.getElementById('ncRest');
-  if(sel) sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${r.id}">${r.name}</option>`).join('');
+  if(sel) sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
 }
 
 // ADD RESTAURANT
@@ -1020,29 +1111,32 @@ window.addRestaurant=async function(){
   const pass=document.getElementById('nrPass').value;
   const sub=parseInt(document.getElementById('nrSub').value)||50000;
   if(!name||!area||!email||!pass){toast('⚠️ أدخل الاسم والمنطقة والإيميل وكلمة المرور','warn');return;}
-  if(pass.length<6){toast('⚠️ كلمة المرور 6 أحرف على الأقل','warn');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('⚠️ الإيميل غير صحيح','warn');return;}
+  if(pass.length<8){toast('⚠️ كلمة المرور 8 أحرف على الأقل','warn');return;}
   const btn=document.getElementById('addRestBtn');
   btn.innerHTML='<div class="spin"></div>';btn.disabled=true;
+  const fb=window._fb;
   try{
-    // Create Firebase Auth user in secondary app
-    const cred=await window._fb.createUserWithEmailAndPassword(window._fb.auth2,email,pass);
+    // الحساب يُنشأ بتطبيق ثانوي حتى لا يخرج المدير
+    const cred=await fb.createUserWithEmailAndPassword(fb.auth2,email,pass);
     const uid=cred.user.uid;
-    // Add to users collection
-    await window._fb.setDoc(window._fb.doc(window._fb.db,'users',uid),{email,role:'restaurant',name});
-    // Add to restaurants collection
+    await fb.signOut(fb.auth2);
     const expiry=document.getElementById('nrExpiry').value||'';
-    await window._fb.addDoc(window._fb.collection(window._fb.db,'restaurants'),{
-      name,area,email,phone,subscription:sub,userId:uid,active:true,expiry,
+    const restRef=fb.doc(fb.collection(fb.db,'restaurants'));
+    await fb.setDoc(restRef,{
+      name,area,email,phone,subscription:sub,userId:uid,active:true,expiry,expiryMs:dayEndMs(expiry),
       createdAt:new Date().toISOString(),createdAtMs:Date.now()
     });
-    // Sign out secondary
-    await window._fb.signOut(window._fb.auth2);
+    // ربط الحساب بالمطعم — هذا ما يعتمد عليه نظام الحماية
+    await fb.setDoc(fb.doc(fb.db,'users',uid),{email,role:'restaurant',name,restaurantId:restRef.id,createdAtMs:Date.now()});
+    audit('restaurant.create',{restaurantId:restRef.id,email});
     toast('✅ تم إضافة المطعم: '+name);
     ['nrName','nrArea','nrEmail','nrPhone','nrPass','nrExpiry'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('nrSub').value='50000';
   }catch(e){
     if(e.code==='auth/email-already-in-use') toast('❌ هذا الإيميل مستخدم مسبقاً','error');
-    else toast('❌ '+e.message,'error');
+    else if(e.code==='auth/weak-password') toast('❌ كلمة المرور ضعيفة','error');
+    else toast('❌ تعذّرت الإضافة: '+(e.code||e.message),'error');
     console.error(e);
   }finally{btn.innerHTML='➕ إضافة المطعم';btn.disabled=false;}
 };
@@ -1075,38 +1169,46 @@ window.saveRest=async function(){
   const pass=document.getElementById('erPass').value;
   if(!name||!email){toast('⚠️ أدخل الاسم والإيميل','warn');return;}
   try{
-    // Update restaurants doc
-    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{name,area,email,phone,subscription:sub,expiry,active});
-    // Update users doc if userId exists
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{name,area,email,phone,subscription:sub,expiry,expiryMs:dayEndMs(expiry),active});
     const restDoc=await window._fb.getDoc(window._fb.doc(window._fb.db,'restaurants',id));
     if(restDoc.exists()&&restDoc.data().userId){
-      await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',restDoc.data().userId),{email,name}).catch(()=>{});
+      await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',restDoc.data().userId),{name}).catch(()=>{});
     }
-    if(pass&&pass.length>=6){
-      toast('✅ تم التحديث! لتغيير كلمة المرور يجب من Firebase Console','warn');
+    audit('restaurant.update',{restaurantId:id,active,expiry,subscription:sub});
+    if(pass){
+      toast('✅ تم التحديث! كلمة المرور تُغيَّر من Firebase Console ← Authentication','warn');
     }else{
       toast('✅ تم تحديث بيانات المطعم!');
     }
     document.getElementById('editRestMo').classList.remove('open');
-  }catch(e){toast('❌ '+e.message,'error');}
+  }catch(e){toast('❌ تعذّر الحفظ','error');}
 };
 
 window.toggleRestActive=async function(id,active){
   try{
     await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{active});
+    audit('restaurant.active',{restaurantId:id,active});
     toast(active?'✅ تم تفعيل المطعم':'⏸️ تم إيقاف المطعم');
-  }catch(e){toast('❌ '+e.message,'error');}
+  }catch(e){toast('❌ تعذّر التحديث','error');}
 };
 
-window.deleteRest=async function(id,name){
-  if(!confirm(`⚠️ حذف مطعم "${name}" وكل بياناته؟`))return;
+window.deleteRest=async function(id){
+  const r=allRestaurants.find(x=>x.id===id);
+  if(!r)return;
+  if(!confirm(`⚠️ حذف مطعم "${r.name}" وكل كباتنه وإلغاء صلاحيات دخولهم؟`))return;
+  const fb=window._fb;
   try{
-    // Delete captains
-    const caps=await window._fb.getDocs(window._fb.query(window._fb.collection(window._fb.db,'captains'),window._fb.where('restaurantId','==',id)));
-    await Promise.all(caps.docs.map(d=>window._fb.deleteDoc(d.ref)));
-    await window._fb.deleteDoc(window._fb.doc(window._fb.db,'restaurants',id));
+    const caps=await fb.getDocs(fb.query(fb.collection(fb.db,'captains'),fb.where('restaurantId','==',id)));
+    await Promise.all(caps.docs.map(async d=>{
+      const uid=d.data().userId;
+      if(uid) await fb.deleteDoc(fb.doc(fb.db,'users',uid)).catch(()=>{});
+      await fb.deleteDoc(d.ref);
+    }));
+    if(r.userId) await fb.deleteDoc(fb.doc(fb.db,'users',r.userId)).catch(()=>{});
+    await fb.deleteDoc(fb.doc(fb.db,'restaurants',id));
+    audit('restaurant.delete',{restaurantId:id,name:r.name,captains:caps.size});
     toast('🗑️ تم حذف المطعم');
-  }catch(e){toast('❌ '+e.message,'error');}
+  }catch(e){toast('❌ تعذّر الحذف','error');}
 };
 
 // ANALYTICS
@@ -1133,7 +1235,7 @@ window.renderAnalytics=function(){
     restStats=`<div class="card"><div class="card-title"><span class="dot"></span> تفاصيل المطاعم</div>`+
       Object.values(restMap).sort((a,b)=>b.total-a.total).map(r=>`
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:12px;">
-          <span>🍽️ ${r.name}</span>
+          <span>🍽️ ${esc(r.name)}</span>
           <span style="color:var(--accent2);font-weight:700;">${toA(r.count)} طلب — ${fmt(r.total)} د.ع</span>
         </div>`).join('')+'</div>';
   }
@@ -1186,13 +1288,124 @@ window.exportCSV=function(){
   fil.forEach(o=>{
     rows.push([o.id.substring(0,6).toUpperCase(),o.orderType||'delivery',o.status||'',o.restaurantName||'',o.captainName||'',o.value||0,o.fee||0,o.createdAt||'']);
   });
-  const csv='\uFEFF'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  // \u0645\u0646\u0639 \u062D\u0642\u0646 \u0627\u0644\u0635\u064A\u063A \u0641\u064A Excel: \u0623\u064A \u0642\u064A\u0645\u0629 \u0646\u0635\u064A\u0629 \u062A\u0628\u062F\u0623 \u0628\u0640 = + - @ \u062A\u064F\u0633\u0628\u0642 \u0628\u0640 '
+  const cell=v=>{let s=String(v);if(typeof v!=='number'&&/^[=+\-@\t\r]/.test(s))s="'"+s;return `"${s.replace(/"/g,'""')}"`;};
+  const csv='\uFEFF'+rows.map(r=>r.map(cell).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download=`تقرير-سرعة-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   toast('✅ تم تصدير التقرير');
+};
+
+// ── SECURITY / MIGRATION ──
+let secPlan=null;
+const ACTIVE_ST=['pending','accepted','pickup','delivering'];
+const ROLE_AR={admin:'👑 مدير',staff:'👥 موظف',restaurant:'🍽️ مطعم',captain:'🛵 كابتن'};
+window.secScan=async function(){
+  if(!isAdmin())return;
+  const fb=window._fb, btn=document.getElementById('secScanBtn');
+  btn.disabled=true;btn.innerHTML='<div class="spin"></div>';
+  try{
+    const [us,rs,cs,ss]=await Promise.all(['users','restaurants','captains','staff'].map(c=>fb.getDocs(fb.collection(fb.db,c))));
+    const users={};us.forEach(d=>users[d.id]={id:d.id,...d.data()});
+    const byEmail=role=>{const m={};Object.values(users).forEach(u=>{if(u.role===role&&u.email)m[String(u.email).toLowerCase()]=u.id;});return m;};
+    const restByEmail=byEmail('restaurant'),capByEmail=byEmail('captain');
+    const ops=[],issues=[],claimed={};
+    const userFix=(uid,want,label)=>{
+      const u=users[uid];
+      if(u&&u.role&&u.role!==want.role){issues.push(`⚠️ ${label}: الحساب مسجّل بدور "${ROLE_AR[u.role]||u.role}" — لم يُغيَّر، راجعه يدوياً`);return false;}
+      if(claimed[uid]&&claimed[uid]!==label){issues.push(`⚠️ ${label}: نفس الحساب مربوط أيضاً بـ ${claimed[uid]}`);return false;}
+      claimed[uid]=label;
+      const need=Object.entries(want).some(([k,v])=>!u||u[k]!==v);
+      if(need)ops.push({path:['users',uid],data:want,merge:true,label:`ربط حساب ${label}`});
+      return true;
+    };
+    rs.forEach(d=>{
+      const r=d.data(),label='المطعم "'+(r.name||d.id)+'"';
+      const uid=r.userId||restByEmail[String(r.email||'').toLowerCase()];
+      if(!uid){issues.push(`❌ ${label}: لا يوجد حساب دخول مرتبط — أعد إنشاء المطعم أو أنشئ له حساباً`);}
+      else if(userFix(uid,{role:'restaurant',restaurantId:d.id},label)&&!r.userId) ops.push({path:['restaurants',d.id],data:{userId:uid},merge:true,label:`ربط ${label} بحسابه`});
+      if(r.expiry&&r.expiryMs!==dayEndMs(r.expiry)) ops.push({path:['restaurants',d.id],data:{expiryMs:dayEndMs(r.expiry)},merge:true,label:`تاريخ انتهاء ${label}`});
+    });
+    cs.forEach(d=>{
+      const c=d.data(),label='الكابتن "'+(c.name||d.id)+'"';
+      const uid=c.userId||capByEmail[String(c.email||'').toLowerCase()];
+      if(!uid){issues.push(`❌ ${label}: لا يوجد حساب دخول مرتبط`);return;}
+      if(!c.restaurantId){issues.push(`❌ ${label}: غير مرتبط بمطعم`);return;}
+      if(userFix(uid,{role:'captain',captainId:d.id,restaurantId:c.restaurantId},label)&&!c.userId) ops.push({path:['captains',d.id],data:{userId:uid},merge:true,label:`ربط ${label} بحسابه`});
+    });
+    ss.forEach(d=>{const s=d.data();userFix(d.id,{role:'staff'},'الموظف "'+(s.name||s.email||d.id)+'"');});
+    // حسابات بدور لكن بدون مطعم/كابتن حقيقي
+    const restIds=new Set(rs.docs.map(d=>d.id)),capIds=new Set(cs.docs.map(d=>d.id));
+    Object.values(users).forEach(u=>{
+      if(u.disabled)return;
+      if(u.role==='restaurant'&&!claimed[u.id]&&!restIds.has(u.restaurantId)) issues.push(`🔸 حساب مطعم يتيم: ${u.email||u.id}`);
+      if(u.role==='captain'&&!claimed[u.id]&&!capIds.has(u.captainId)) issues.push(`🔸 حساب كابتن يتيم: ${u.email||u.id}`);
+    });
+    // صفحات التتبع للطلبات الجارية (حتى تعمل الروابط المرسلة للزبائن)
+    allOrders.filter(o=>ACTIVE_ST.includes(o.status)&&(o.orderType||'delivery')==='delivery').forEach(o=>{
+      const t={status:o.status,restaurantName:o.restaurantName||'',value:o.value||0,fee:o.fee||0,restaurantId:o.restaurantId||'',updatedAtMs:Date.now()};
+      if(o.captainName)t.captainName=o.captainName;
+      if(o.captainId)t.captainId=o.captainId;
+      ops.push({path:['tracking',o.id],data:t,merge:true,label:'صفحة تتبع '+o.id.substring(0,6).toUpperCase(),quiet:true});
+    });
+    secPlan=ops;
+    const main=ops.filter(o=>!o.quiet),quiet=ops.length-main.length;
+    document.getElementById('secReport').innerHTML=`
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;">
+        <div class="stat"><div class="stat-v">${toA(main.length)}</div><div class="stat-l">إصلاح حسابات</div></div>
+        <div class="stat"><div class="stat-v">${toA(quiet)}</div><div class="stat-l">صفحات تتبع</div></div>
+        <div class="stat"><div class="stat-v" style="color:${issues.length?'var(--red)':'var(--green)'}">${toA(issues.length)}</div><div class="stat-l">تحتاج مراجعة</div></div>
+      </div>
+      ${main.length?`<details style="font-size:12px;margin-bottom:8px;"><summary style="cursor:pointer;font-weight:700;">عرض الإصلاحات</summary><div style="line-height:1.9;margin-top:6px;">${main.map(o=>'• '+esc(o.label)).join('<br>')}</div></details>`:''}
+      ${issues.length?`<div style="font-size:12px;line-height:1.9;background:var(--panel2);border-radius:10px;padding:10px;">${issues.map(esc).join('<br>')}</div>`:'<div style="color:var(--green);font-weight:700;font-size:13px;">✅ كل الحسابات مرتبطة بشكل صحيح</div>'}`;
+    document.getElementById('secFixBtn').disabled=!ops.length;
+    // قائمة المدراء
+    const admins=Object.values(users).filter(u=>u.role==='admin');
+    document.getElementById('secAdmins').innerHTML=admins.map(u=>`<div class="entity" style="padding:10px;">
+      <div style="display:flex;align-items:center;gap:10px;"><div style="flex:1;"><div class="entity-name">${esc(u.name||u.email||u.id)} ${u.id===currentUser.uid?'<span class="sub-badge sub-active">أنت</span>':''} ${u.disabled?'<span class="sub-badge sub-expired">موقوف</span>':''}</div><div class="entity-sub">📧 ${esc(u.email||'—')}</div></div>
+      ${u.id!==currentUser.uid?`<button class="btn-sm ${u.disabled?'btn-cap':'btn-del'}" onclick="secToggleUser('${esc(u.id)}',${u.disabled?'false':'true'})">${u.disabled?'تفعيل':'⛔ إيقاف'}</button>`:''}</div></div>`).join('');
+  }catch(e){console.error(e);toast('❌ تعذّر الفحص: '+(e.code||e.message),'error');}
+  finally{btn.disabled=false;btn.innerHTML='🔍 فحص';}
+};
+window.secApply=async function(){
+  if(!isAdmin()||!secPlan||!secPlan.length)return;
+  if(!confirm(`تطبيق ${secPlan.length} إصلاح؟`))return;
+  const fb=window._fb,btn=document.getElementById('secFixBtn');
+  btn.disabled=true;btn.innerHTML='<div class="spin"></div>';
+  try{
+    for(let i=0;i<secPlan.length;i+=400){
+      const b=fb.writeBatch(fb.db);
+      secPlan.slice(i,i+400).forEach(o=>b.set(fb.doc(fb.db,...o.path),o.data,{merge:!!o.merge}));
+      await b.commit();
+    }
+    audit('security.migrate',{ops:secPlan.length});
+    toast('✅ تم تطبيق '+secPlan.length+' إصلاح');
+    secPlan=null;
+    await secScan();
+  }catch(e){console.error(e);toast('❌ تعذّر التطبيق: '+(e.code||e.message),'error');btn.disabled=false;}
+  finally{btn.innerHTML='✅ تطبيق الإصلاحات';}
+};
+window.secToggleUser=async function(uid,disabled){
+  if(!isAdmin()||uid===currentUser.uid)return;
+  if(!confirm(disabled?'إيقاف هذا الحساب؟ لن يستطيع الدخول لأي تطبيق.':'إعادة تفعيل هذا الحساب؟'))return;
+  try{
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',uid),{disabled});
+    audit(disabled?'user.disable':'user.enable',{uid});
+    toast(disabled?'⛔ تم إيقاف الحساب':'✅ تم التفعيل');
+    secScan();
+  }catch(e){toast('❌ تعذّر التحديث','error');}
+};
+window.secLoadAudit=async function(){
+  const el=document.getElementById('secAudit');if(!el)return;
+  try{
+    const fb=window._fb;
+    const s=await fb.getDocs(fb.query(fb.collection(fb.db,'auditLog'),fb.orderBy('atMs','desc'),fb.limit(30)));
+    el.innerHTML=s.empty?'<div style="color:var(--muted);font-size:12px;">لا توجد عمليات مسجلة بعد</div>':s.docs.map(d=>{const a=d.data();return `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;">
+      <span><b>${esc(a.action)}</b> — ${esc(a.email||a.uid)}</span><span style="color:var(--muted);white-space:nowrap;">${a.atMs?esc(new Date(a.atMs).toLocaleString('ar-IQ')):''}</span></div>`;}).join('');
+  }catch(e){el.innerHTML='<div style="color:var(--muted);font-size:12px;">السجل يعمل بعد نشر قواعد الحماية</div>';}
 };
 
 // MODAL
@@ -1211,10 +1424,10 @@ function initMap(){
   if(!mapInitialized){
     // Load Leaflet
     const css=document.createElement('link');
-    css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    css.rel='stylesheet';css.href='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';css.integrity='sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H';css.crossOrigin='anonymous';
     document.head.appendChild(css);
     const sc=document.createElement('script');
-    sc.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    sc.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';sc.integrity='sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH';sc.crossOrigin='anonymous';
     sc.onload=()=>{
       mapInitialized=true;
       mapInstance=L.map('mapContainer').setView([33.3152,44.3661],12);
@@ -1256,13 +1469,13 @@ async function renderMapCaptains(){
       });
       const marker=L.marker([data.lat,data.lng],{icon}).addTo(mapInstance);
       marker.bindPopup(`<div style="font-family:Tajawal,sans-serif;text-align:center;direction:rtl;">
-        <strong>${name}</strong><br>
+        <strong>${esc(name)}</strong><br>
         <span style="color:${isOnline?'green':'red'}">${isOnline?'🟢 متصل':'🔴 غير متصل'}</span>
       </div>`);
       capMarkers[data.captainId]=marker;
       capLocHTML.push(`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);">
         <div style="width:10px;height:10px;border-radius:50%;background:${isOnline?'var(--green)':'var(--red)'};flex-shrink:0;"></div>
-        <div style="flex:1;font-size:12px;font-weight:700;">${name}</div>
+        <div style="flex:1;font-size:12px;font-weight:700;">${esc(name)}</div>
         <div style="font-size:10px;color:var(--muted);">${isOnline?'متصل':'غير متصل'}</div>
       </div>`);
     });
