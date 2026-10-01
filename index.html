@@ -238,6 +238,15 @@ body.staff-mode .staff-banner{display:block;}
 .entity:hover::before{opacity:1;}
 .btn-primary{position:relative;overflow:hidden;}
 
+/* Cashier perms & phone lines */
+.perm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;}
+.perm-grid label,.perm-row label{display:flex!important;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:12px;font-weight:700;color:var(--text)!important;margin:0!important;cursor:pointer;}
+.perm-grid input,.perm-row input{width:16px;height:16px;accent-color:var(--accent);}
+.perm-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+.tok{font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;word-break:break-all;direction:ltr;text-align:left;}
+.setup{font-size:12px;line-height:1.9;background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:8px;}
+.setup pre{white-space:pre-wrap;word-break:break-all;direction:ltr;text-align:left;font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0;}
+
 /* Scrollbar */
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px;}
 </style>
@@ -405,6 +414,34 @@ body.staff-mode .staff-banner{display:block;}
         <button class="btn-primary" id="addStaffBtn" onclick="addStaff()">➕ إضافة الموظف</button>
       </div>
       <div id="staffList"></div>
+    </div>
+
+    <!-- Restaurant staff & phone lines (restaurant owner + admin) -->
+    <div class="screen" id="scMyRest">
+      <div class="card admin-only" id="mrPick">
+        <div class="form-group" style="margin:0"><label>المطعم</label><select class="form-sel" id="mrRest" onchange="mrLoad()"></select></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> 👥 حسابات الكاشير وصلاحياتهم</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">الكاشير يدخل لتطبيق الكاشير بحسابه، ويشوف فقط الأقسام اللي تسمح له بيها. التغيير يطبّق فوراً على جهازه.</div>
+        <div class="form-row">
+          <div class="form-group"><label>اسم الكاشير *</label><input class="form-inp" id="mcName" maxlength="40"></div>
+          <div class="form-group"><label>الإيميل *</label><input class="form-inp" id="mcEmail" type="email"></div>
+        </div>
+        <div class="form-group"><label>كلمة المرور * (8 أحرف على الأقل)</label><input class="form-inp" id="mcPass" type="password"></div>
+        <div class="form-group"><label>الصلاحيات</label><div class="perm-grid" id="mcPerms"></div></div>
+        <button class="btn-primary" id="mcAddBtn" onclick="mcAdd()">➕ إضافة كاشير</button>
+        <div id="mcList" style="margin-top:14px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> 📞 خطوط الاتصال — توكن جوكر</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">لكل خط (جهاز) توكن سري خاص. عند ورود مكالمة على الجهاز يرسل رقم المتصل للكاشير فوراً، ويظهر للكاشير اسم الزبون وعنوانه وطلباته السابقة. حتى ١٠ خطوط.</div>
+        <div class="form-row">
+          <div class="form-group"><label>اسم الخط</label><input class="form-inp" id="mlLabel" maxlength="40" placeholder="مثال: خط زين 1"></div>
+          <div class="form-group" style="display:flex;align-items:flex-end"><button class="btn-primary" onclick="mlAdd()">➕ إضافة خط</button></div>
+        </div>
+        <div id="mlList"></div>
+      </div>
     </div>
 
     <!-- Security (admin only) -->
@@ -689,11 +726,12 @@ const tabs=[
   {id:'map',label:'الخريطة',icon:'🗺️',screen:'scMap',adminOnly:false},
   {id:'analytics',label:'التحليلات',icon:'📊',screen:'scAnalytics',adminOnly:false},
   {id:'staff',label:'الموظفين',icon:'👥',screen:'scStaff',adminOnly:true},
+  {id:'myrest',label:'الكاشيرية والخطوط',icon:'☎️',screen:'scMyRest',manage:true},
   {id:'security',label:'الأمان',icon:'🛡️',screen:'scSecurity',adminOnly:true},
 ];
 
 function buildNavs(){
-  const visibleTabs=tabs.filter(t=>!t.adminOnly||isAdmin());
+  const visibleTabs=tabs.filter(t=>(!t.adminOnly||isAdmin())&&(!t.manage||canManage()));
   document.getElementById('dNav').innerHTML=visibleTabs.map((t,i)=>
     `<button class="dnav-btn ${i===0?'on':''}" data-screen="${t.screen}" onclick="goTab('${t.screen}',this)">${t.icon} ${t.label}</button>`
   ).join('');
@@ -713,6 +751,7 @@ window.goTab=function(screenId,btn){
   if(screenId==='scRests')renderRests();
   if(screenId==='scStaff')renderStaffList();
   if(screenId==='scSecurity')secLoadAudit();
+  if(screenId==='scMyRest')mrInit();
 };
 
 // LISTENERS
@@ -1297,6 +1336,158 @@ window.exportCSV=function(){
   a.download=`تقرير-سرعة-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   toast('✅ تم تصدير التقرير');
+};
+
+// ── RESTAURANT STAFF (CASHIERS) & PHONE LINES ──
+const PERMS=[['discount','٪ الخصم'],['cancel','❌ إلغاء الطلبات'],['reports','📊 التقارير'],['inventory','📦 المخزون والحسابات'],['menu','🍔 تعديل المنيو'],['settings','⚙️ الإعدادات']];
+const PERM_DEFAULT={discount:true,cancel:false,reports:false,inventory:false,menu:false,settings:false};
+const MAX_LINES=10;
+let mrRid=null,mrUnsubs=[];
+const mrRestId=()=>isRest()?currentUser.restaurantId:(document.getElementById('mrRest').value||null);
+window.mrInit=function(){
+  if(isAdmin()){
+    const sel=document.getElementById('mrRest');const cur=sel.value;
+    sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
+    if(cur)sel.value=cur;
+  }
+  document.getElementById('mcPerms').innerHTML=PERMS.map(([k,l])=>`<label><input type="checkbox" data-p="${k}" ${PERM_DEFAULT[k]?'checked':''}> ${l}</label>`).join('');
+  mrLoad();
+};
+window.mrLoad=function(){
+  mrUnsubs.forEach(u=>u&&u());mrUnsubs=[];
+  mrRid=mrRestId();
+  const fb=window._fb;
+  if(!mrRid){document.getElementById('mcList').innerHTML='';document.getElementById('mlList').innerHTML='<div style="color:var(--muted);font-size:12px">اختر المطعم أولاً</div>';return;}
+  mrUnsubs.push(fb.onSnapshot(fb.query(fb.collection(fb.db,'users'),fb.where('restaurantId','==',mrRid),fb.where('role','==','cashier')),s=>{
+    mcRender(s.docs.map(d=>({id:d.id,...d.data()})));
+  },e=>{document.getElementById('mcList').innerHTML='<div style="color:var(--red);font-size:12px">تعذّر التحميل — تأكد من نشر قواعد الحماية الجديدة</div>';}));
+  mrUnsubs.push(fb.onSnapshot(fb.query(fb.collection(fb.db,'lineTokens'),fb.where('restaurantId','==',mrRid)),s=>{
+    mlRender(s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(+a.line||0)-(+b.line||0)));
+  },e=>{document.getElementById('mlList').innerHTML='<div style="color:var(--red);font-size:12px">تعذّر التحميل — تأكد من نشر قواعد الحماية الجديدة</div>';}));
+  unsubs.push(()=>{mrUnsubs.forEach(u=>u&&u());mrUnsubs=[];});
+};
+function mcRender(list){
+  const el=document.getElementById('mcList');
+  if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--muted);padding:12px;font-size:12px">لا يوجد كاشيرية بعد</div>';return;}
+  el.innerHTML=list.map(u=>{const p=u.perms||{};return `<div class="entity">
+    <div class="entity-head"><div class="entity-icon">🧾</div>
+      <div style="flex:1"><div class="entity-name">${esc(u.name||u.email)} ${u.disabled?'<span class="sub-badge sub-expired">موقوف</span>':''}</div><div class="entity-sub">📧 ${esc(u.email||'')}</div></div>
+      <button class="btn-sm ${u.disabled?'btn-cap':'btn-edit'}" onclick="mcToggle('${esc(u.id)}',${u.disabled?'false':'true'})">${u.disabled?'تفعيل':'⏸️ إيقاف'}</button>
+      <button class="btn-sm btn-del" onclick="mcDel('${esc(u.id)}')">🗑️</button></div>
+    <div class="perm-row">${PERMS.map(([k,l])=>`<label><input type="checkbox" ${p[k]?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>
+  </div>`;}).join('');
+}
+window.mcAdd=async function(){
+  const rid=mrRestId();if(!rid){toast('⚠️ اختر المطعم','warn');return;}
+  const name=document.getElementById('mcName').value.trim(),email=document.getElementById('mcEmail').value.trim().toLowerCase(),pass=document.getElementById('mcPass').value;
+  if(!name||!email||!pass){toast('⚠️ أدخل الاسم والإيميل وكلمة المرور','warn');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('⚠️ الإيميل غير صحيح','warn');return;}
+  if(pass.length<8){toast('⚠️ كلمة المرور 8 أحرف على الأقل','warn');return;}
+  const perms={};document.querySelectorAll('#mcPerms input').forEach(i=>perms[i.dataset.p]=i.checked);
+  const fb=window._fb,btn=document.getElementById('mcAddBtn');btn.disabled=true;btn.innerHTML='<div class="spin"></div>';
+  try{
+    const cred=await fb.createUserWithEmailAndPassword(fb.auth2,email,pass);
+    await fb.signOut(fb.auth2);
+    await fb.setDoc(fb.doc(fb.db,'users',cred.user.uid),{email,role:'cashier',name,restaurantId:rid,perms,createdAtMs:Date.now()});
+    audit('cashier.create',{uid:cred.user.uid,restaurantId:rid,email});
+    toast('✅ تم إضافة الكاشير: '+name);
+    ['mcName','mcEmail','mcPass'].forEach(id=>document.getElementById(id).value='');
+  }catch(e){toast(e.code==='auth/email-already-in-use'?'❌ هذا الإيميل مستخدم مسبقاً':'❌ تعذّرت الإضافة: '+(e.code||e.message),'error');}
+  finally{btn.disabled=false;btn.innerHTML='➕ إضافة كاشير';}
+};
+window.mcPerm=async function(uid,k,v){
+  try{const fb=window._fb;const s=await fb.getDoc(fb.doc(fb.db,'users',uid));const perms={...(s.data().perms||{}),[k]:v};
+    await fb.updateDoc(fb.doc(fb.db,'users',uid),{perms});audit('cashier.perms',{uid,perm:k,value:v});toast('✅ تم تحديث الصلاحية');}
+  catch(e){toast('❌ تعذّر التحديث','error');}
+};
+window.mcToggle=async function(uid,disabled){
+  try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',uid),{disabled});audit(disabled?'cashier.disable':'cashier.enable',{uid});toast(disabled?'⏸️ تم إيقاف الكاشير':'✅ تم التفعيل');}
+  catch(e){toast('❌ تعذّر التحديث','error');}
+};
+window.mcDel=async function(uid){
+  if(!confirm('حذف هذا الكاشير وإلغاء صلاحية دخوله؟'))return;
+  try{await window._fb.deleteDoc(window._fb.doc(window._fb.db,'users',uid));audit('cashier.delete',{uid});toast('🗑️ تم الحذف');}
+  catch(e){toast('❌ تعذّر الحذف','error');}
+};
+let mlLines=[];
+function newToken(){const a='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';const r=crypto.getRandomValues(new Uint8Array(40));return Array.from(r,x=>a[x%a.length]).join('');}
+const FS_URL=`https://firestore.googleapis.com/v1/projects/sora3a-system/databases/(default)/documents/incomingCalls?key=AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ`;
+const lineBody=(l,num)=>JSON.stringify({fields:{token:{stringValue:l.id},restaurantId:{stringValue:l.restaurantId},line:{stringValue:String(l.line)},number:{stringValue:num},status:{stringValue:'ringing'}}});
+function mlRender(list){
+  mlLines=list;
+  const el=document.getElementById('mlList');
+  if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--muted);padding:12px;font-size:12px">لا توجد خطوط بعد</div>';return;}
+  el.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${toA(list.length)} / ${toA(MAX_LINES)} خطوط</div>`+list.map(l=>`<div class="entity">
+    <div class="entity-head"><div class="entity-icon">📞</div>
+      <div style="flex:1"><div class="entity-name">خط ${esc(l.line)} — ${esc(l.label||'')} ${l.active?'<span class="sub-badge sub-active">مفعّل</span>':'<span class="sub-badge sub-off">موقوف</span>'}</div></div>
+      <label class="tgl" title="تفعيل/إيقاف"><input type="checkbox" ${l.active?'checked':''} onchange="mlToggle('${esc(l.id)}',this.checked)"><span class="tgl-slider"></span></label></div>
+    <div class="entity-actions">
+      <button class="btn-sm btn-edit" onclick="mlSetup('${esc(l.id)}')">📋 طريقة الربط</button>
+      <button class="btn-sm btn-cap" onclick="mlTest('${esc(l.id)}')">🧪 مكالمة تجريبية</button>
+      <button class="btn-sm btn-edit" onclick="mlRotate('${esc(l.id)}')">🔄 توكن جديد</button>
+      <button class="btn-sm btn-del" onclick="mlDel('${esc(l.id)}')">🗑️</button>
+    </div><div id="setup_${esc(l.id)}"></div></div>`).join('');
+}
+window.mlAdd=async function(){
+  const rid=mrRestId();if(!rid){toast('⚠️ اختر المطعم','warn');return;}
+  if(mlLines.length>=MAX_LINES){toast('⚠️ الحد الأقصى ١٠ خطوط','warn');return;}
+  const used=new Set(mlLines.map(l=>String(l.line)));let n=1;while(used.has(String(n)))n++;
+  const label=document.getElementById('mlLabel').value.trim().slice(0,40)||('خط '+n);
+  try{await window._fb.setDoc(window._fb.doc(window._fb.db,'lineTokens',newToken()),{restaurantId:rid,line:String(n),label,active:true,createdAtMs:Date.now()});
+    audit('line.create',{restaurantId:rid,line:n});document.getElementById('mlLabel').value='';toast('✅ تم إنشاء الخط '+n);}
+  catch(e){toast('❌ تعذّر الإنشاء','error');}
+};
+window.mlToggle=async function(id,active){
+  const l=mlLines.find(x=>x.id===id);if(!l)return;
+  try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'lineTokens',id),{active});toast(active?'✅ الخط مفعّل':'⏸️ الخط موقوف');}catch(e){toast('❌ تعذّر التحديث','error');}
+};
+window.mlDel=async function(id){
+  if(!confirm('حذف هذا الخط؟ الجهاز المرتبط به يتوقف عن إرسال المكالمات.'))return;
+  try{await window._fb.deleteDoc(window._fb.doc(window._fb.db,'lineTokens',id));audit('line.delete',{restaurantId:mrRid});toast('🗑️ تم حذف الخط');}catch(e){toast('❌ تعذّر الحذف','error');}
+};
+window.mlRotate=async function(id){
+  const l=mlLines.find(x=>x.id===id);if(!l)return;
+  if(!confirm('إنشاء توكن جديد لهذا الخط؟ التوكن القديم يتوقف فوراً ويجب تحديثه على الجهاز.'))return;
+  const fb=window._fb;
+  try{await fb.setDoc(fb.doc(fb.db,'lineTokens',newToken()),{restaurantId:l.restaurantId,line:l.line,label:l.label||'',active:true,createdAtMs:Date.now()});
+    await fb.deleteDoc(fb.doc(fb.db,'lineTokens',id));audit('line.rotate',{restaurantId:l.restaurantId,line:l.line});toast('🔄 تم إنشاء توكن جديد — حدّثه على الجهاز');}
+  catch(e){toast('❌ تعذّر التحديث','error');}
+};
+window.mlSetup=function(id){
+  const l=mlLines.find(x=>x.id===id);if(!l)return;
+  const box=document.getElementById('setup_'+id);
+  if(box.innerHTML){box.innerHTML='';return;}
+  const body=lineBody(l,'[call_number]');
+  box.innerHTML=`<div class="setup">
+    <b>🔑 توكن جوكر (سرّي — لا تشاركه):</b><div class="tok">${esc(l.id)}</div>
+    <b>📱 جهاز أندرويد (تطبيق MacroDroid المجاني) — مرة واحدة لكل جهاز:</b><br>
+    ١) ثبّت <b>MacroDroid</b> من Google Play وافتحه ← <b>Add Macro</b><br>
+    ٢) <b>Trigger</b>: Phone/Call ← <b>Call Incoming</b> ← Any number<br>
+    ٣) <b>Action</b>: Connectivity ← <b>HTTP Request</b> ← Method: <b>POST</b><br>
+    &nbsp;&nbsp;&nbsp;URL:<pre>${esc(FS_URL)}</pre>
+    &nbsp;&nbsp;&nbsp;Content type: <b>application/json</b> ← Body:<pre>${esc(body)}</pre>
+    &nbsp;&nbsp;&nbsp;<small>(<b>[call_number]</b> يُستبدل تلقائياً برقم المتصل — اختره من زر «...» إذا لزم)</small><br>
+    ٤) <b>Constraint</b> (اختياري): Connectivity ← <b>WiFi SSID</b> ← اختر واي فاي المطعم — حتى لا يرسل إلا داخل المطعم<br>
+    ٥) احفظ الماكرو، واسمح لـ MacroDroid بإذن الهاتف وسجل المكالمات، وأوقف تحسين البطارية له.<br>
+    <b>☎️ سنترال / هاتف IP:</b> نفس الطلب (POST للرابط أعلاه بنفس الـ Body) مع رقم المتصل.
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn-sm btn-edit" onclick="mlCopy('${esc(l.id)}','url')">📋 نسخ الرابط</button>
+      <button class="btn-sm btn-edit" onclick="mlCopy('${esc(l.id)}','body')">📋 نسخ الـ Body</button>
+      <button class="btn-sm btn-edit" onclick="mlCopy('${esc(l.id)}','token')">📋 نسخ التوكن</button>
+    </div></div>`;
+};
+window.mlCopy=async function(id,what){
+  const l=mlLines.find(x=>x.id===id);if(!l)return;
+  const txt=what==='url'?FS_URL:what==='token'?l.id:lineBody(l,'[call_number]');
+  try{await navigator.clipboard.writeText(txt);toast('📋 تم النسخ');}catch(e){prompt('انسخ النص:',txt);}
+};
+window.mlTest=async function(id){
+  const l=mlLines.find(x=>x.id===id);if(!l)return;
+  if(!l.active){toast('⚠️ فعّل الخط أولاً','warn');return;}
+  const num=prompt('رقم تجريبي يظهر بالكاشير:','07700000000');if(!num)return;
+  try{await window._fb.addDoc(window._fb.collection(window._fb.db,'incomingCalls'),{token:l.id,restaurantId:l.restaurantId,line:String(l.line),number:num.trim().slice(0,24),status:'ringing'});
+    toast('📞 أُرسلت مكالمة تجريبية — شوف شاشة الكاشير');}
+  catch(e){toast('❌ تعذّر الإرسال: '+(e.code||''),'error');}
 };
 
 // ── SECURITY / MIGRATION ──

@@ -21,7 +21,8 @@ const shortId = (id) => id.substring(0, 6).toUpperCase();
 // يجمع التوكنات من pushTokens حسب شرط، ويرجع [{uid, token}]
 async function tokensWhere(field, op, value, role) {
   if (Array.isArray(value) && !value.length) return [];
-  const snap = await db.collection('pushTokens').where(field, op, value).where('role', '==', role).get();
+  const roles = Array.isArray(role) ? role : [role];
+  const snap = await db.collection('pushTokens').where(field, op, value).where('role', 'in', roles).get();
   const out = [];
   snap.forEach((d) => (d.get('tokens') || []).forEach((t) => out.push({ uid: d.id, token: t })));
   return out;
@@ -90,7 +91,7 @@ exports.onOrderWrite = onDocumentWritten('orders/{orderId}', async (event) => {
   const newReject = after.rejectNotice && (!before || !before.rejectNotice
     || before.rejectNotice.timestamp !== after.rejectNotice.timestamp);
   if (newReject) {
-    const targets = await tokensWhere('restaurantId', '==', after.restaurantId, 'restaurant');
+    const targets = await tokensWhere('restaurantId', '==', after.restaurantId, ['restaurant', 'cashier']);
     await send(targets, {
       title: '⚠️ رفض الكابتن الطلب',
       body: `الطلب ${shortId(id)} — ${after.rejectNotice.by || ''}. اختر كابتن آخر.`,
@@ -100,7 +101,7 @@ exports.onOrderWrite = onDocumentWritten('orders/{orderId}', async (event) => {
 
   // 3) تم التسليم → إشعار للمطعم
   if (after.status === 'delivered' && before && before.status !== 'delivered' && after.captainId) {
-    const targets = await tokensWhere('restaurantId', '==', after.restaurantId, 'restaurant');
+    const targets = await tokensWhere('restaurantId', '==', after.restaurantId, ['restaurant', 'cashier']);
     await send(targets, {
       title: '✅ تم تسليم الطلب',
       body: `${shortId(id)} — ${after.captainName || ''}`,
