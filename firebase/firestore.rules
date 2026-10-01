@@ -134,7 +134,7 @@ service cloud.firestore {
           && d.value is number && d.value >= 0
           && optNum(d, 'fee')
           && optStr(d, 'customer', 120) && optStr(d, 'phone', 30)
-          && optStr(d, 'address', 400) && optStr(d, 'notes', 2000);
+          && optStr(d, 'address', 400) && optStr(d, 'notes', 5000);
       }
 
       allow read: if isOffice()
