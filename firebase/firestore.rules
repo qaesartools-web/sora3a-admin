@@ -43,10 +43,29 @@ service cloud.firestore {
     function myRest() { return me().restaurantId; }
     function ownsRest(rid) { return isRestaurant() && myRest() == rid; }
 
+    // دوام الكاشير: hours = {from, to} بالدقائق من منتصف الليل بتوقيت بغداد (UTC+3)
+    // بعد نهاية الدوام ١٥ دقيقة سماح لإغلاق الوردية وطباعة التقرير
+    function onDuty() {
+      let h = me().get('hours', null);
+      let now = (int(request.time.toMillis() / 60000) + 180) % 1440;
+      let f = h == null ? 0 : h.from;
+      let t = h == null ? 0 : h.to + 15;
+      return h == null
+        || (f < h.to && ((now >= f && now < t) || now < t - 1440))
+        || (f > h.to && (now >= f || now < t));
+    }
+    function validHours(d) {
+      return !('hours' in d) || d.hours == null
+        || (d.hours is map && d.hours.keys().hasOnly(['from','to'])
+            && d.hours.from is int && d.hours.to is int
+            && d.hours.from >= 0 && d.hours.from < 1440
+            && d.hours.to >= 0 && d.hours.to < 1440 && d.hours.from != d.hours.to);
+    }
     function isCashier() {
       return active() && role() == 'cashier'
         && me().get('restaurantId', '') != ''
-        && restaurantOpen(me().restaurantId);
+        && restaurantOpen(me().restaurantId)
+        && onDuty();
     }
     function perm(p) { return me().get('perms', {}).get(p, false) == true; }
     // صاحب المطعم أو كاشير تابع له
@@ -92,11 +111,13 @@ service cloud.firestore {
         && request.resource.data.role == 'cashier'
         && request.resource.data.restaurantId == myRest()
         && request.resource.data.get('perms', {}) is map
-        && request.resource.data.keys().hasOnly(['email','role','name','restaurantId','perms','createdAtMs']);
+        && validHours(request.resource.data)
+        && request.resource.data.keys().hasOnly(['email','role','name','restaurantId','perms','hours','createdAtMs']);
       allow update: if isRestaurant()
         && resource.data.role == 'cashier' && resource.data.restaurantId == myRest()
         && request.resource.data.get('perms', {}) is map
-        && onlyChanged(['name','perms','disabled']);
+        && validHours(request.resource.data)
+        && onlyChanged(['name','perms','disabled','hours']);
       allow delete: if isRestaurant()
         && resource.data.role == 'cashier' && resource.data.restaurantId == myRest();
     }

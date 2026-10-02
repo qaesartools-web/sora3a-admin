@@ -429,6 +429,11 @@ body.staff-mode .staff-banner{display:block;}
           <div class="form-group"><label>الإيميل *</label><input class="form-inp" id="mcEmail" type="email"></div>
         </div>
         <div class="form-group"><label>كلمة المرور * (8 أحرف على الأقل)</label><input class="form-inp" id="mcPass" type="password"></div>
+        <div class="form-row">
+          <div class="form-group"><label>⏰ بداية الدوام (اختياري)</label><input class="form-inp" id="mcFrom" type="time"></div>
+          <div class="form-group"><label>⏰ نهاية الدوام (اختياري)</label><input class="form-inp" id="mcTo" type="time"></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin:-6px 0 10px;line-height:1.7">خارج الدوام يُقفل الكاشير تلقائياً. عند نهاية الدوام تُغلق ورديته وتنطبع فاتورة المبلغ الكلي. اتركهما فارغين = بدون تحديد وقت.</div>
         <div class="form-group"><label>الصلاحيات</label><div class="perm-grid" id="mcPerms"></div></div>
         <button class="btn-primary" id="mcAddBtn" onclick="mcAdd()">➕ إضافة كاشير</button>
         <div id="mcList" style="margin-top:14px"></div>
@@ -1342,6 +1347,16 @@ window.exportCSV=function(){
 const PERMS=[['discount','٪ الخصم'],['cancel','❌ إلغاء الطلبات'],['reports','📊 التقارير'],['inventory','📦 المخزون والحسابات'],['menu','🍔 تعديل المنيو'],['settings','⚙️ الإعدادات']];
 const PERM_DEFAULT={discount:true,cancel:false,reports:false,inventory:false,menu:false,settings:false};
 const MAX_LINES=10;
+// الدوام يُخزّن بالدقائق من منتصف الليل (بتوقيت بغداد)
+const toMins=v=>{const m=/^(\d{1,2}):(\d{2})$/.exec(v||'');return m?(+m[1])*60+(+m[2]):null;};
+const fromMins=n=>n==null?'':String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
+const hm12=n=>{const h=Math.floor(n/60),m=n%60;return (h%12||12)+':'+String(m).padStart(2,'0')+(h<12?' ص':' م');};
+function readHours(fromId,toId){
+  const f=toMins(document.getElementById(fromId).value),t=toMins(document.getElementById(toId).value);
+  if(f==null&&t==null)return {ok:true,hours:null};
+  if(f==null||t==null||f===t)return {ok:false};
+  return {ok:true,hours:{from:f,to:t}};
+}
 let mrRid=null,mrUnsubs=[];
 const mrRestId=()=>isRest()?currentUser.restaurantId:(document.getElementById('mrRest').value||null);
 window.mrInit=function(){
@@ -1371,10 +1386,14 @@ function mcRender(list){
   if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--muted);padding:12px;font-size:12px">لا يوجد كاشيرية بعد</div>';return;}
   el.innerHTML=list.map(u=>{const p=u.perms||{};return `<div class="entity">
     <div class="entity-head"><div class="entity-icon">🧾</div>
-      <div style="flex:1"><div class="entity-name">${esc(u.name||u.email)} ${u.disabled?'<span class="sub-badge sub-expired">موقوف</span>':''}</div><div class="entity-sub">📧 ${esc(u.email||'')}</div></div>
+      <div style="flex:1"><div class="entity-name">${esc(u.name||u.email)} ${u.disabled?'<span class="sub-badge sub-expired">موقوف</span>':''}</div><div class="entity-sub">📧 ${esc(u.email||'')} • ⏰ ${u.hours?esc(hm12(u.hours.from)+' ← '+hm12(u.hours.to)):'بدون تحديد وقت'}</div></div>
       <button class="btn-sm ${u.disabled?'btn-cap':'btn-edit'}" onclick="mcToggle('${esc(u.id)}',${u.disabled?'false':'true'})">${u.disabled?'تفعيل':'⏸️ إيقاف'}</button>
       <button class="btn-sm btn-del" onclick="mcDel('${esc(u.id)}')">🗑️</button></div>
     <div class="perm-row">${PERMS.map(([k,l])=>`<label><input type="checkbox" ${p[k]?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>
+    <div class="perm-row" style="align-items:center">⏰ الدوام من <input type="time" class="form-inp" style="width:auto;padding:6px" id="hf_${esc(u.id)}" value="${u.hours?fromMins(u.hours.from):''}">
+      إلى <input type="time" class="form-inp" style="width:auto;padding:6px" id="ht_${esc(u.id)}" value="${u.hours?fromMins(u.hours.to):''}">
+      <button class="btn-sm btn-edit" onclick="mcHours('${esc(u.id)}')">💾 حفظ الدوام</button>
+      ${u.hours?`<button class="btn-sm" onclick="mcHours('${esc(u.id)}',true)">بدون وقت</button>`:''}</div>
   </div>`;}).join('');
 }
 window.mcAdd=async function(){
@@ -1384,14 +1403,15 @@ window.mcAdd=async function(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('⚠️ الإيميل غير صحيح','warn');return;}
   if(pass.length<8){toast('⚠️ كلمة المرور 8 أحرف على الأقل','warn');return;}
   const perms={};document.querySelectorAll('#mcPerms input').forEach(i=>perms[i.dataset.p]=i.checked);
+  const hr=readHours('mcFrom','mcTo');if(!hr.ok){toast('⚠️ حدد بداية ونهاية الدوام (مختلفتين) أو اتركهما فارغين','warn');return;}
   const fb=window._fb,btn=document.getElementById('mcAddBtn');btn.disabled=true;btn.innerHTML='<div class="spin"></div>';
   try{
     const cred=await fb.createUserWithEmailAndPassword(fb.auth2,email,pass);
     await fb.signOut(fb.auth2);
-    await fb.setDoc(fb.doc(fb.db,'users',cred.user.uid),{email,role:'cashier',name,restaurantId:rid,perms,createdAtMs:Date.now()});
+    await fb.setDoc(fb.doc(fb.db,'users',cred.user.uid),{email,role:'cashier',name,restaurantId:rid,perms,...(hr.hours?{hours:hr.hours}:{}),createdAtMs:Date.now()});
     audit('cashier.create',{uid:cred.user.uid,restaurantId:rid,email});
     toast('✅ تم إضافة الكاشير: '+name);
-    ['mcName','mcEmail','mcPass'].forEach(id=>document.getElementById(id).value='');
+    ['mcName','mcEmail','mcPass','mcFrom','mcTo'].forEach(id=>document.getElementById(id).value='');
   }catch(e){toast(e.code==='auth/email-already-in-use'?'❌ هذا الإيميل مستخدم مسبقاً':'❌ تعذّرت الإضافة: '+(e.code||e.message),'error');}
   finally{btn.disabled=false;btn.innerHTML='➕ إضافة كاشير';}
 };
@@ -1399,6 +1419,13 @@ window.mcPerm=async function(uid,k,v){
   try{const fb=window._fb;const s=await fb.getDoc(fb.doc(fb.db,'users',uid));const perms={...(s.data().perms||{}),[k]:v};
     await fb.updateDoc(fb.doc(fb.db,'users',uid),{perms});audit('cashier.perms',{uid,perm:k,value:v});toast('✅ تم تحديث الصلاحية');}
   catch(e){toast('❌ تعذّر التحديث','error');}
+};
+window.mcHours=async function(uid,clear){
+  let hours=null;
+  if(!clear){const hr=readHours('hf_'+uid,'ht_'+uid);if(!hr.ok){toast('⚠️ حدد بداية ونهاية الدوام (مختلفتين)','warn');return;}hours=hr.hours;}
+  try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',uid),{hours});audit('cashier.hours',{uid,hours});
+    toast(hours?'✅ الدوام: '+hm12(hours.from)+' ← '+hm12(hours.to):'✅ بدون تحديد وقت');}
+  catch(e){toast('❌ تعذّر الحفظ — تأكد من نشر قواعد الحماية الجديدة','error');}
 };
 window.mcToggle=async function(uid,disabled){
   try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',uid),{disabled});audit(disabled?'cashier.disable':'cashier.enable',{uid});toast(disabled?'⏸️ تم إيقاف الكاشير':'✅ تم التفعيل');}
