@@ -210,6 +210,37 @@ test('صاحب المطعم يدير كاشيريته فقط', async () => {
   await assertFails(updateDoc(doc(as('rest2'), 'users/cash1'), { perms: {} }));
 });
 
+// ── دوام الكاشير ──
+const nowBag = () => (Math.floor(Date.now() / 60000) + 180) % 1440;
+const wrap = (n) => ((n % 1440) + 1440) % 1440;
+test('الكاشير يعمل داخل دوامه فقط (مع سماح ١٥ دقيقة بعد النهاية)', async () => {
+  const n = nowBag();
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'users/cOn'), { role: 'cashier', restaurantId: 'R1', perms: {}, hours: { from: wrap(n - 60), to: wrap(n + 60) } });
+    await setDoc(doc(db, 'users/cOff'), { role: 'cashier', restaurantId: 'R1', perms: {}, hours: { from: wrap(n + 60), to: wrap(n + 120) } });
+    await setDoc(doc(db, 'users/cGrace'), { role: 'cashier', restaurantId: 'R1', perms: {}, hours: { from: wrap(n - 120), to: wrap(n - 5) } });
+    await setDoc(doc(db, 'users/cLate'), { role: 'cashier', restaurantId: 'R1', perms: {}, hours: { from: wrap(n - 120), to: wrap(n - 30) } });
+  });
+  const sh = (u) => setDoc(doc(as(u), 'restaurants/R1/shifts/s_' + u), { status: 'open' });
+  await assertSucceeds(sh('cOn'));
+  await assertFails(sh('cOff'));
+  await assertSucceeds(sh('cGrace'));
+  await assertFails(sh('cLate'));
+  // يقرأ ملفه دائماً حتى يعرف متى يفتح
+  await assertSucceeds(getDoc(doc(as('cOff'), 'users/cOff')));
+});
+test('صاحب المطعم يحدد الدوام بقيم صحيحة فقط، والكاشير لا يغيّره', async () => {
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'users/cash1'), { hours: { from: 540, to: 1020 } }));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'users/cash1'), { hours: { from: 1200, to: 120 } }));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'users/cash1'), { hours: null }));
+  await assertFails(updateDoc(doc(as('rest1'), 'users/cash1'), { hours: { from: 540, to: 540 } }));
+  await assertFails(updateDoc(doc(as('rest1'), 'users/cash1'), { hours: { from: 540, to: 2000 } }));
+  await assertFails(updateDoc(doc(as('rest1'), 'users/cash1'), { hours: { from: '9', to: 1020 } }));
+  await assertFails(updateDoc(doc(as('cash1'), 'users/cash1'), { hours: null }));
+  await assertSucceeds(setDoc(doc(as('rest1'), 'users/newc'), { role: 'cashier', restaurantId: 'R1', name: 'n', email: 'e', perms: {}, hours: { from: 480, to: 960 } }));
+});
+
 // ── خطوط الاتصال والمكالمات ──
 const call = (o) => ({ token: 'TOKEN_R1_LINE1_xxxxxxxxxxxxxxxx', restaurantId: 'R1', line: '1', number: '07701234567', status: 'ringing', ...o });
 test('جهاز الخط يرسل المكالمة بالتوكن بدون تسجيل دخول', async () => {

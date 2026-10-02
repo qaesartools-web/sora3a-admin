@@ -146,3 +146,67 @@ test('cashier without cancel/discount permission cannot cancel or discount', asy
   assert.equal(await p.locator('button[onclick^="ordCancel"]').count(), 0);
   await p.context().close();
 });
+
+test('working hours: shift auto-closes with printed total at end, cashier locked until hours start', async () => {
+  const bag = () => (Math.floor(Date.now() / 60000) + 180) % 1440;
+  const wrap = (n) => ((n % 1440) + 1440) % 1440;
+  const n = bag();
+  await write('users/' + U.cash, { perms: { discount: true }, hours: { from: wrap(n - 60), to: wrap(n + 60) } });
+  const p = await page(B, { w: 1280, h: 800 });
+  await posLogin(p, 'cash@x.com', 'cashpass1');
+  await p.waitForSelector('#prods .prod');
+  await p.evaluate(() => goTab('shift'));
+  await p.fill('#shOpenCash', '10000');
+  await p.click('button >> text=فتح الوردية');
+  const sh = await until(async () => (await all('restaurants/RC/shifts', 'status', 'open'))[0]);
+  assert.equal(sh.uid, U.cash);
+  await E.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'orders/OH1'), { restaurantId: 'RC', status: 'delivered', orderType: 'takeaway', value: 7000, shiftId: sh.id, createdAtMs: Date.now(),
+      payment: { method: 'cash', cash: 7000, card: 0, shiftId: sh.id, atMs: Date.now() } });
+  });
+  await p.waitForFunction(() => orders.some((o) => o.id === 'OH1'));
+  // صاحب المطعم يجعل الدوام منتهياً قبل دقيقتين → إغلاق تلقائي + طباعة + قفل
+  await write('users/' + U.cash, { hours: { from: wrap(n - 120), to: wrap(n - 2) } });
+  await p.waitForSelector('#dutyLock.on', { timeout: 10000 });
+  const closed = await until(async () => { const d = await read('restaurants/RC/shifts/' + sh.id); return d.status === 'closed' ? d : null; });
+  assert.equal(closed.autoClosed, true); assert.equal(closed.report.sales, 7000); assert.equal(closed.expectedCash, 17000);
+  const printed = await p.evaluate(() => document.getElementById('prtFr').srcdoc);
+  assert.ok(printed.includes('تقرير إغلاق الوردية') && /(7,000|٧٬٠٠٠|٧,٠٠٠|7000|٧٠٠٠)/.test(printed));
+  assert.match(await p.textContent('#dutyLock'), /خارج وقت الدوام/);
+  await p.screenshot({ path: 'shots/pos-duty-lock.png' });
+  // بعد السماح: السيرفر يرفض أي كتابة من الكاشير
+  await write('users/' + U.cash, { hours: { from: wrap(n - 120), to: wrap(n - 30) } });
+  const denied = await p.evaluate(async () => { try { await window._fb.setDoc(window._fb.doc(window._fb.db, 'restaurants/RC/shifts/hack'), { status: 'open' }); return false; } catch (e) { return e.code; } });
+  assert.equal(denied, 'permission-denied');
+  // بداية الدوام → يفتح تلقائياً
+  await write('users/' + U.cash, { hours: { from: wrap(n - 5), to: wrap(n + 60) } });
+  await p.waitForSelector('#prods .prod', { timeout: 15000 });
+  await p.waitForTimeout(1500);
+  assert.equal(await p.evaluate(() => !!document.querySelector('#dutyLock.on')), false);
+  await p.context().close();
+  // دخول خارج الدوام → مقفل مباشرة
+  await write('users/' + U.cash, { hours: { from: wrap(n + 60), to: wrap(n + 120) } });
+  const q = await page(B, { w: 390, h: 800 });
+  await posLogin(q, 'cash@x.com', 'cashpass1');
+  await q.waitForSelector('#dutyLock.on', { timeout: 10000 });
+  await q.screenshot({ path: 'shots/pos-duty-mobile.png' });
+  await q.context().close();
+  await write('users/' + U.cash, { hours: null });
+});
+
+test('owner sets and clears cashier working hours from the admin app', async () => {
+  const p = await page(B, { w: 1280, h: 800 });
+  await adminLogin(p, 'owner@x.com');
+  await p.click('.dnav-btn[data-screen="scMyRest"]');
+  await p.waitForSelector('#hf_' + U.cash);
+  await p.fill('#hf_' + U.cash, '09:00'); await p.fill('#ht_' + U.cash, '17:30');
+  await p.click('button >> text=حفظ الدوام');
+  const u = await until(async () => { const d = await read('users/' + U.cash); return d.hours ? d : null; });
+  assert.deepEqual(u.hours, { from: 540, to: 1050 });
+  await p.waitForFunction(() => document.getElementById('mcList').textContent.includes('9:00 ص ← 5:30 م'));
+  await p.screenshot({ path: 'shots/admin-hours.png', fullPage: true });
+  await p.click('button >> text=بدون وقت');
+  await until(async () => (await read('users/' + U.cash)).hours === null);
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
