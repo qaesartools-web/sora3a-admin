@@ -242,6 +242,20 @@ body.staff-mode .staff-banner{display:block;}
 .perm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;}
 .perm-grid label,.perm-row label{display:flex!important;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:12px;font-weight:700;color:var(--text)!important;margin:0!important;cursor:pointer;}
 .perm-grid input,.perm-row input{width:16px;height:16px;accent-color:var(--accent);}
+.tm-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.tm-filters select{flex:1;min-width:140px;}
+.tm-kpi .stat-v{font-size:22px;}
+.tm-kpi .stat-s{font-size:11px;color:var(--muted);margin-top:2px;}
+.tm-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.tm-tbl th{background:var(--panel2);color:var(--muted);font-weight:800;padding:8px 6px;text-align:right;white-space:nowrap;position:sticky;top:0;}
+.tm-tbl td{padding:8px 6px;border-top:1px solid var(--line);vertical-align:top;white-space:nowrap;}
+.tm-tbl td small{display:block;color:var(--muted);font-size:10.5px;}
+.tm-scroll{overflow:auto;max-height:560px;border:1px solid var(--line);border-radius:12px;}
+.tm-ok{color:var(--green);font-weight:900;}.tm-warn{color:var(--yellow);font-weight:900;}.tm-bad{color:var(--red);font-weight:900;}
+.tm-bar{height:8px;border-radius:6px;background:var(--panel2);overflow:hidden;margin-top:4px;}
+.tm-bar>i{display:block;height:100%;background:var(--accent);border-radius:6px;}
+.tm-flow{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;}
+.tm-flow b{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;}
 .svc-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px;align-items:center;}
 .svc-row .svc-l{font-size:11px;color:var(--muted);font-weight:800;margin-left:2px;}
 .svc{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 11px;font-size:12px;font-weight:800;cursor:pointer;border:1.5px solid var(--line);background:var(--panel2);color:var(--muted);font-family:inherit;}
@@ -394,6 +408,14 @@ body.staff-mode .staff-banner{display:block;}
     </div>
 
     <!-- Analytics -->
+    <div class="screen" id="scTimes">
+      <div class="tm-filters">
+        <select class="form-sel" id="tmRange" onchange="renderTimes()"><option value="today">اليوم</option><option value="yesterday">أمس</option><option value="7" selected>آخر ٧ أيام</option><option value="30">آخر ٣٠ يوم</option></select>
+        <select class="form-sel" id="tmType" onchange="renderTimes()"><option value="">كل الأنواع</option><option value="delivery">🏍️ دلفري</option><option value="salon">🪑 صالة</option><option value="takeaway">🥡 سفري</option></select>
+        <select class="form-sel admin-only" id="tmRest" onchange="renderTimes()"><option value="">كل المطاعم</option></select>
+      </div>
+      <div id="tmBody"></div>
+    </div>
     <div class="screen" id="scAnalytics">
       <div class="date-filter">
         <input type="date" id="anFrom">
@@ -739,6 +761,7 @@ const tabs=[
   {id:'rests',label:'المطاعم',icon:'🍽️',screen:'scRests',adminOnly:true},
   {id:'map',label:'الخريطة',icon:'🗺️',screen:'scMap',adminOnly:false,feat:'captain'},
   {id:'analytics',label:'التحليلات',icon:'📊',screen:'scAnalytics',adminOnly:false},
+  {id:'times',label:'أوقات الطلبات',icon:'⏱️',screen:'scTimes',manage:true},
   {id:'staff',label:'الموظفين',icon:'👥',screen:'scStaff',adminOnly:true},
   {id:'myrest',label:'الكاشيرية والخطوط',icon:'☎️',screen:'scMyRest',manage:true},
   {id:'security',label:'الأمان',icon:'🛡️',screen:'scSecurity',adminOnly:true},
@@ -762,6 +785,7 @@ window.goTab=function(screenId,btn){
   if(screenId==='scCaptains')renderCapStats();
   if(screenId==='scMap')initMap();
   if(screenId==='scAnalytics')renderAnalytics();
+  if(screenId==='scTimes')renderTimes();
   if(screenId==='scRests')renderRests();
   if(screenId==='scStaff')renderStaffList();
   if(screenId==='scSecurity')secLoadAudit();
@@ -786,6 +810,7 @@ function startListeners(){
     prevPendingCount=pendingCount;
     notifReady=true;
     renderDash();renderOrders();
+    if(document.getElementById('scTimes').classList.contains('on'))renderTimes();
   }));
   const capsQ=isRest()
     ? fb.query(fb.collection(fb.db,'captains'),fb.where('restaurantId','==',currentUser.restaurantId))
@@ -1292,6 +1317,94 @@ window.deleteRest=async function(id){
 };
 
 // ANALYTICS
+// ── أوقات الطلبات: متى وصل، متى جهز كل قسم، متى قبل الكابتن، متى سُلّم، والوقت الكلي ──
+const TM_SEC_CACHE={};
+const tmType=o=>o.orderType||'delivery';
+const tmDur=ms=>{if(ms==null||!isFinite(ms)||ms<0)return'—';const m=Math.round(ms/60000);return m<60?toA(m)+' د':toA(Math.floor(m/60))+' س '+toA(m%60)+' د';};
+const tmClock=ms=>ms?new Date(ms).toLocaleTimeString('ar-IQ',{hour:'numeric',minute:'2-digit'}):'—';
+const tmAvg=a=>{const v=a.filter(x=>x!=null&&isFinite(x)&&x>=0);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
+const tmMax=a=>{const v=a.filter(x=>x!=null&&isFinite(x)&&x>=0);return v.length?Math.max(...v):null;};
+// حدود السرعة بالدقائق: [ممتاز، مقبول]
+const TM_LIMIT={delivery:[30,45],salon:[15,25],takeaway:[15,25]};
+function tmCls(o,ms){if(ms==null)return'';const l=TM_LIMIT[tmType(o)]||TM_LIMIT.delivery,m=ms/60000;return m<=l[0]?'tm-ok':m<=l[1]?'tm-warn':'tm-bad';}
+function tmStages(o){
+  const t=tmType(o),c=o.createdAtMs||0;
+  const kitchen=o.kitchenReadyAt||null;
+  const end=t==='delivery'?(o.status==='delivered'?o.deliveredAtMs||null:null):(o.servedAtMs||null);
+  return{created:c,kitchen,accepted:o.acceptedAtMs||null,pickup:o.pickupAtMs||null,out:o.deliveringAtMs||null,end,
+    prep:kitchen?kitchen-c:null,
+    accept:o.acceptedAtMs?o.acceptedAtMs-c:null,
+    trip:t==='delivery'&&o.deliveredAtMs?o.deliveredAtMs-(o.deliveringAtMs||o.pickupAtMs||o.acceptedAtMs||c):null,
+    total:end?end-c:null};
+}
+async function tmSections(rid){
+  if(!rid)return{};
+  if(TM_SEC_CACHE[rid])return TM_SEC_CACHE[rid];
+  try{const s=await window._fb.getDoc(window._fb.doc(window._fb.db,'restaurants',rid,'settings','main'));
+    const m={};((s.exists()&&s.data().sections)||[]).forEach(x=>{if(x&&x.name)m[x.id]=(x.emoji||'')+' '+x.name;});TM_SEC_CACHE[rid]=m;}
+  catch(e){TM_SEC_CACHE[rid]={};}
+  return TM_SEC_CACHE[rid];
+}
+window.renderTimes=async function(){
+  const el=document.getElementById('tmBody');if(!el)return;
+  if(isAdmin()){const sel=document.getElementById('tmRest'),cur=sel.value;sel.innerHTML='<option value="">كل المطاعم</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur;}
+  const range=document.getElementById('tmRange').value,type=document.getElementById('tmType').value;
+  const rid=isRest()?currentUser.restaurantId:document.getElementById('tmRest').value;
+  const d0=new Date();d0.setHours(0,0,0,0);
+  let from=d0.getTime(),to=Infinity;
+  if(range==='yesterday'){to=from;from-=86400000;}else if(range!=='today')from-=(+range-1)*86400000;
+  const list=allOrders.filter(o=>(o.createdAtMs||0)>=from&&(o.createdAtMs||0)<to&&o.status!=='cancelled'&&(!type||tmType(o)===type)&&(!rid||o.restaurantId===rid));
+  const secNames=rid?await tmSections(rid):{};
+  const rows=list.map(o=>({o,s:tmStages(o)}));
+  const done=rows.filter(x=>x.s.total!=null);
+  const dl=rows.filter(x=>tmType(x.o)==='delivery');
+  const late=done.filter(x=>tmCls(x.o,x.s.total)==='tm-bad').length;
+  const kpi=(v,l,sub)=>`<div class="stat"><div class="stat-v">${v}</div><div class="stat-l">${l}</div>${sub?`<div class="stat-s">${sub}</div>`:''}</div>`;
+  let h=`<div class="stats tm-kpi">
+    ${kpi(toA(list.length),'📦 طلب بالفترة',toA(done.length)+' مكتمل التوقيت')}
+    ${kpi(tmDur(tmAvg(done.map(x=>x.s.total))),'⏱️ متوسط الوقت الكلي','أبطأ: '+tmDur(tmMax(done.map(x=>x.s.total))))}
+    ${kpi(tmDur(tmAvg(rows.map(x=>x.s.prep))),'👨‍🍳 متوسط تجهيز المطبخ','من وصول الطلب')}
+    ${kpi(done.length?toA(Math.round(late*100/done.length))+'٪':'—','🐢 طلبات متأخرة',toA(late)+' طلب فوق الحد')}
+    ${dl.length?kpi(tmDur(tmAvg(dl.map(x=>x.s.accept))),'🛵 متوسط قبول الكابتن','من وصول الطلب'):''}
+    ${dl.length?kpi(tmDur(tmAvg(dl.map(x=>x.s.trip))),'🏍️ متوسط مدة التوصيل','من خروج الكابتن للتسليم'):''}
+  </div>`;
+  h+=`<div class="card"><div class="card-title"><span class="dot"></span> 🔁 رحلة الطلب (المتوسط)</div><div class="tm-flow">
+    <b>📥 وصل</b> → <b>👨‍🍳 المطبخ ${tmDur(tmAvg(rows.map(x=>x.s.prep)))}</b>
+    ${dl.length?`→ <b>🛵 قبول الكابتن ${tmDur(tmAvg(dl.map(x=>x.s.accept)))}</b> → <b>🏍️ التوصيل ${tmDur(tmAvg(dl.map(x=>x.s.trip)))}</b>`:''}
+    → <b>✅ التسليم — الكلي ${tmDur(tmAvg(done.map(x=>x.s.total)))}</b></div>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">الحدود: دلفري ممتاز ≤ ٣٠ د ومقبول ≤ ٤٥ د • صالة وسفري ممتاز ≤ ١٥ د ومقبول ≤ ٢٥ د</div></div>`;
+  // أقسام المطبخ
+  const sec={};rows.forEach(({o})=>Object.entries(o.kSec||{}).forEach(([k,v])=>{if(!v.readyAt)return;(sec[k]=sec[k]||[]).push(v.readyAt-(o.createdAtMs||0));}));
+  const secKeys=Object.keys(sec);
+  if(secKeys.length){const mx=Math.max(...secKeys.map(k=>tmAvg(sec[k])||0))||1;
+    h+=`<div class="card"><div class="card-title"><span class="dot"></span> 👨‍🍳 سرعة أقسام المطبخ</div>${secKeys.sort((a,b)=>tmAvg(sec[a])-tmAvg(sec[b])).map(k=>`<div style="margin:10px 0">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800"><span>${esc(secNames[k]||k)}</span><span>${tmDur(tmAvg(sec[k]))} <small style="color:var(--muted);font-weight:600">• ${toA(sec[k].length)} طلب • أبطأ ${tmDur(tmMax(sec[k]))}</small></span></div>
+      <div class="tm-bar"><i style="width:${Math.round((tmAvg(sec[k])||0)*100/mx)}%"></i></div></div>`).join('')}</div>`;}
+  // الكباتن
+  const caps={};dl.forEach(x=>{if(!x.o.captainName)return;(caps[x.o.captainName]=caps[x.o.captainName]||[]).push(x);});
+  const capNames=Object.keys(caps);
+  if(capNames.length)h+=`<div class="card"><div class="card-title"><span class="dot"></span> 🛵 أداء الكباتن</div><div class="tm-scroll"><table class="tm-tbl"><tr><th>الكابتن</th><th>الطلبات</th><th>متوسط القبول</th><th>متوسط التوصيل</th><th>متوسط الكلي</th></tr>
+    ${capNames.sort((a,b)=>(tmAvg(caps[a].map(x=>x.s.total))||1e12)-(tmAvg(caps[b].map(x=>x.s.total))||1e12)).map(n=>`<tr><td><b>${esc(n)}</b></td><td>${toA(caps[n].length)}</td><td>${tmDur(tmAvg(caps[n].map(x=>x.s.accept)))}</td><td>${tmDur(tmAvg(caps[n].map(x=>x.s.trip)))}</td><td><b>${tmDur(tmAvg(caps[n].map(x=>x.s.total)))}</b></td></tr>`).join('')}</table></div></div>`;
+  // حسب النوع
+  const TN={delivery:'🏍️ دلفري',salon:'🪑 صالة',takeaway:'🥡 سفري'};
+  h+=`<div class="card"><div class="card-title"><span class="dot"></span> 📊 حسب نوع الطلب</div><div class="tm-scroll"><table class="tm-tbl"><tr><th>النوع</th><th>الطلبات</th><th>تجهيز المطبخ</th><th>الوقت الكلي</th><th>متأخرة</th></tr>
+    ${['delivery','salon','takeaway'].map(t=>{const g=rows.filter(x=>tmType(x.o)===t);if(!g.length)return'';const gd=g.filter(x=>x.s.total!=null);
+      return`<tr><td><b>${TN[t]}</b></td><td>${toA(g.length)}</td><td>${tmDur(tmAvg(g.map(x=>x.s.prep)))}</td><td>${tmDur(tmAvg(gd.map(x=>x.s.total)))}</td><td>${toA(gd.filter(x=>tmCls(x.o,x.s.total)==='tm-bad').length)}</td></tr>`;}).join('')}</table></div></div>`;
+  // جدول الطلبات
+  const rn=id=>(allRestaurants.find(r=>r.id===id)||{}).name||'';
+  h+=`<div class="card"><div class="card-title"><span class="dot"></span> 🧾 توقيت كل طلب ${list.length>100?'<small style="color:var(--muted)">(آخر ١٠٠)</small>':''}</div><div class="tm-scroll"><table class="tm-tbl">
+    <tr><th>الطلب</th><th>📥 وصل</th><th>👨‍🍳 المطبخ</th><th>🛵 قبول الكابتن</th><th>🏪 استلم</th><th>✅ سُلّم</th><th>⏱️ الكلي</th></tr>
+    ${rows.slice(0,100).map(({o,s})=>`<tr>
+      <td><b>#${esc(String(o.ticketNo||o.salonNum||o.holdNum||o.id.slice(0,5).toUpperCase()))}</b> ${TN[tmType(o)]||''}<small>${isAdmin()&&!rid?esc(rn(o.restaurantId))+' • ':''}${esc(o.captainName||'')}${o.kSec?' • '+Object.entries(o.kSec).map(([k,v])=>esc((secNames[k]||k).trim().split(' ')[0])+' '+(v.readyAt?tmDur(v.readyAt-s.created):'⏳')).join(' '):''}</small></td>
+      <td>${tmClock(s.created)}</td>
+      <td>${tmClock(s.kitchen)}<small>${tmDur(s.prep)}</small></td>
+      <td>${tmType(o)==='delivery'?tmClock(s.accepted)+`<small>${tmDur(s.accept)}</small>`:'—'}</td>
+      <td>${tmType(o)==='delivery'?tmClock(s.out||s.pickup):'—'}</td>
+      <td>${tmClock(s.end)}${tmType(o)==='delivery'&&s.trip!=null?`<small>توصيل ${tmDur(s.trip)}</small>`:''}</td>
+      <td class="${tmCls(o,s.total)}">${s.total!=null?tmDur(s.total):'<span style="color:var(--muted);font-weight:600">جارٍ…</span>'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px">لا توجد طلبات بهذه الفترة</td></tr>'}
+  </table></div></div>`;
+  el.innerHTML=h;
+};
 window.renderAnalytics=function(){
   const from=document.getElementById('anFrom')?.value;
   const to=document.getElementById('anTo')?.value;
