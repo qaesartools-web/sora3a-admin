@@ -74,6 +74,8 @@ test('admin app reads every number and detail; owner edits and deletes expenses'
   await p.fill('#lEmail', 'accown@x.com'); await p.fill('#lPass', 'secret123'); await p.click('#lBtn');
   await p.waitForSelector('#appPage', { state: 'visible' });
   await p.click('.dnav-btn[data-screen="scAcc"]');
+  await p.selectOption('#axRange', '30');
+  await p.click('#axTabs button >> text=المصروفات');
   await p.waitForFunction(() => document.getElementById('axBody').textContent.includes('تصليح الثلاجة'));
   const t = await p.textContent('#axBody');
   assert.ok(t.includes('40,000') && t.includes('حسين الكاشير') && t.includes('فاتورة قديمة'));
