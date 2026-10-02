@@ -43,6 +43,7 @@ test('new restaurant: empty menu, import sample → synced to second device', as
   const b = await page(B, { w: 1280, h: 800 });
   await login(b);
   await b.waitForFunction(() => document.querySelectorAll('#prods .prod').length > 3, null, { timeout: 15000 });
+  await b.waitForTimeout(2500);   // ننتظر وصول آخر نسخة من المنيو قبل التعديل (الجهاز الأول قد يرفعها مرتين)
   // edit on device 2 → appears on device 1
   await b.evaluate(() => { menu[0].items.push({ name: 'برغر الشيف', variants: [{ name: 'وحدة', price: 6500 }] }); saveMenu(); });
   await a.waitForFunction(() => menu[0].items.some((i) => i.name === 'برغر الشيف'), null, { timeout: 15000 });
