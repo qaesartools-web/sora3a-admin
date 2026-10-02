@@ -270,7 +270,28 @@ service cloud.firestore {
     match /accounting/{rid} {
       // الكاشير يحتاجها لخصم المواد عند كل بيع (عرضها بالواجهة حسب صلاحية inventory)
       allow read: if isOffice() || staffOf(rid);
-      allow write: if isAdmin() || staffOf(rid);
+      allow write: if isAdmin() || ownsRest(rid)
+        // الكاشير: لا يحذف مواد، ولا يغيّر الوصفات والتكاليف أو المصروفات القديمة
+        || (cashierOf(rid) && (resource == null || (
+              request.resource.data.get('expenses', []) == resource.data.get('expenses', [])
+              && request.resource.data.get('recipes', {}) == resource.data.get('recipes', {})
+              && request.resource.data.get('costs', {}) == resource.data.get('costs', {})
+              && request.resource.data.get('materials', []).size() >= resource.data.get('materials', []).size())));
+
+      // المصروفات: كل مصروف سجل مستقل. الكاشير يضيف فقط؛ التعديل والحذف للمطعم والإدارة
+      match /expenses/{eid} {
+        allow read: if isOffice() || staffOf(rid);
+        allow create: if (isAdmin() || staffOf(rid))
+          && request.resource.data.keys().hasOnly(['cat','amount','note','ts','by','byUid','createdAtMs'])
+          && str(request.resource.data.cat, 40)
+          && request.resource.data.amount is number && request.resource.data.amount > 0
+          && optStr(request.resource.data, 'note', 300) && optStr(request.resource.data, 'by', 60)
+          && request.resource.data.ts is int;
+        allow update: if (isAdmin() || ownsRest(rid))
+          && request.resource.data.keys().hasOnly(['cat','amount','note','ts','by','byUid','createdAtMs','editedBy','editedAtMs'])
+          && request.resource.data.amount is number && request.resource.data.amount > 0;
+        allow delete: if isAdmin() || ownsRest(rid);
+      }
     }
 
     // ── lineTokens (توكن جوكر لكل خط اتصال — حتى 10 خطوط للمطعم) ──

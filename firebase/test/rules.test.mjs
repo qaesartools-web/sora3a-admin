@@ -265,6 +265,31 @@ test('إيقاف خدمة الاتصال أو الواتساب يرفض مكال
   await assertFails(setDoc(doc(anon(), 'incomingCalls/s2'), c('1')));
 });
 
+// ── المصروفات والحسابات ──
+const ex = (o) => ({ cat: 'إيجار', amount: 5000, note: 'شهر 10', ts: 1700000000000, by: 'علي', createdAtMs: 1, ...o });
+test('الكاشير يضيف مصروفاً ولا يعدّله ولا يحذفه؛ صاحب المطعم يعدّل ويحذف', async () => {
+  await assertSucceeds(setDoc(doc(as('cash1'), 'accounting/R1/expenses/e1'), ex({})));
+  await assertFails(updateDoc(doc(as('cash1'), 'accounting/R1/expenses/e1'), { amount: 1 }));
+  await assertFails(deleteDoc(doc(as('cash1'), 'accounting/R1/expenses/e1')));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/expenses/e2'), ex({ amount: -5 })));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/expenses/e3'), ex({ hack: 1 })));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R2/expenses/e4'), ex({})));
+  await assertSucceeds(getDocs(collection(as('cash1'), 'accounting/R1/expenses')));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'accounting/R1/expenses/e1'), { amount: 6000, editedBy: 'المالك', editedAtMs: 2 }));
+  await assertSucceeds(deleteDoc(doc(as('rest1'), 'accounting/R1/expenses/e1')));
+  await assertFails(getDocs(collection(as('rest2'), 'accounting/R1/expenses')));
+  await assertSucceeds(getDocs(collection(as('staff1'), 'accounting/R1/expenses')));
+});
+test('الكاشير لا يمسح مواد المخزون ولا يغيّر الوصفات أو المصروفات القديمة', async () => {
+  await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'accounting/R1'), { materials: [{ id: 'm1', qty: 5 }], recipes: { 'a|b': [{ mid: 'm1', q: 1 }] }, costs: {}, moves: [], expenses: [{ id: 'old', amount: 1 }] }); });
+  const base = { recipes: { 'a|b': [{ mid: 'm1', q: 1 }] }, costs: {}, moves: [{ id: 'v1' }], expenses: [{ id: 'old', amount: 1 }] };
+  await assertSucceeds(setDoc(doc(as('cash1'), 'accounting/R1'), { ...base, materials: [{ id: 'm1', qty: 4 }] }));        // بيع يخصم المخزون
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1'), { ...base, materials: [] }));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1'), { ...base, materials: [{ id: 'm1', qty: 4 }], expenses: [] }));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1'), { ...base, materials: [{ id: 'm1', qty: 4 }], recipes: {} }));
+  await assertSucceeds(setDoc(doc(as('rest1'), 'accounting/R1'), { ...base, materials: [], expenses: [] }));
+});
+
 // ── خطوط الاتصال والمكالمات ──
 const call = (o) => ({ token: 'TOKEN_R1_LINE1_xxxxxxxxxxxxxxxx', restaurantId: 'R1', line: '1', number: '07701234567', status: 'ringing', ...o });
 test('جهاز الخط يرسل المكالمة بالتوكن بدون تسجيل دخول', async () => {

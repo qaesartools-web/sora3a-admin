@@ -258,6 +258,18 @@ body.staff-mode .staff-banner{display:block;}
 .tm-bar>i{display:block;height:100%;background:var(--accent);border-radius:6px;}
 .tm-flow{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;}
 .tm-flow b{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;}
+.ax-tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0;}
+.ax-tabs button{flex-shrink:0;white-space:nowrap;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:9px 14px;font-weight:800;font-family:inherit;cursor:pointer;}
+.ax-tabs button.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+.ax-row{cursor:pointer;}
+.ax-row:hover td{background:var(--panel2);}
+.ax-neg{color:var(--red);font-weight:900;}.ax-pos{color:var(--green);font-weight:900;}
+.ax-kv{display:grid;grid-template-columns:120px 1fr;gap:8px 12px;font-size:14px;margin:10px 0;}
+.ax-kv b{color:var(--muted);font-weight:700;}
+.ax-kv span{word-break:break-word;}
+.ax-note{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;white-space:pre-wrap;}
+.ax-badge{display:inline-block;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:800;}
+.ax-badge.out{background:rgba(239,68,68,.15);color:var(--red);}.ax-badge.low{background:rgba(245,158,11,.18);color:var(--yellow);}.ax-badge.ok{background:rgba(34,197,94,.15);color:var(--green);}
 .svc-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px;align-items:center;}
 .svc-row .svc-l{font-size:11px;color:var(--muted);font-weight:800;margin-left:2px;}
 .svc{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 11px;font-size:12px;font-weight:800;cursor:pointer;border:1.5px solid var(--line);background:var(--panel2);color:var(--muted);font-family:inherit;}
@@ -410,6 +422,15 @@ body.staff-mode .staff-banner{display:block;}
     </div>
 
     <!-- Analytics -->
+    <div class="screen" id="scAcc">
+      <div class="tm-filters">
+        <select class="form-sel admin-only" id="axRest" onchange="accInit()"></select>
+        <select class="form-sel" id="axRange" onchange="accRender()"><option value="today">اليوم</option><option value="7">آخر 7 أيام</option><option value="30" selected>آخر 30 يوم</option><option value="month">هذا الشهر</option><option value="all">الكل</option></select>
+      </div>
+      <div class="ax-tabs" id="axTabs"></div>
+      <div id="axBody"></div>
+    </div>
+    <div class="modal-ov" id="axMo"><div class="modal" id="axMoBody"></div></div>
     <div class="screen" id="scTimes">
       <div class="tm-filters">
         <select class="form-sel" id="tmRange" onchange="renderTimes()"><option value="today">اليوم</option><option value="yesterday">أمس</option><option value="7" selected>آخر 7 أيام</option><option value="30">آخر 30 يوم</option></select>
@@ -766,6 +787,7 @@ const tabs=[
   {id:'map',label:'الخريطة',icon:'🗺️',screen:'scMap',adminOnly:false,feat:'captain'},
   {id:'analytics',label:'التحليلات',icon:'📊',screen:'scAnalytics',adminOnly:false},
   {id:'times',label:'أوقات الطلبات',icon:'⏱️',screen:'scTimes',manage:true},
+  {id:'acc',label:'المخزون والحسابات',icon:'📒',screen:'scAcc',manage:true},
   {id:'staff',label:'الموظفين',icon:'👥',screen:'scStaff',adminOnly:true},
   {id:'myrest',label:'الكاشيرية والخطوط',icon:'☎️',screen:'scMyRest',manage:true},
   {id:'security',label:'الأمان',icon:'🛡️',screen:'scSecurity',adminOnly:true},
@@ -792,6 +814,7 @@ window.goTab=function(screenId,btn){
   if(screenId==='scMap')initMap();
   if(screenId==='scAnalytics')renderAnalytics();
   if(screenId==='scTimes')renderTimes();
+  if(screenId==='scAcc')accInit();
   if(screenId==='scRests')renderRests();
   if(screenId==='scStaff')renderStaffList();
   if(screenId==='scSecurity')secLoadAudit();
@@ -1411,6 +1434,152 @@ window.renderTimes=async function(){
   </table></div></div>`;
   el.innerHTML=h;
 };
+// ── المخزون والحسابات: قراءة كاملة لكل الأرقام + الإدارة فقط تعدّل وتحذف المصروفات ──
+const AX_MV={open:'رصيد افتتاحي',purchase:'وارد — مشتريات',sale:'صادر — منصرف للمبيعات',sale_return:'وارد — مردود مبيعات',waste:'صادر — تالف / هالك',count:'تسوية جرد',purchase_return:'صادر — مرتجع للمورد'};
+const AX_CATS=['رواتب','إيجار','كهرباء وماء','غاز / وقود','صيانة','تغليف','تسويق وإعلان','مشتريات أخرى','أخرى'];
+let axRid=null,axDoc=null,axExp=[],axTab='exp',axUnsubs=[],axView=null;
+const axFmtD=ms=>ms?new Date(ms).toLocaleString('ar-IQ-u-nu-latn',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'—';
+const axQ=n=>Number(Math.round((Number(n)||0)*1000)/1000).toLocaleString('ar-IQ-u-nu-latn');
+function axRange(){
+  const v=document.getElementById('axRange').value,d0=new Date();d0.setHours(0,0,0,0);
+  if(v==='all')return[0,Infinity];if(v==='today')return[d0.getTime(),Infinity];
+  if(v==='month')return[new Date(d0.getFullYear(),d0.getMonth(),1).getTime(),Infinity];
+  return[d0.getTime()-(+v-1)*86400000,Infinity];
+}
+window.accInit=function(){
+  const sel=document.getElementById('axRest');
+  if(isAdmin()){const cur=sel.value;sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur||(allRestaurants[0]&&allRestaurants[0].id)||'';}
+  const rid=isRest()?currentUser.restaurantId:sel.value;
+  if(rid===axRid&&axUnsubs.length){accRender();return;}
+  axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=rid;axDoc=null;axExp=[];
+  if(!rid){accRender();return;}
+  const fb=window._fb;
+  axUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'accounting',rid),s=>{axDoc=s.exists()?s.data():{};accRender(true);},()=>{axDoc={};accRender(true);}));
+  axUnsubs.push(fb.onSnapshot(fb.collection(fb.db,'accounting',rid,'expenses'),s=>{axExp=s.docs.map(d=>({id:d.id,...d.data(),_sub:true}));accRender(true);},()=>{}));
+  unsubs.push(()=>{axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=null;});
+  accRender();
+};
+const axAllExp=()=>{const ids=new Set(axExp.map(e=>e.id));return axExp.concat(((axDoc&&axDoc.expenses)||[]).filter(e=>!ids.has(e.id)).map(e=>({...e,_legacy:true})));};
+window.axSetTab=t=>{axTab=t;accRender();};
+// live: ما نعيد رسم الشاشة إذا نافذة التفاصيل مفتوحة أو المستخدم يكتب
+window.accRender=function(live){
+  const el=document.getElementById('axBody');if(!el)return;
+  if(live&&(document.getElementById('axMo').classList.contains('open')||/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName||''))){if(axView)axView();return;}
+  const T=[['exp','💸 المصروفات'],['mat','📦 المخزون'],['mov','🔄 حركات المخزون'],['fin','💰 قائمة الدخل'],['rec','🧾 الوصفات']];
+  document.getElementById('axTabs').innerHTML=T.map(([k,l])=>`<button class="${k===axTab?'on':''}" onclick="axSetTab('${k}')">${l}</button>`).join('');
+  if(!axRid){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">اختر المطعم</div>';return;}
+  if(axDoc===null){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">⏳ جاري التحميل…</div>';return;}
+  const [from,to]=axRange(),inR=ts=>(ts||0)>=from&&(ts||0)<to;
+  const mats=(axDoc.materials||[]),moves=(axDoc.moves||[]);
+  const kpi=(v,l,sub)=>`<div class="stat"><div class="stat-v">${v}</div><div class="stat-l">${l}</div>${sub?`<div class="stat-s" style="font-size:11px;color:var(--muted)">${sub}</div>`:''}</div>`;
+  let h='';
+  if(axTab==='exp'){
+    const list=axAllExp().filter(e=>inR(e.ts)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const tot=list.reduce((s,e)=>s+(Number(e.amount)||0),0),by={};list.forEach(e=>{by[e.cat||'أخرى']=(by[e.cat||'أخرى']||0)+(Number(e.amount)||0);});
+    const mx=Math.max(1,...Object.values(by));
+    h=`<div class="stats">${kpi(fmt(tot),'💸 مجموع المصروفات (د.ع)')}${kpi(toA(list.length),'🧾 عدد المصروفات')}</div>
+    ${Object.keys(by).length?`<div class="card"><div class="card-title"><span class="dot"></span> حسب النوع</div>${Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-weight:800;font-size:13px"><span>${esc(k)}</span><span>${fmt(v)}</span></div><div class="tm-bar"><i style="width:${Math.round(v*100/mx)}%"></i></div></div>`).join('')}</div>`:''}
+    <div class="card"><div class="card-title"><span class="dot"></span> كل المصروفات — اضغط على أي سطر للتفاصيل</div><div class="tm-scroll"><table class="tm-tbl">
+      <tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الملاحظة</th><th>أضافه</th></tr>
+      ${list.map(e=>`<tr class="ax-row" onclick="axExpView('${esc(e.id)}')"><td>${axFmtD(e.ts)}</td><td><b>${esc(e.cat||'')}</b></td><td class="ax-neg">${fmt(e.amount)}</td><td style="white-space:normal;max-width:280px">${esc(e.note||'—')}</td><td>${esc(e.by||'—')}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">لا توجد مصروفات بهذه الفترة</td></tr>'}
+    </table></div></div>`;
+  }else if(axTab==='mat'){
+    const st=m=>(m.qty||0)<=0?'out':(m.min>0&&m.qty<=m.min?'low':'ok');
+    const val=mats.reduce((s,m)=>s+Math.max(0,m.qty||0)*(Number(m.cost)||0),0);
+    h=`<div class="stats">${kpi(toA(mats.length),'📦 مادة بالمخزن')}${kpi(toA(mats.filter(m=>st(m)!=='ok').length),'⚠️ تحتاج شراء')}${kpi(fmt(Math.round(val)),'💰 قيمة المخزون (د.ع)')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> المواد — اضغط على أي مادة لكارت حركاتها</div><div class="tm-scroll"><table class="tm-tbl">
+      <tr><th>المادة</th><th>الرصيد</th><th>الحد الأدنى</th><th>تكلفة الوحدة</th><th>القيمة</th><th>الحالة</th></tr>
+      ${mats.slice().sort((a,b)=>({out:0,low:1,ok:2}[st(a)]-{out:0,low:1,ok:2}[st(b)])).map(m=>`<tr class="ax-row" onclick="axMatView('${esc(m.id)}')"><td><b>${esc(m.name)}</b></td><td>${axQ(m.qty)} ${esc(m.unit||'')}</td><td>${axQ(m.min)}</td><td>${fmt(Math.round(m.cost||0))}</td><td>${fmt(Math.round(Math.max(0,m.qty||0)*(m.cost||0)))}</td><td><span class="ax-badge ${st(m)}">${st(m)==='out'?'نفذ':st(m)==='low'?'منخفض':'متوفر'}</span></td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:18px">لا توجد مواد</td></tr>'}
+    </table></div></div>`;
+  }else if(axTab==='mov'){
+    const list=moves.filter(e=>inR(e.ts)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const g=t=>list.filter(e=>e.type===t).reduce((s,e)=>s+(e.value||0),0);
+    h=`<div class="stats">${kpi(fmt(Math.round(g('purchase'))),'⬇️ مشتريات (د.ع)')}${kpi(fmt(Math.round(-g('sale')-g('sale_return'))),'🍔 منصرف للمبيعات')}${kpi(fmt(Math.round(-g('waste'))),'🗑️ تالف وهالك')}${kpi(toA(list.length),'🔄 حركة')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> كل الحركات — اضغط على أي سطر للتفاصيل</div><div class="tm-scroll"><table class="tm-tbl">
+      <tr><th>التاريخ</th><th>المادة</th><th>النوع</th><th>الكمية</th><th>القيمة</th><th>الملاحظة</th><th>بواسطة</th></tr>
+      ${list.slice(0,500).map(e=>`<tr class="ax-row" onclick="axMovView('${esc(e.id)}')"><td>${axFmtD(e.ts)}</td><td><b>${esc(e.name||'')}</b></td><td>${esc(AX_MV[e.type]||e.type)}</td><td class="${e.qty>0?'ax-pos':'ax-neg'}">${e.qty>0?'+':''}${axQ(e.qty)} ${esc(e.unit||'')}</td><td>${fmt(Math.round(Math.abs(e.value||0)))}</td><td style="white-space:normal;max-width:240px">${esc(e.note||'—')}</td><td>${esc(e.by||'—')}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px">لا توجد حركات بهذه الفترة</td></tr>'}
+    </table></div></div>`;
+  }else if(axTab==='fin'){
+    const os=allOrders.filter(o=>o.restaurantId===axRid&&inR(o.createdAtMs));
+    const done=os.filter(o=>o.status==='delivered'),canc=os.filter(o=>o.status==='cancelled');
+    let sales=0,cogs=0;done.forEach(o=>{sales+=o.value||0;(o.items||[]).forEach(i=>{cogs+=(Number(i.cost)||0)*(i.qty||1);});});
+    const exp=axAllExp().filter(e=>inR(e.ts)).reduce((s,e)=>s+(Number(e.amount)||0),0);
+    const mv=moves.filter(e=>inR(e.ts)),waste=-mv.filter(e=>e.type==='waste').reduce((s,e)=>s+(e.value||0),0),cnt=mv.filter(e=>e.type==='count').reduce((s,e)=>s+(e.value||0),0);
+    const gross=sales-cogs,net=gross-exp-waste+cnt;
+    const ln=(a,b,c)=>`<tr><td>${a}</td><td class="${c||''}" style="text-align:left"><b>${b}</b></td></tr>`;
+    h=`<div class="stats">${kpi(fmt(sales),'💰 صافي المبيعات')}${kpi(fmt(Math.round(gross)),'📈 مجمل الربح')}${kpi(fmt(Math.round(exp)),'💸 المصروفات')}${kpi(`<span class="${net>=0?'ax-pos':'ax-neg'}">${fmt(Math.round(net))}</span>`,'🏁 صافي الربح')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> قائمة الدخل</div><table class="tm-tbl">
+      ${ln('عدد الطلبات المسلّمة',toA(done.length))}${ln('صافي المبيعات',fmt(sales)+' د.ع')}${ln('(−) تكلفة البضاعة المباعة','−'+fmt(Math.round(cogs)),'ax-neg')}
+      ${ln('= مجمل الربح',fmt(Math.round(gross)))}${ln('(−) المصروفات التشغيلية','−'+fmt(Math.round(exp)),'ax-neg')}${ln('(−) التالف والهالك','−'+fmt(Math.round(waste)),'ax-neg')}
+      ${cnt?ln('(±) تسويات الجرد',fmt(Math.round(cnt)),cnt>=0?'ax-pos':'ax-neg'):''}${ln('= صافي الربح',fmt(Math.round(net))+' د.ع',net>=0?'ax-pos':'ax-neg')}
+      ${canc.length?ln('طلبات ملغية ('+toA(canc.length)+')',fmt(canc.reduce((s,o)=>s+(o.value||0),0))):''}
+    </table></div>`;
+  }else{
+    const rec=axDoc.recipes||{},matN=id=>(mats.find(m=>m.id===id)||{}).name||'؟';
+    const keys=Object.keys(rec);
+    h=`<div class="card"><div class="card-title"><span class="dot"></span> الوصفات (مكونات كل صنف)</div><div class="tm-scroll"><table class="tm-tbl"><tr><th>الصنف</th><th>المكونات</th><th>التكلفة</th></tr>
+      ${keys.map(k=>{const [n,v]=k.split('|');const c=(rec[k]||[]).reduce((s,x)=>{const m=mats.find(mm=>mm.id===x.mid);return s+(m?(m.cost||0)*(x.q||0):0);},0);
+        return `<tr><td><b>${esc(n)}</b>${v&&v!=='وحدة'?' ('+esc(v)+')':''}</td><td style="white-space:normal">${(rec[k]||[]).map(x=>esc(matN(x.mid))+' × '+axQ(x.q)).join('، ')}</td><td>${fmt(Math.round(c))}</td></tr>`;}).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:18px">لا توجد وصفات</td></tr>'}
+    </table></div></div>`;
+  }
+  el.innerHTML=h;
+};
+function axOpen(html,refresh){document.getElementById('axMoBody').innerHTML=html;document.getElementById('axMo').classList.add('open');axView=refresh||null;}
+window.axClose=()=>{document.getElementById('axMo').classList.remove('open');axView=null;accRender();};
+const canEditAcc=()=>isAdmin()||isRest();
+window.axExpView=id=>{
+  const show=()=>{const e=axAllExp().find(x=>x.id===id);if(!e){axClose();return;}
+    axOpen(`<div class="modal-title">💸 تفاصيل المصروف</div>
+      <div class="ax-kv"><b>النوع</b><span>${esc(e.cat||'')}</span><b>المبلغ</b><span class="ax-neg">${fmt(e.amount)} د.ع</span><b>تاريخ المصروف</b><span>${axFmtD(e.ts)}</span>
+        <b>أضافه</b><span>${esc(e.by||'—')}</span><b>وقت التسجيل</b><span>${axFmtD(e.createdAtMs)}</span>${e.editedBy?`<b>آخر تعديل</b><span>${esc(e.editedBy)} • ${axFmtD(e.editedAtMs)}</span>`:''}</div>
+      <div style="font-weight:800;margin:6px 0">📝 الملاحظة</div><div class="ax-note">${esc(e.note||'لا توجد ملاحظة')}</div>
+      ${canEditAcc()?`<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="form-row"><div class="form-group"><label>النوع</label><select class="form-sel" id="axEcat">${AX_CATS.concat(AX_CATS.includes(e.cat)?[]:[e.cat||'أخرى']).map(c=>`<option ${c===e.cat?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+        <div class="form-group"><label>المبلغ</label><input class="form-inp" id="axEamt" type="number" value="${Number(e.amount)||0}"></div></div>
+        <div class="form-group"><label>الملاحظة</label><textarea class="form-inp" id="axEnote" rows="2">${esc(e.note||'')}</textarea></div></div>`:''}
+      <div class="modal-btns">${canEditAcc()?`<button class="btn-primary" onclick="axExpSave('${esc(id)}')">💾 حفظ التعديل</button><button class="btn-sm btn-del" onclick="axExpDel('${esc(id)}')">🗑️ حذف</button>`:''}<button class="btn-sm" onclick="axClose()">إغلاق</button></div>`,null);};
+  show();
+};
+window.axExpSave=async id=>{
+  const e=axAllExp().find(x=>x.id===id);if(!e)return;
+  const amount=Number(document.getElementById('axEamt').value),cat=document.getElementById('axEcat').value,note=document.getElementById('axEnote').value.trim().slice(0,300);
+  if(!(amount>0)){toast('⚠️ أدخل مبلغاً صحيحاً','warn');return;}
+  const fb=window._fb;
+  try{
+    if(e._sub)await fb.updateDoc(fb.doc(fb.db,'accounting',axRid,'expenses',id),{amount,cat,note,editedBy:currentUser.name||currentUser.email||'الإدارة',editedAtMs:Date.now()});
+    else{const list=(axDoc.expenses||[]).map(x=>x.id===id?{...x,amount,cat,note}:x);await fb.updateDoc(fb.doc(fb.db,'accounting',axRid),{expenses:list});}
+    audit('expense.edit',{restaurantId:axRid,id,amount});toast('✅ تم تعديل المصروف');axClose();
+  }catch(err){toast('❌ تعذّر الحفظ: '+(err.code||err.message),'error');}
+};
+window.axExpDel=async id=>{
+  if(!confirm('حذف هذا المصروف نهائياً؟'))return;
+  const e=axAllExp().find(x=>x.id===id);if(!e)return;const fb=window._fb;
+  try{
+    if(e._sub)await fb.deleteDoc(fb.doc(fb.db,'accounting',axRid,'expenses',id));
+    else await fb.updateDoc(fb.doc(fb.db,'accounting',axRid),{expenses:(axDoc.expenses||[]).filter(x=>x.id!==id)});
+    audit('expense.delete',{restaurantId:axRid,id,amount:e.amount});toast('🗑️ تم حذف المصروف');axClose();
+  }catch(err){toast('❌ تعذّر الحذف: '+(err.code||err.message),'error');}
+};
+window.axMatView=id=>{
+  const show=()=>{const m=(axDoc.materials||[]).find(x=>x.id===id);if(!m){axClose();return;}
+    const list=(axDoc.moves||[]).filter(e=>e.mid===id).sort((a,b)=>(a.ts||0)-(b.ts||0));let bal=0;
+    const rows=list.map(e=>{bal+=e.qty||0;return {e,bal};}).reverse();
+    axOpen(`<div class="modal-title">📇 كارت المادة: ${esc(m.name)}</div>
+      <div class="ax-kv"><b>الرصيد الحالي</b><span>${axQ(m.qty)} ${esc(m.unit||'')}</span><b>الحد الأدنى</b><span>${axQ(m.min)}</span><b>تكلفة الوحدة</b><span>${fmt(Math.round(m.cost||0))} د.ع</span><b>القيمة</b><span>${fmt(Math.round(Math.max(0,m.qty||0)*(m.cost||0)))} د.ع</span></div>
+      <div class="tm-scroll" style="max-height:50vh"><table class="tm-tbl"><tr><th>التاريخ</th><th>النوع</th><th>الكمية</th><th>الرصيد بعدها</th><th>الملاحظة</th><th>بواسطة</th></tr>
+      ${rows.map(({e,bal})=>`<tr><td>${axFmtD(e.ts)}</td><td>${esc(AX_MV[e.type]||e.type)}</td><td class="${e.qty>0?'ax-pos':'ax-neg'}">${e.qty>0?'+':''}${axQ(e.qty)}</td><td>${axQ(bal)}</td><td style="white-space:normal">${esc(e.note||'—')}</td><td>${esc(e.by||'—')}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted)">لا توجد حركات</td></tr>'}
+      </table></div><div class="modal-btns"><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`,show);};
+  show();
+};
+window.axMovView=id=>{
+  const e=(axDoc.moves||[]).find(x=>x.id===id);if(!e)return;
+  axOpen(`<div class="modal-title">🔄 تفاصيل الحركة</div>
+    <div class="ax-kv"><b>المادة</b><span>${esc(e.name||'')}</span><b>النوع</b><span>${esc(AX_MV[e.type]||e.type)}</span><b>الكمية</b><span class="${e.qty>0?'ax-pos':'ax-neg'}">${e.qty>0?'+':''}${axQ(e.qty)} ${esc(e.unit||'')}</span>
+      <b>تكلفة الوحدة</b><span>${fmt(Math.round(e.cost||0))} د.ع</span><b>القيمة</b><span>${fmt(Math.round(Math.abs(e.value||0)))} د.ع</span><b>التاريخ</b><span>${axFmtD(e.ts)}</span>
+      <b>بواسطة</b><span>${esc(e.by||(e.type==='sale'?'الكاشير — مبيعات':'—'))}</span>${e.ref?`<b>رقم الطلب</b><span>${esc(String(e.ref).slice(0,8).toUpperCase())}</span>`:''}</div>
+    <div style="font-weight:800;margin:6px 0">📝 الملاحظة</div><div class="ax-note">${esc(e.note||'لا توجد ملاحظة')}</div>
+    <div class="modal-btns"><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`);
+};
 window.renderAnalytics=function(){
   const from=document.getElementById('anFrom')?.value;
   const to=document.getElementById('anTo')?.value;
@@ -1861,7 +2030,7 @@ async function renderMapCaptains(){
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(()=>{});}
 </script>
 <script>
-// تحديث تلقائي صامت: كل ٥ ثواني نتأكد هل نزل إصدار جديد للتطبيق، ونحدّث فقط لما الشاشة فاضية
+// البيانات والإشعارات مباشرة دائماً. هنا فقط: كل 5 ثواني نتأكد هل نزل إصدار جديد، وينطبق بالخلفية بدون ما يقاطعك
 (function(){
   var KEY='au_state_'+location.pathname, base=null, cand=null, pending=false, busy=false;
   function sig(r){var e=(r.headers.get('etag')||'').replace(/^W\//,'').replace(/-gzip"?$/,'"');return r.headers.get('last-modified')||e;}
@@ -1873,6 +2042,8 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch
       return !/checkbox|radio|date|time|hidden|file|range|color/.test(i.type)&&i.offsetParent&&i.value!==i.defaultValue;});
   }
   function tryReload(){
+    // ما نحدّث والشاشة أمامك أبداً: الإصدار الجديد ينطبق لما يكون التطبيق بالخلفية
+    if(!document.hidden)return;
     var idle=true;try{idle=!window.auIdle||window.auIdle();}catch(e){}
     if(!idle||dirty())return;
     try{sessionStorage.setItem(KEY,JSON.stringify(window.auSave?window.auSave():{}));}catch(e){}
@@ -1891,7 +2062,7 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch
   }
   window.auRestore=function(){try{var s=sessionStorage.getItem(KEY);sessionStorage.removeItem(KEY);return s?JSON.parse(s):null;}catch(e){return null;}};
   setInterval(check,5000);setTimeout(check,1500);
-  document.addEventListener('visibilitychange',function(){if(!document.hidden)check();});
+  document.addEventListener('visibilitychange',function(){if(document.hidden){if(pending)tryReload();}else check();});
 })();
 </script>
 </body>
