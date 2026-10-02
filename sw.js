@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'admin-v5';
+const CACHE_VERSION = 'admin-v6';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 const PRECACHE = ['/sora3a-admin/', '/sora3a-admin/index.html', '/sora3a-admin/manifest.json'];
 const RUNTIME_CACHE_PATTERNS = [
@@ -22,7 +22,7 @@ self.addEventListener('fetch', event => {
       url.hostname.includes('script.google.com') || url.hostname.includes('googleapis.com') ||
       url.hostname.includes('imgbb.com') || url.hostname.includes('ibb.co')) return;
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(fetch(request).then(r => {
+    event.respondWith(fetch(new Request(request.url, { cache: 'no-cache', credentials: 'same-origin' })).then(r => {
       const clone = r.clone();
       caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {});
       return r;

@@ -1,6 +1,6 @@
 // e2e harness: static server + Chromium with Firebase SDK routed to local emulator-wired bundles
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
@@ -19,7 +19,7 @@ export function serve(port = 5050) {
     const root = ROOTS[repo];
     if (!root) { res.writeHead(404); return res.end(); }
     let p = path.join(root, rest.join('/') || 'index.html');
-    try { const b = await readFile(p); res.writeHead(200, { 'content-type': TYPES[path.extname(p)] || 'application/octet-stream' }); res.end(b); }
+    try { const b = await readFile(p); const st = await stat(p); res.writeHead(200, { 'content-type': TYPES[path.extname(p)] || 'application/octet-stream', 'last-modified': st.mtime.toUTCString(), 'cache-control': 'no-cache' }); res.end(b); }
     catch { res.writeHead(404); res.end('nf'); }
   });
   return new Promise((r) => srv.listen(port, () => r(srv)));
