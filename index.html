@@ -8,7 +8,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="إدارة سرعة">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>سرعة — الإدارة</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js" integrity="sha384-G436+Z2nlA8+PNoeRvWdxKbvOf8E/y+lYxqht2iBwNHTQDV5CJr3+AGVj8fGZi5t" crossorigin="anonymous"></script>
@@ -43,7 +44,8 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
   background:radial-gradient(ellipse at 20% 50%,rgba(0,139,44,.1),transparent 55%),
              radial-gradient(ellipse at 80% 50%,rgba(0,184,74,.07),transparent 55%);}
 .lbox{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:36px 28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(16,36,24,.12);}
-.l-icon{width:72px;height:72px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 18px;box-shadow:0 8px 30px rgba(0,139,44,.4);}
+.brand-ic{width:28px;height:28px;border-radius:8px;vertical-align:middle;margin-left:4px;}
+.l-icon{display:block;width:72px;height:72px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 18px;box-shadow:0 8px 30px rgba(30,58,138,.35);}
 .l-title{text-align:center;font-size:24px;font-weight:900;margin-bottom:4px;}
 .l-sub{text-align:center;color:var(--muted);font-size:13px;margin-bottom:24px;}
 .l-badge{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.3);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--green);margin-bottom:20px;}
@@ -274,7 +276,7 @@ body.staff-mode .staff-banner{display:block;}
 
 <!-- SPLASH -->
 <div id="splash">
-  <div class="sp-ring"><div class="sp-logo">📊</div></div>
+  <div class="sp-ring"><img class="sp-logo" src="logo.svg" alt="" style="width:72px;height:72px;display:block"></div>
   <div class="sp-title">سرعة</div>
   <div class="sp-sub">لوحة الإدارة المتقدمة</div>
   <div class="sp-bar"><div class="sp-bar-fill"></div></div>
@@ -285,7 +287,7 @@ body.staff-mode .staff-banner{display:block;}
 <!-- LOGIN -->
 <div id="loginPage">
   <div class="lbox">
-    <div class="l-icon">📊</div>
+    <img class="l-icon" src="logo.svg" alt="شعار سرعة">
     <div class="l-title">منصة سرعة</div>
     <div class="l-sub">لوحة الإدارة المتقدمة</div>
     <div class="l-badge"><span class="l-dot"></span> متصل بـ Firebase</div>
@@ -300,7 +302,7 @@ body.staff-mode .staff-banner{display:block;}
 <!-- APP -->
 <div id="appPage">
   <div class="hdr">
-    <div class="hdr-logo">🚀 سرعة</div>
+    <div class="hdr-logo"><img src="logo.svg" alt="" class="brand-ic"> سرعة</div>
     <div class="hdr-user">
       <div>
         <div class="hdr-name" id="hdrName">—</div>
