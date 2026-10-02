@@ -69,14 +69,14 @@ test('shift + discount + salon cash payment with change + KDS + Z report', async
   // discount 10%
   await p.click('#discBtn');
   await p.selectOption('#acf_t', 'pct'); await p.fill('#acf_v', '10'); await p.click('#acDlgOk');
-  assert.match(await p.textContent('#cartTotal'), /11,700|١١٬٧٠٠/);
+  assert.match(await p.textContent('#cartTotal'), /11,700/);
   // F9 → 1 (salon) → pay 20000
   await p.keyboard.press('F9');
   await p.waitForSelector('#typeOv.on');
   await p.keyboard.press('1');
   await p.waitForSelector('#payOv.on');
   await p.fill('#payRecv', '20000');
-  assert.match(await p.textContent('#payChange'), /8,300|٨٬٣٠٠/);
+  assert.match(await p.textContent('#payChange'), /8,300/);
   await p.keyboard.press('Enter');
   const o = await until(async () => (await ordersRP()).find((x) => x.orderType === 'salon'));
   assert.equal(o.value, 11700); assert.equal(o.subtotal, 13000); assert.equal(o.discount, 1300);

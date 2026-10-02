@@ -412,7 +412,7 @@ body.staff-mode .staff-banner{display:block;}
     <!-- Analytics -->
     <div class="screen" id="scTimes">
       <div class="tm-filters">
-        <select class="form-sel" id="tmRange" onchange="renderTimes()"><option value="today">اليوم</option><option value="yesterday">أمس</option><option value="7" selected>آخر ٧ أيام</option><option value="30">آخر ٣٠ يوم</option></select>
+        <select class="form-sel" id="tmRange" onchange="renderTimes()"><option value="today">اليوم</option><option value="yesterday">أمس</option><option value="7" selected>آخر 7 أيام</option><option value="30">آخر 30 يوم</option></select>
         <select class="form-sel" id="tmType" onchange="renderTimes()"><option value="">كل الأنواع</option><option value="delivery">🏍️ دلفري</option><option value="salon">🪑 صالة</option><option value="takeaway">🥡 سفري</option></select>
         <select class="form-sel admin-only" id="tmRest" onchange="renderTimes()"><option value="">كل المطاعم</option></select>
       </div>
@@ -469,7 +469,7 @@ body.staff-mode .staff-banner{display:block;}
       </div>
       <div class="card" id="mlCard">
         <div class="card-title"><span class="dot"></span> 📞 خطوط الاتصال — توكن جوكر</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">لكل خط (جهاز) توكن سري خاص. عند ورود مكالمة على الجهاز يرسل رقم المتصل للكاشير فوراً، ويظهر للكاشير اسم الزبون وعنوانه وطلباته السابقة. حتى ١٠ خطوط.</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">لكل خط (جهاز) توكن سري خاص. عند ورود مكالمة على الجهاز يرسل رقم المتصل للكاشير فوراً، ويظهر للكاشير اسم الزبون وعنوانه وطلباته السابقة. حتى 10 خطوط.</div>
         <div class="form-row">
           <div class="form-group"><label>اسم الخط</label><input class="form-inp" id="mlLabel" maxlength="40" placeholder="مثال: خط زين 1"></div>
           <div class="form-group" style="display:flex;align-items:flex-end"><button class="btn-primary" onclick="mlAdd()">➕ إضافة خط</button></div>
@@ -600,8 +600,8 @@ let currentUser=null, restData=null;
 let allOrders=[], allCaptains=[], allRestaurants=[], allStaff=[];
 let unsubs=[], orderFilter='all', installPrompt=null, toastT;
 
-const fmt=n=>Number(n||0).toLocaleString('ar-IQ');
-const toA=n=>n.toString().replace(/\d/g,d=>'٠١٢٣٤٥٦٧٨٩'[d]);
+const fmt=n=>Number(n||0).toLocaleString('ar-IQ-u-nu-latn');
+const toA=n=>String(n);
 // كل نص قادم من قاعدة البيانات يمر من هنا قبل إدراجه في HTML
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dayEndMs=ymd=>ymd?new Date(ymd+'T23:59:59').getTime():0;
@@ -905,7 +905,7 @@ window.viewProof=async function(id){
     if(!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src)){toast('صورة غير صالحة','error');return;}
     const mo=document.getElementById('proofMo');
     document.getElementById('proofImg').src=src;
-    document.getElementById('proofMeta').textContent=`🛵 ${d.captainName||''} • ${d.capturedAtMs?new Date(d.capturedAtMs).toLocaleString('ar-IQ'):''}`;
+    document.getElementById('proofMeta').textContent=`🛵 ${d.captainName||''} • ${d.capturedAtMs?new Date(d.capturedAtMs).toLocaleString('ar-IQ-u-nu-latn'):''}`;
     mo.classList.add('open');
   }catch(e){toast('❌ تعذّر تحميل الصورة','error');}
 };
@@ -1323,7 +1323,7 @@ window.deleteRest=async function(id){
 const TM_SEC_CACHE={};
 const tmType=o=>o.orderType||'delivery';
 const tmDur=ms=>{if(ms==null||!isFinite(ms)||ms<0)return'—';const m=Math.round(ms/60000);return m<60?toA(m)+' د':toA(Math.floor(m/60))+' س '+toA(m%60)+' د';};
-const tmClock=ms=>ms?new Date(ms).toLocaleTimeString('ar-IQ',{hour:'numeric',minute:'2-digit'}):'—';
+const tmClock=ms=>ms?new Date(ms).toLocaleTimeString('ar-IQ-u-nu-latn',{hour:'numeric',minute:'2-digit'}):'—';
 const tmAvg=a=>{const v=a.filter(x=>x!=null&&isFinite(x)&&x>=0);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
 const tmMax=a=>{const v=a.filter(x=>x!=null&&isFinite(x)&&x>=0);return v.length?Math.max(...v):null;};
 // حدود السرعة بالدقائق: [ممتاز، مقبول]
@@ -1374,7 +1374,7 @@ window.renderTimes=async function(){
     <b>📥 وصل</b> → <b>👨‍🍳 المطبخ ${tmDur(tmAvg(rows.map(x=>x.s.prep)))}</b>
     ${dl.length?`→ <b>🛵 قبول الكابتن ${tmDur(tmAvg(dl.map(x=>x.s.accept)))}</b> → <b>🏍️ التوصيل ${tmDur(tmAvg(dl.map(x=>x.s.trip)))}</b>`:''}
     → <b>✅ التسليم — الكلي ${tmDur(tmAvg(done.map(x=>x.s.total)))}</b></div>
-    <div style="font-size:11px;color:var(--muted);margin-top:8px">الحدود: دلفري ممتاز ≤ ٣٠ د ومقبول ≤ ٤٥ د • صالة وسفري ممتاز ≤ ١٥ د ومقبول ≤ ٢٥ د</div></div>`;
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">الحدود: دلفري ممتاز ≤ 30 د ومقبول ≤ 45 د • صالة وسفري ممتاز ≤ 15 د ومقبول ≤ 25 د</div></div>`;
   // أقسام المطبخ
   const sec={};rows.forEach(({o})=>Object.entries(o.kSec||{}).forEach(([k,v])=>{if(!v.readyAt)return;(sec[k]=sec[k]||[]).push(v.readyAt-(o.createdAtMs||0));}));
   const secKeys=Object.keys(sec);
@@ -1394,7 +1394,7 @@ window.renderTimes=async function(){
       return`<tr><td><b>${TN[t]}</b></td><td>${toA(g.length)}</td><td>${tmDur(tmAvg(g.map(x=>x.s.prep)))}</td><td>${tmDur(tmAvg(gd.map(x=>x.s.total)))}</td><td>${toA(gd.filter(x=>tmCls(x.o,x.s.total)==='tm-bad').length)}</td></tr>`;}).join('')}</table></div></div>`;
   // جدول الطلبات
   const rn=id=>(allRestaurants.find(r=>r.id===id)||{}).name||'';
-  h+=`<div class="card"><div class="card-title"><span class="dot"></span> 🧾 توقيت كل طلب ${list.length>100?'<small style="color:var(--muted)">(آخر ١٠٠)</small>':''}</div><div class="tm-scroll"><table class="tm-tbl">
+  h+=`<div class="card"><div class="card-title"><span class="dot"></span> 🧾 توقيت كل طلب ${list.length>100?'<small style="color:var(--muted)">(آخر 100)</small>':''}</div><div class="tm-scroll"><table class="tm-tbl">
     <tr><th>الطلب</th><th>📥 وصل</th><th>👨‍🍳 المطبخ</th><th>🛵 قبول الكابتن</th><th>🏪 استلم</th><th>✅ سُلّم</th><th>⏱️ الكلي</th></tr>
     ${rows.slice(0,100).map(({o,s})=>`<tr>
       <td><b>#${esc(String(o.ticketNo||o.salonNum||o.holdNum||o.id.slice(0,5).toUpperCase()))}</b> ${TN[tmType(o)]||''}<small>${isAdmin()&&!rid?esc(rn(o.restaurantId))+' • ':''}${esc(o.captainName||'')}${o.kSec?' • '+Object.entries(o.kSec).map(([k,v])=>esc((secNames[k]||k).trim().split(' ')[0])+' '+(v.readyAt?tmDur(v.readyAt-s.created):'⏳')).join(' '):''}</small></td>
@@ -1609,7 +1609,7 @@ function mlRender(list){
 }
 window.mlAdd=async function(){
   const rid=mrRestId();if(!rid){toast('⚠️ اختر المطعم','warn');return;}
-  if(mlLines.length>=MAX_LINES){toast('⚠️ الحد الأقصى ١٠ خطوط','warn');return;}
+  if(mlLines.length>=MAX_LINES){toast('⚠️ الحد الأقصى 10 خطوط','warn');return;}
   const used=new Set(mlLines.map(l=>String(l.line)));let n=1;while(used.has(String(n)))n++;
   const label=document.getElementById('mlLabel').value.trim().slice(0,40)||('خط '+n);
   try{await window._fb.setDoc(window._fb.doc(window._fb.db,'lineTokens',newToken()),{restaurantId:rid,line:String(n),label,active:true,createdAtMs:Date.now()});
@@ -1640,14 +1640,14 @@ window.mlSetup=function(id){
   box.innerHTML=`<div class="setup">
     <b>🔑 توكن جوكر (سرّي — لا تشاركه):</b><div class="tok">${esc(l.id)}</div>
     <b>📱 جهاز أندرويد (تطبيق MacroDroid المجاني) — مرة واحدة لكل جهاز:</b><br>
-    ١) ثبّت <b>MacroDroid</b> من Google Play وافتحه ← <b>Add Macro</b><br>
-    ٢) <b>Trigger</b>: Phone/Call ← <b>Call Incoming</b> ← Any number<br>
-    ٣) <b>Action</b>: Connectivity ← <b>HTTP Request</b> ← Method: <b>POST</b><br>
+    1) ثبّت <b>MacroDroid</b> من Google Play وافتحه ← <b>Add Macro</b><br>
+    2) <b>Trigger</b>: Phone/Call ← <b>Call Incoming</b> ← Any number<br>
+    3) <b>Action</b>: Connectivity ← <b>HTTP Request</b> ← Method: <b>POST</b><br>
     &nbsp;&nbsp;&nbsp;URL:<pre>${esc(FS_URL)}</pre>
     &nbsp;&nbsp;&nbsp;Content type: <b>application/json</b> ← Body:<pre>${esc(body)}</pre>
     &nbsp;&nbsp;&nbsp;<small>(<b>[call_number]</b> يُستبدل تلقائياً برقم المتصل — اختره من زر «...» إذا لزم)</small><br>
-    ٤) <b>Constraint</b> (اختياري): Connectivity ← <b>WiFi SSID</b> ← اختر واي فاي المطعم — حتى لا يرسل إلا داخل المطعم<br>
-    ٥) احفظ الماكرو، واسمح لـ MacroDroid بإذن الهاتف وسجل المكالمات، وأوقف تحسين البطارية له.<br>
+    4) <b>Constraint</b> (اختياري): Connectivity ← <b>WiFi SSID</b> ← اختر واي فاي المطعم — حتى لا يرسل إلا داخل المطعم<br>
+    5) احفظ الماكرو، واسمح لـ MacroDroid بإذن الهاتف وسجل المكالمات، وأوقف تحسين البطارية له.<br>
     <b>☎️ سنترال / هاتف IP:</b> نفس الطلب (POST للرابط أعلاه بنفس الـ Body) مع رقم المتصل.
     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">
       <button class="btn-sm btn-edit" onclick="mlCopy('${esc(l.id)}','url')">📋 نسخ الرابط</button>
@@ -1774,7 +1774,7 @@ window.secLoadAudit=async function(){
     const fb=window._fb;
     const s=await fb.getDocs(fb.query(fb.collection(fb.db,'auditLog'),fb.orderBy('atMs','desc'),fb.limit(30)));
     el.innerHTML=s.empty?'<div style="color:var(--muted);font-size:12px;">لا توجد عمليات مسجلة بعد</div>':s.docs.map(d=>{const a=d.data();return `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;">
-      <span><b>${esc(a.action)}</b> — ${esc(a.email||a.uid)}</span><span style="color:var(--muted);white-space:nowrap;">${a.atMs?esc(new Date(a.atMs).toLocaleString('ar-IQ')):''}</span></div>`;}).join('');
+      <span><b>${esc(a.action)}</b> — ${esc(a.email||a.uid)}</span><span style="color:var(--muted);white-space:nowrap;">${a.atMs?esc(new Date(a.atMs).toLocaleString('ar-IQ-u-nu-latn')):''}</span></div>`;}).join('');
   }catch(e){el.innerHTML='<div style="color:var(--muted);font-size:12px;">السجل يعمل بعد نشر قواعد الحماية</div>';}
 };
 

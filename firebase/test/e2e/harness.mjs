@@ -10,7 +10,7 @@ const HERE = path.dirname(new URL(import.meta.url).pathname);
 // SORA3A_ROOT: المجلد الذي يحتوي المستودعات الثلاثة (sora3a-admin, sora3a-rest2, sora3a-captain)
 const ROOT = process.env.SORA3A_ROOT || path.resolve(HERE, '../../../..');
 export const ROOTS = Object.fromEntries(['sora3a-captain', 'sora3a-rest2', 'sora3a-admin'].map((r) => [r, path.join(ROOT, r)]));
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png', '.css': 'text/css', '.svg': 'image/svg+xml' };
 
 export function serve(port = 5050) {
   const srv = http.createServer(async (req, res) => {
