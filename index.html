@@ -80,6 +80,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .dnav-btn:hover{color:var(--text);}
 
 /* Mobile Nav */
+@media(max-width:899px){body.nav-many .mnav{display:none;}body:not(.nav-many) .dnav{display:none;}}
 .mnav{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--line);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);}
 @media(min-width:900px){.mnav{display:none;}}
 .mnav-btn{flex:1;padding:9px 4px;background:transparent;border:none;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:10px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;}
@@ -798,6 +799,8 @@ window.auIdle=()=>!document.querySelector('.modal-ov.open');
 window.auSave=()=>({screen:(document.querySelector('.screen.on')||{}).id||''});
 function buildNavs(){
   const visibleTabs=tabs.filter(t=>(!t.adminOnly||isAdmin())&&(!t.manage||canManage())&&(!t.feat||!isRest()||featOf(myRestDoc,t.feat)));
+  // تبويبات كثيرة: على الموبايل شريط علوي يتمرر بدل شريط سفلي مزدحم
+  document.body.classList.toggle('nav-many',visibleTabs.length>5);
   document.getElementById('dNav').innerHTML=visibleTabs.map((t,i)=>
     `<button class="dnav-btn ${i===0?'on':''}" data-screen="${t.screen}" onclick="goTab('${t.screen}',this)">${t.icon} ${t.label}</button>`
   ).join('');
@@ -811,6 +814,8 @@ window.goTab=function(screenId,btn){
   document.getElementById(screenId).classList.add('on');
   document.querySelectorAll('.dnav-btn,.mnav-btn').forEach(b=>b.classList.remove('on'));
   document.querySelectorAll(`[data-screen="${screenId}"]`).forEach(b=>b.classList.add('on'));
+  // على الموبايل: التبويب المختار يبان بشريط التبويبات
+  const db=document.querySelector(`.dnav-btn[data-screen="${screenId}"]`);if(db&&db.scrollIntoView)try{db.scrollIntoView({block:'nearest',inline:'center'});}catch(e){}
   if(screenId==='scCaptains')renderCapStats();
   if(screenId==='scMap')initMap();
   if(screenId==='scAnalytics')renderAnalytics();
@@ -868,6 +873,7 @@ function startListeners(){
       allRestaurants=snap.docs.map(d=>({id:d.id,...d.data()}));
       renderRests();
       populateRestSelect();
+      renderDash();
     }));
     unsubs.push(fb.onSnapshot(fb.collection(fb.db,'staff'),snap=>{
       allStaff=snap.docs.map(d=>({id:d.id,...d.data()}));
