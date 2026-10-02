@@ -160,8 +160,9 @@ test('admin: order times analytics (restaurant owner)', async () => {
   await p.click('.dnav-btn[data-screen="scTimes"]');
   await p.waitForSelector('#tmBody .tm-tbl');
   const txt = await p.textContent('#tmBody');
-  assert.ok(txt.includes('٣٢ د'), 'delivery total 32 min');
-  assert.ok(txt.includes('١٢ د'), 'kitchen 12 min');
+  assert.ok(txt.includes('32 د'), 'delivery total 32 min');
+  assert.ok(txt.includes('12 د'), 'kitchen 12 min');
+  assert.ok(!/[\u0660-\u0669]/.test(txt), 'English digits only');
   assert.ok(txt.includes('كرار'));
   assert.ok(txt.includes('الشاورما'), 'section names from settings');
   await p.screenshot({ path: 'shots/admin-times.png', fullPage: true });

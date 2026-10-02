@@ -56,7 +56,7 @@ test('pager: assign 1-10 at checkout → busy → kitchen ready alerts → free 
   await p.evaluate(() => { window.__toasts = []; const t = window.toast; window.toast = (m, ...a) => { window.__toasts.push(m); return t(m, ...a); }; });
   await p.click('#acDlgOk');
   await p.waitForSelector('#pagerBar .pg[data-pg="2"].ready', { timeout: 8000 });
-  await p.waitForFunction(() => window.__toasts.some((m) => m.includes('اضغط البيجر رقم ٢')), null, { timeout: 5000 });
+  await p.waitForFunction(() => window.__toasts.some((m) => m.includes('اضغط البيجر رقم 2')), null, { timeout: 5000 });
   await p.evaluate(() => goTab('kitchen'));
   await p.click('.kds-card:has(.kds-pager) .kds-done');
   await p.evaluate(() => goTab('cashier'));
