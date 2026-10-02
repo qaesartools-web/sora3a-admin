@@ -241,6 +241,30 @@ test('صاحب المطعم يحدد الدوام بقيم صحيحة فقط، �
   await assertSucceeds(setDoc(doc(as('rest1'), 'users/newc'), { role: 'cashier', restaurantId: 'R1', name: 'n', email: 'e', perms: {}, hours: { from: 480, to: 960 } }));
 });
 
+// ── خدمات المطعم (المدير الأعلى فقط) ──
+test('المدير فقط يفتح ويغلق خدمات المطعم', async () => {
+  await assertFails(updateDoc(doc(as('rest1'), 'restaurants/R1'), { features: { captain: true, pager: true } }));
+  await assertFails(updateDoc(doc(as('staff1'), 'restaurants/R1'), { 'features.pager': false }));
+  await assertSucceeds(updateDoc(doc(as('admin1'), 'restaurants/R1'), { 'features.pager': false }));
+});
+test('إيقاف خدمة الكابتن: لا دلفري ولا دخول للكابتن، والصالة تعمل', async () => {
+  await env.withSecurityRulesDisabled(async (c) => { await updateDoc(doc(c.firestore(), 'restaurants/R1'), { features: { captain: false } }); });
+  await assertFails(setDoc(doc(as('rest1'), 'orders/ND'), { restaurantId: 'R1', orderType: 'delivery', status: 'pending', value: 1000 }));
+  await assertFails(setDoc(doc(as('cash1'), 'orders/ND2'), { restaurantId: 'R1', status: 'pending', value: 1000 }));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'orders/NS'), { restaurantId: 'R1', orderType: 'salon', status: 'delivered', value: 1000 }));
+  await assertFails(getDoc(doc(as('cap1'), 'orders/O1')));
+  await assertSucceeds(getDoc(doc(as('cap1'), 'restaurants/R1')));   // حتى يعرف أن الخدمة متوقفة
+});
+test('إيقاف خدمة الاتصال أو الواتساب يرفض مكالمات ذلك النوع فقط', async () => {
+  const c = (line) => ({ token: 'TOKEN_R1_LINE1_xxxxxxxxxxxxxxxx', restaurantId: 'R1', line, number: '07701234567', status: 'ringing' });
+  await env.withSecurityRulesDisabled(async (x) => { await updateDoc(doc(x.firestore(), 'restaurants/R1'), { features: { whatsapp: false } }); });
+  await assertFails(setDoc(doc(anon(), 'incomingCalls/w1'), c('1 واتساب')));
+  await assertSucceeds(setDoc(doc(anon(), 'incomingCalls/s1'), c('1')));
+  await env.withSecurityRulesDisabled(async (x) => { await updateDoc(doc(x.firestore(), 'restaurants/R1'), { features: { calls: false } }); });
+  await assertSucceeds(setDoc(doc(anon(), 'incomingCalls/w2'), c('1 واتساب')));
+  await assertFails(setDoc(doc(anon(), 'incomingCalls/s2'), c('1')));
+});
+
 // ── خطوط الاتصال والمكالمات ──
 const call = (o) => ({ token: 'TOKEN_R1_LINE1_xxxxxxxxxxxxxxxx', restaurantId: 'R1', line: '1', number: '07701234567', status: 'ringing', ...o });
 test('جهاز الخط يرسل المكالمة بالتوكن بدون تسجيل دخول', async () => {
