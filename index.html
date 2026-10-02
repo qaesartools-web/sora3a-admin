@@ -242,6 +242,11 @@ body.staff-mode .staff-banner{display:block;}
 .perm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;}
 .perm-grid label,.perm-row label{display:flex!important;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:12px;font-weight:700;color:var(--text)!important;margin:0!important;cursor:pointer;}
 .perm-grid input,.perm-row input{width:16px;height:16px;accent-color:var(--accent);}
+.svc-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px;align-items:center;}
+.svc-row .svc-l{font-size:11px;color:var(--muted);font-weight:800;margin-left:2px;}
+.svc{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 11px;font-size:12px;font-weight:800;cursor:pointer;border:1.5px solid var(--line);background:var(--panel2);color:var(--muted);font-family:inherit;}
+.svc.on{border-color:var(--green);background:rgba(34,197,94,.12);color:var(--green);}
+.svc.off{text-decoration:line-through;opacity:.75;}
 .perm-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
 .tok{font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;word-break:break-all;direction:ltr;text-align:left;}
 .setup{font-size:12px;line-height:1.9;background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:8px;}
@@ -438,7 +443,7 @@ body.staff-mode .staff-banner{display:block;}
         <button class="btn-primary" id="mcAddBtn" onclick="mcAdd()">➕ إضافة كاشير</button>
         <div id="mcList" style="margin-top:14px"></div>
       </div>
-      <div class="card">
+      <div class="card" id="mlCard">
         <div class="card-title"><span class="dot"></span> 📞 خطوط الاتصال — توكن جوكر</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">لكل خط (جهاز) توكن سري خاص. عند ورود مكالمة على الجهاز يرسل رقم المتصل للكاشير فوراً، ويظهر للكاشير اسم الزبون وعنوانه وطلباته السابقة. حتى ١٠ خطوط.</div>
         <div class="form-row">
@@ -583,6 +588,10 @@ const isAdmin=()=>currentUser?.role==='admin';
 const isRest=()=>currentUser?.role==='restaurant';
 const isStaff=()=>currentUser?.role==='staff';
 const canManage=()=>isAdmin()||isRest();
+// خدمات المطعم: يفتحها ويغلقها المدير الأعلى فقط (الافتراضي مفعّلة)
+const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر']];
+const featOf=(r,k)=>!r||!r.features||r.features[k]!==false;
+let myRestDoc=null;
 let prevPendingCount=null, notifReady=false;
 function playNotifSound(){
   try{
@@ -726,9 +735,9 @@ function enterApp(){
 const tabs=[
   {id:'dash',label:'الرئيسية',icon:'🏠',screen:'scDash',adminOnly:false},
   {id:'orders',label:'الطلبات',icon:'📋',screen:'scOrders',adminOnly:false},
-  {id:'captains',label:'الكباتن',icon:'🛵',screen:'scCaptains',adminOnly:false},
+  {id:'captains',label:'الكباتن',icon:'🛵',screen:'scCaptains',adminOnly:false,feat:'captain'},
   {id:'rests',label:'المطاعم',icon:'🍽️',screen:'scRests',adminOnly:true},
-  {id:'map',label:'الخريطة',icon:'🗺️',screen:'scMap',adminOnly:false},
+  {id:'map',label:'الخريطة',icon:'🗺️',screen:'scMap',adminOnly:false,feat:'captain'},
   {id:'analytics',label:'التحليلات',icon:'📊',screen:'scAnalytics',adminOnly:false},
   {id:'staff',label:'الموظفين',icon:'👥',screen:'scStaff',adminOnly:true},
   {id:'myrest',label:'الكاشيرية والخطوط',icon:'☎️',screen:'scMyRest',manage:true},
@@ -736,7 +745,7 @@ const tabs=[
 ];
 
 function buildNavs(){
-  const visibleTabs=tabs.filter(t=>(!t.adminOnly||isAdmin())&&(!t.manage||canManage()));
+  const visibleTabs=tabs.filter(t=>(!t.adminOnly||isAdmin())&&(!t.manage||canManage())&&(!t.feat||!isRest()||featOf(myRestDoc,t.feat)));
   document.getElementById('dNav').innerHTML=visibleTabs.map((t,i)=>
     `<button class="dnav-btn ${i===0?'on':''}" data-screen="${t.screen}" onclick="goTab('${t.screen}',this)">${t.icon} ${t.label}</button>`
   ).join('');
@@ -787,6 +796,18 @@ function startListeners(){
     if(document.getElementById('scCaptains').classList.contains('on'))renderCapStats();
     renderDash();
   }));
+  if(isRest()){
+    unsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',currentUser.restaurantId),snap=>{
+      const before=JSON.stringify((myRestDoc&&myRestDoc.features)||{});
+      myRestDoc=snap.exists()?{id:snap.id,...snap.data()}:null;
+      if(before!==JSON.stringify((myRestDoc&&myRestDoc.features)||{})){
+        const cur=document.querySelector('.screen.on');buildNavs();
+        // إذا أُغلقت خدمة الشاشة الحالية نرجع للرئيسية
+        if(cur)goTab(document.querySelector(`.dnav-btn[data-screen="${cur.id}"]`)?cur.id:'scDash');
+        mlVisibility();
+      }
+    },()=>{}));
+  }
   if(isAdmin()){
     unsubs.push(fb.onSnapshot(fb.collection(fb.db,'restaurants'),snap=>{
       allRestaurants=snap.docs.map(d=>({id:d.id,...d.data()}));
@@ -1133,6 +1154,7 @@ function renderRests(){
         <div class="meta-item"><strong>${toA(delivered.length)}</strong>مسلّمة</div>
         <div class="meta-item"><strong>${fmt(r.subscription||0)}</strong>د.ع/شهر</div>
       </div>
+      <div class="svc-row"><span class="svc-l">الخدمات:</span>${SERVICES.map(([k,l])=>{const on=featOf(r,k);return `<button type="button" class="svc ${on?'on':'off'}" title="${on?'اضغط للإيقاف':'اضغط للتشغيل'}" onclick="toggleFeat('${esc(r.id)}','${k}',${on?'false':'true'})">${on?'✅':'⛔'} ${l}</button>`;}).join('')}</div>
       <div class="entity-actions">
         <button class="btn-sm btn-edit" onclick="openEditRest('${esc(r.id)}')">✏️ تعديل</button>
         <button class="btn-sm btn-del" onclick="deleteRest('${esc(r.id)}')">🗑️ حذف</button>
@@ -1228,6 +1250,20 @@ window.saveRest=async function(){
   }catch(e){toast('❌ تعذّر الحفظ','error');}
 };
 
+window.toggleFeat=async function(id,k,v){
+  if(!isAdmin())return;
+  const name=(SERVICES.find(x=>x[0]===k)||[])[1]||k;
+  try{
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{['features.'+k]:v});
+    audit('restaurant.feature',{restaurantId:id,feature:k,value:v});
+    toast((v?'✅ تم تشغيل ':'⛔ تم إيقاف ')+name);
+  }catch(e){toast('❌ تعذّر التحديث','error');}
+};
+function mlVisibility(){
+  const r=isRest()?myRestDoc:allRestaurants.find(x=>x.id===mrRestId());
+  const c=document.getElementById('mlCard');
+  if(c)c.style.display=(featOf(r,'calls')||featOf(r,'whatsapp'))?'':'none';
+}
 window.toggleRestActive=async function(id,active){
   try{
     await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{active});
@@ -1371,6 +1407,7 @@ window.mrInit=function(){
 window.mrLoad=function(){
   mrUnsubs.forEach(u=>u&&u());mrUnsubs=[];
   mrRid=mrRestId();
+  mlVisibility();
   const fb=window._fb;
   if(!mrRid){document.getElementById('mcList').innerHTML='';document.getElementById('mlList').innerHTML='<div style="color:var(--muted);font-size:12px">اختر المطعم أولاً</div>';return;}
   mrUnsubs.push(fb.onSnapshot(fb.query(fb.collection(fb.db,'users'),fb.where('restaurantId','==',mrRid),fb.where('role','==','cashier')),s=>{

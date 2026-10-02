@@ -35,6 +35,8 @@ service cloud.firestore {
       return r.get('active', true) != false
         && (r.get('expiryMs', 0) == 0 || r.get('expiryMs', 0) > request.time.toMillis());
     }
+    // خدمات المطعم يفتحها ويغلقها المدير الأعلى فقط: captain / calls / whatsapp / pager (الافتراضي مفعّلة)
+    function feat(rid, k) { return restDoc(rid).get('features', {}).get(k, true) != false; }
     function isRestaurant() {
       return active() && role() == 'restaurant'
         && me().get('restaurantId', '') != ''
@@ -76,7 +78,8 @@ service cloud.firestore {
     function isCaptain() {
       return active() && role() == 'captain'
         && me().get('captainId', '') != ''
-        && me().get('restaurantId', '') != '';
+        && me().get('restaurantId', '') != ''
+        && feat(me().restaurantId, 'captain');
     }
     function myCap() { return me().captainId; }
 
@@ -131,13 +134,12 @@ service cloud.firestore {
     // ── restaurants ─────────────────────────────────────────
     match /restaurants/{rid} {
       allow read: if isOffice()
-        || (active() && role() in ['restaurant', 'cashier'] && me().get('restaurantId', '') == rid)
-        || (isCaptain() && me().restaurantId == rid);
+        || (active() && role() in ['restaurant', 'cashier', 'captain'] && me().get('restaurantId', '') == rid);
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
         // المطعم لا يستطيع تعديل الاشتراك أو التفعيل أو ربط الحساب
         || (ownsRest(rid) && !changed().hasAny(
-             ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs']));
+             ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs','features']));
 
       // المنيو والإعدادات المتزامنة بين أجهزة المطعم
       //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
@@ -186,7 +188,9 @@ service cloud.firestore {
           && d.value is number && d.value >= 0
           && optNum(d, 'fee')
           && optStr(d, 'customer', 120) && optStr(d, 'phone', 30)
-          && optStr(d, 'address', 400) && optStr(d, 'notes', 5000);
+          && optStr(d, 'address', 400) && optStr(d, 'notes', 5000)
+          // الدلفري يحتاج خدمة الكابتن مفعّلة
+          && (d.get('orderType', 'delivery') != 'delivery' || feat(myRest(), 'captain'));
       }
 
       allow read: if isOffice()
@@ -297,7 +301,11 @@ service cloud.firestore {
         && request.resource.data.status == 'ringing'
         && exists(/databases/$(database)/documents/lineTokens/$(request.resource.data.token))
         && lt().active == true
-        && lt().restaurantId == request.resource.data.restaurantId;
+        && lt().restaurantId == request.resource.data.restaurantId
+        // خط الواتساب يحتاج خدمة الواتساب، والخط العادي يحتاج خدمة الاتصال
+        && (request.resource.data.get('line', '').matches('.*(واتس|واتساب|[Ww]hats).*')
+              ? feat(request.resource.data.restaurantId, 'whatsapp')
+              : feat(request.resource.data.restaurantId, 'calls'));
       allow read: if isOffice() || (isRestStaff() && resource.data.restaurantId == myRest());
       allow update: if isRestStaff() && resource.data.restaurantId == myRest()
         && onlyChanged(['status','takenBy','takenAtMs']);
