@@ -123,3 +123,16 @@ test('admin: sales report with any date range + print, items & profit, shifts', 
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
+
+test('orders filter bar stays visible and clickable with a long list', async () => {
+  await E.withSecurityRulesDisabled(async (c) => { const db = c.firestore();
+    for (let i = 0; i < 30; i++) await setDoc(doc(db, 'orders/L' + i), { restaurantId: 'RR', status: 'delivered', orderType: i % 3 ? 'delivery' : 'salon', createdAtMs: Date.now() - i * 60000, value: 5000, items: [{ name: 'كلاسك', variant: 'وحدة', price: 5000, qty: 1 }] });
+  });
+  const p = await pos('rown@x.com');
+  await p.evaluate(() => goTab('orders'));
+  await p.waitForFunction(() => document.querySelectorAll('#ordersScreen .ocard, #ordersScreen [class*="ord"]').length > 10);
+  const h = await p.evaluate(() => document.getElementById('f-all').getBoundingClientRect().height);
+  assert.ok(h > 20, 'filter buttons visible, height=' + h);
+  await p.click('#f-salon'); await p.click('#f-delivery'); await p.click('#f-all');
+  await p.context().close();
+});
