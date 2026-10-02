@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'admin-v3';
+const CACHE_VERSION = 'admin-v4';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 const PRECACHE = ['/sora3a-admin/', '/sora3a-admin/index.html', '/sora3a-admin/manifest.json'];
 const RUNTIME_CACHE_PATTERNS = [
