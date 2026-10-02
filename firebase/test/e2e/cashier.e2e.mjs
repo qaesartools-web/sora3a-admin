@@ -49,7 +49,7 @@ test('owner creates a cashier with default permissions and a phone line', async 
   await p.click('#mcAddBtn');
   const cu = await until(async () => (await all('users', 'role', 'cashier'))[0]);
   assert.equal(cu.restaurantId, 'RC');
-  assert.deepEqual(cu.perms, { discount: true, cancel: false, reports: false, inventory: false, menu: false, settings: false });
+  assert.deepEqual(cu.perms, { discount: true, cancel: false, inventory: false, menu: false, settings: false });
   U.cash = cu.id;
   await p.waitForSelector('#mcList .entity');
   await p.fill('#mlLabel', 'خط زين');
@@ -75,9 +75,10 @@ test('cashier sees only allowed sections; permissions update live', async () => 
   await p.evaluate(() => goTab('reports'));
   assert.equal(await p.evaluate(() => document.getElementById('reportsScreen').classList.contains('on')), false);
   assert.match(await p.textContent('#restName'), /علي الكاشير/);
-  // صاحب المطعم يفعّل التقارير → تظهر فوراً
-  await write('users/' + U.cash, { perms: { discount: true, cancel: false, reports: true, inventory: false, menu: false, settings: false } });
-  await p.waitForFunction(() => getComputedStyle(document.querySelector('.dnb[data-tab="reports"]')).display !== 'none', null, { timeout: 10000 });
+  // صاحب المطعم يفعّل المخزون → يظهر فوراً، والتقارير تبقى مخفية عن الكاشير دائماً
+  await write('users/' + U.cash, { perms: { discount: true, cancel: false, reports: true, inventory: true, menu: false, settings: false } });
+  await p.waitForFunction(() => getComputedStyle(document.querySelector('.dnb[data-tab="acc"]')).display !== 'none', null, { timeout: 10000 });
+  assert.equal(await vis('reports'), false);
   // إيقاف الحساب يخرجه
   await write('users/' + U.cash, { disabled: true });
   await p.waitForSelector('#loginPage', { state: 'visible', timeout: 10000 });

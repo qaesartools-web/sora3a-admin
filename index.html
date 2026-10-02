@@ -425,7 +425,8 @@ body.staff-mode .staff-banner{display:block;}
     <div class="screen" id="scAcc">
       <div class="tm-filters">
         <select class="form-sel admin-only" id="axRest" onchange="accInit()"></select>
-        <select class="form-sel" id="axRange" onchange="accRender()"><option value="today">اليوم</option><option value="7">آخر 7 أيام</option><option value="30" selected>آخر 30 يوم</option><option value="month">هذا الشهر</option><option value="all">الكل</option></select>
+        <select class="form-sel" id="axRange" onchange="axRangeCh()"><option value="today" selected>اليوم</option><option value="yesterday">أمس</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يوم</option><option value="month">هذا الشهر</option><option value="custom">من تاريخ إلى تاريخ</option><option value="all">الكل</option></select>
+        <input type="date" class="form-inp" id="axFrom" style="display:none;max-width:170px" onchange="accRender()"><input type="date" class="form-inp" id="axTo" style="display:none;max-width:170px" onchange="accRender()">
       </div>
       <div class="ax-tabs" id="axTabs"></div>
       <div id="axBody"></div>
@@ -1437,11 +1438,14 @@ window.renderTimes=async function(){
 // ── المخزون والحسابات: قراءة كاملة لكل الأرقام + الإدارة فقط تعدّل وتحذف المصروفات ──
 const AX_MV={open:'رصيد افتتاحي',purchase:'وارد — مشتريات',sale:'صادر — منصرف للمبيعات',sale_return:'وارد — مردود مبيعات',waste:'صادر — تالف / هالك',count:'تسوية جرد',purchase_return:'صادر — مرتجع للمورد'};
 const AX_CATS=['رواتب','إيجار','كهرباء وماء','غاز / وقود','صيانة','تغليف','تسويق وإعلان','مشتريات أخرى','أخرى'];
-let axRid=null,axDoc=null,axExp=[],axTab='exp',axUnsubs=[],axView=null;
+let axRid=null,axDoc=null,axExp=[],axTab='rep',axUnsubs=[],axView=null,axShifts=[],axMenu=[];
 const axFmtD=ms=>ms?new Date(ms).toLocaleString('ar-IQ-u-nu-latn',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'—';
 const axQ=n=>Number(Math.round((Number(n)||0)*1000)/1000).toLocaleString('ar-IQ-u-nu-latn');
+window.axRangeCh=()=>{const c=document.getElementById('axRange').value==='custom';['axFrom','axTo'].forEach(id=>{const e=document.getElementById(id);e.style.display=c?'':'none';if(c&&!e.value){const d=new Date();e.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}});accRender();};
 function axRange(){
   const v=document.getElementById('axRange').value,d0=new Date();d0.setHours(0,0,0,0);
+  if(v==='custom'){const f=new Date((document.getElementById('axFrom').value||'1970-01-01')+'T00:00:00').getTime(),t=new Date((document.getElementById('axTo').value||'2999-01-01')+'T00:00:00').getTime()+86400000;return[f,t];}
+  if(v==='yesterday')return[d0.getTime()-86400000,d0.getTime()];
   if(v==='all')return[0,Infinity];if(v==='today')return[d0.getTime(),Infinity];
   if(v==='month')return[new Date(d0.getFullYear(),d0.getMonth(),1).getTime(),Infinity];
   return[d0.getTime()-(+v-1)*86400000,Infinity];
@@ -1451,11 +1455,13 @@ window.accInit=function(){
   if(isAdmin()){const cur=sel.value;sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur||(allRestaurants[0]&&allRestaurants[0].id)||'';}
   const rid=isRest()?currentUser.restaurantId:sel.value;
   if(rid===axRid&&axUnsubs.length){accRender();return;}
-  axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=rid;axDoc=null;axExp=[];
+  axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=rid;axDoc=null;axExp=[];axShifts=[];axMenu=[];
   if(!rid){accRender();return;}
   const fb=window._fb;
   axUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'accounting',rid),s=>{axDoc=s.exists()?s.data():{};accRender(true);},()=>{axDoc={};accRender(true);}));
   axUnsubs.push(fb.onSnapshot(fb.collection(fb.db,'accounting',rid,'expenses'),s=>{axExp=s.docs.map(d=>({id:d.id,...d.data(),_sub:true}));accRender(true);},()=>{}));
+  axUnsubs.push(fb.onSnapshot(fb.collection(fb.db,'restaurants',rid,'shifts'),s=>{axShifts=s.docs.map(d=>({id:d.id,...d.data()}));accRender(true);},()=>{}));
+  axUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',rid,'menu','main'),s=>{axMenu=(s.exists()&&s.data().cats)||[];accRender(true);},()=>{}));
   unsubs.push(()=>{axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=null;});
   accRender();
 };
@@ -1465,7 +1471,7 @@ window.axSetTab=t=>{axTab=t;accRender();};
 window.accRender=function(live){
   const el=document.getElementById('axBody');if(!el)return;
   if(live&&(document.getElementById('axMo').classList.contains('open')||/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName||''))){if(axView)axView();return;}
-  const T=[['exp','💸 المصروفات'],['mat','📦 المخزون'],['mov','🔄 حركات المخزون'],['fin','💰 قائمة الدخل'],['rec','🧾 الوصفات']];
+  const T=[['rep','🧾 تقرير المبيعات'],['fin','💰 قائمة الدخل'],['items','📋 الأصناف والأرباح'],['shifts','🧮 الورديات'],['exp','💸 المصروفات'],['mat','📦 المخزون'],['mov','🔄 حركات المخزون'],['rec','🧾 الوصفات']];
   document.getElementById('axTabs').innerHTML=T.map(([k,l])=>`<button class="${k===axTab?'on':''}" onclick="axSetTab('${k}')">${l}</button>`).join('');
   if(!axRid){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">اختر المطعم</div>';return;}
   if(axDoc===null){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">⏳ جاري التحميل…</div>';return;}
@@ -1473,7 +1479,39 @@ window.accRender=function(live){
   const mats=(axDoc.materials||[]),moves=(axDoc.moves||[]);
   const kpi=(v,l,sub)=>`<div class="stat"><div class="stat-v">${v}</div><div class="stat-l">${l}</div>${sub?`<div class="stat-s" style="font-size:11px;color:var(--muted)">${sub}</div>`:''}</div>`;
   let h='';
-  if(axTab==='exp'){
+  if(axTab==='rep'){
+    const R=axReport(from,to);
+    const ln=(a,b,c)=>`<tr><td>${a}</td><td class="${c||''}" style="text-align:left"><b>${b}</b></td></tr>`;
+    h=`<div class="stats">${kpi(fmt(R.sales),'💰 مجموع المبيعات (د.ع)')}${kpi(toA(R.n),'📦 عدد الطلبات')}${kpi(fmt(R.n?Math.round(R.sales/R.n):0),'🧾 متوسط الطلب')}${kpi(fmt(R.exp),'💸 المصروفات')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> التقرير — ${esc(axRangeLabel())} <button class="btn-sm btn-edit" style="margin-inline-start:auto" onclick="axPrintReport()">🖨️ طباعة الوصل</button></div><table class="tm-tbl">
+      ${ln('🪑 صالة ('+toA(R.byType.salon.n)+' طلب)',fmt(R.byType.salon.v))}${ln('🥡 سفري ('+toA(R.byType.takeaway.n)+' طلب)',fmt(R.byType.takeaway.v))}${ln('🏍️ دلفري ('+toA(R.byType.delivery.n)+' طلب)',fmt(R.byType.delivery.v))}
+      ${R.fees?ln('أجور التوصيل (للكباتن)',fmt(R.fees)):''}${ln('💵 نقداً',fmt(R.cash))}${ln('💳 بطاقة',fmt(R.card))}${R.later?ln('⏳ آجل غير محصّل',fmt(R.later),'ax-neg'):''}${R.cod?ln('🏍️ عند الكباتن (عند الاستلام)',fmt(R.cod)):''}
+      ${R.disc?ln('٪ الخصومات','−'+fmt(R.disc),'ax-neg'):''}${R.cancN?ln('❌ الطلبات الملغية ('+toA(R.cancN)+')',fmt(R.cancV),'ax-neg'):''}${ln('عدد الأصناف المباعة',toA(R.items))}
+      ${ln('= مجموع المبيعات',fmt(R.sales)+' د.ع','ax-pos')}${R.exp?ln('(−) المصروفات','−'+fmt(R.exp),'ax-neg'):''}
+    </table></div>
+    ${R.days.length>1?`<div class="card"><div class="card-title"><span class="dot"></span> حسب اليوم</div><div class="tm-scroll"><table class="tm-tbl"><tr><th>اليوم</th><th>الطلبات</th><th>صالة</th><th>سفري</th><th>دلفري</th><th>المجموع</th><th>المصروفات</th></tr>
+      ${R.days.map(d=>`<tr><td><b>${esc(d.label)}</b></td><td>${toA(d.n)}</td><td>${fmt(d.salon)}</td><td>${fmt(d.takeaway)}</td><td>${fmt(d.delivery)}</td><td class="ax-pos">${fmt(d.sales)}</td><td class="ax-neg">${d.exp?fmt(d.exp):'—'}</td></tr>`).join('')}</table></div></div>`:''}`;
+  }else if(axTab==='items'){
+    const os=allOrders.filter(o=>o.restaurantId===axRid&&inR(o.createdAtMs)&&o.status==='delivered');
+    const sold={};os.forEach(o=>(o.items||[]).forEach(i=>{const k=i.name+'|'+(i.variant||'وحدة');const a=sold[k]||(sold[k]={q:0,rev:0,cost:0});a.q+=i.qty||1;a.rev+=(i.price||0)*(i.qty||1);a.cost+=(Number(i.cost)||0)*(i.qty||1);}));
+    const rows=[];axMenu.forEach(c=>(c.items||[]).forEach(it=>(it.variants||[]).forEach(v=>{const k=it.name+'|'+v.name,c0=axUnitCost(it.name,v.name),sd=sold[k]||{q:0,rev:0,cost:0};
+      rows.push({k,cat:c.cat,name:it.name,vn:v.name,price:v.price,cost:c0,rec:axHasRec(k),q:sd.q,rev:sd.rev,prof:sd.rev-sd.cost});})));
+    const tr=rows.reduce((s,x)=>s+x.rev,0),tp=rows.reduce((s,x)=>s+x.prof,0);
+    h=`<div class="stats">${kpi(toA(rows.length),'📋 صنف/حجم')}${kpi(toA(rows.filter(x=>!x.cost).length),'⚠️ بدون تكلفة')}${kpi(fmt(Math.round(tr)),'💰 مبيعات الأصناف')}${kpi(fmt(Math.round(tp)),'📈 ربح الأصناف')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> كل صنف: السعر والتكلفة والربح — اضغط لتعديل التكلفة</div><div class="tm-scroll"><table class="tm-tbl">
+      <tr><th>الصنف</th><th>سعر البيع</th><th>التكلفة</th><th>الربح للحبة</th><th>نسبة الربح</th><th>المباع</th><th>المبيعات</th><th>الربح</th></tr>
+      ${(window.axKeys=rows.sort((a,b)=>b.rev-a.rev).map(x=>x.k),rows).map((x,ix)=>{const pr=x.price-x.cost,m=x.price?Math.round(pr*100/x.price):0;
+        return `<tr class="ax-row" onclick="axItemView(axKeys[${ix}])"><td><b>${esc(x.name)}</b>${x.vn!=='وحدة'?' ('+esc(x.vn)+')':''}<small style="display:block;color:var(--muted)">${esc(x.cat)}</small></td><td>${fmt(x.price)}</td><td>${x.cost?fmt(Math.round(x.cost))+(x.rec?' 🧾':''):'<span class="ax-neg">—</span>'}</td><td class="${x.cost?(pr>=0?'ax-pos':'ax-neg'):''}">${x.cost?fmt(Math.round(pr)):'—'}</td><td>${x.cost?m+'%':'—'}</td><td>${toA(x.q)}</td><td>${fmt(Math.round(x.rev))}</td><td class="${x.prof>=0?'ax-pos':'ax-neg'}">${x.q?fmt(Math.round(x.prof)):'—'}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">لا توجد أصناف</td></tr>'}
+    </table></div><div style="font-size:11px;color:var(--muted);margin-top:6px">🧾 = التكلفة محسوبة من وصفة الصنف. الربح بالمبيعات محسوب بتكلفة يوم البيع.</div></div>`;
+  }else if(axTab==='shifts'){
+    const list=axShifts.filter(x=>inR(x.openedAtMs)).sort((a,b)=>(b.openedAtMs||0)-(a.openedAtMs||0));
+    const diffT=list.filter(x=>x.status==='closed').reduce((s,x)=>s+(x.diff||0),0);
+    h=`<div class="stats">${kpi(toA(list.length),'🧮 وردية')}${kpi(toA(list.filter(x=>x.status==='open').length),'🔓 مفتوحة الآن')}${kpi(`<span class="${diffT<0?'ax-neg':'ax-pos'}">${fmt(diffT)}</span>`,'⚖️ مجموع العجز/الزيادة')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> الورديات — اضغط على أي وردية للتفاصيل</div><div class="tm-scroll"><table class="tm-tbl">
+      <tr><th>الكاشير</th><th>الفتح</th><th>الإغلاق</th><th>المبيعات</th><th>المتوقع بالدرج</th><th>الفعلي</th><th>الفرق</th></tr>
+      ${list.map(x=>`<tr class="ax-row" onclick="axShiftView('${esc(x.id)}')"><td><b>${esc(x.cashier||'—')}</b>${x.autoClosed?'<small style="display:block;color:var(--muted)">إغلاق تلقائي</small>':''}</td><td>${axFmtD(x.openedAtMs)}</td><td>${x.status==='open'?'<span class="ax-pos">مفتوحة</span>':axFmtD(x.closedAtMs)}</td><td>${fmt(x.report&&x.report.sales)}</td><td>${fmt(x.expectedCash)}</td><td>${x.countedCash!=null?fmt(x.countedCash):'—'}</td><td class="${(x.diff||0)<0?'ax-neg':'ax-pos'}">${x.status==='closed'?fmt(x.diff||0):'—'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px">لا توجد ورديات بهذه الفترة</td></tr>'}
+    </table></div></div>`;
+  }else if(axTab==='exp'){
     const list=axAllExp().filter(e=>inR(e.ts)).sort((a,b)=>(b.ts||0)-(a.ts||0));
     const tot=list.reduce((s,e)=>s+(Number(e.amount)||0),0),by={};list.forEach(e=>{by[e.cat||'أخرى']=(by[e.cat||'أخرى']||0)+(Number(e.amount)||0);});
     const mx=Math.max(1,...Object.values(by));
@@ -1523,6 +1561,74 @@ window.accRender=function(live){
     </table></div></div>`;
   }
   el.innerHTML=h;
+};
+// ── تقرير المبيعات للفترة (الإدارة فقط تجمع التواريخ) ──
+const axTypeOf=o=>o.orderType||'delivery';
+function axRangeLabel(){const s=document.getElementById('axRange');const o=s.options[s.selectedIndex];if(s.value==='custom')return (document.getElementById('axFrom').value||'')+' ← '+(document.getElementById('axTo').value||'');return o?o.text:'';}
+function axReport(from,to){
+  const os=allOrders.filter(o=>o.restaurantId===axRid&&(o.createdAtMs||0)>=from&&(o.createdAtMs||0)<to);
+  const live=os.filter(o=>o.status!=='cancelled'),canc=os.filter(o=>o.status==='cancelled');
+  const R={n:live.length,sales:0,disc:0,fees:0,items:0,cash:0,card:0,later:0,cod:0,cancN:canc.length,cancV:canc.reduce((s,o)=>s+(o.value||0),0),byType:{salon:{n:0,v:0},takeaway:{n:0,v:0},delivery:{n:0,v:0}},days:[]};
+  const day={},dk=ms=>{const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();};
+  live.forEach(o=>{const t=axTypeOf(o),v=o.value||0;R.sales+=v;R.disc+=o.discount||0;R.byType[t].n++;R.byType[t].v+=v;(o.items||[]).forEach(i=>{R.items+=i.qty||1;});
+    const k=dk(o.createdAtMs||0),D=day[k]||(day[k]={n:0,sales:0,salon:0,takeaway:0,delivery:0,exp:0});D.n++;D.sales+=v;D[t]+=v;
+    if(t==='delivery'){R.fees+=o.fee||0;R.cod+=v+(o.fee||0);return;}
+    const p=o.payment||{};if(p.method==='later')R.later+=v;else{R.cash+=p.cash!=null?p.cash:(p.method==='card'?0:v);R.card+=p.card||0;}});
+  const ex=axAllExp().filter(e=>(e.ts||0)>=from&&(e.ts||0)<to);R.exp=ex.reduce((s,e)=>s+(Number(e.amount)||0),0);
+  ex.forEach(e=>{const k=dk(e.ts||0),D=day[k]||(day[k]={n:0,sales:0,salon:0,takeaway:0,delivery:0,exp:0});D.exp+=Number(e.amount)||0;});
+  R.days=Object.keys(day).sort((a,b)=>b-a).map(k=>({...day[k],label:new Date(+k).toLocaleDateString('ar-IQ-u-nu-latn',{weekday:'short',year:'numeric',month:'numeric',day:'numeric'})}));
+  return R;
+}
+window.axPrintReport=()=>{
+  const [from,to]=axRange(),R=axReport(from,to),rn=(allRestaurants.find(r=>r.id===axRid)||{}).name||currentUser.restaurantName||'';
+  const row=(a,b,bold)=>`<div style="display:flex;justify-content:space-between;font-size:12px;margin:3px 0;${bold?'font-weight:900;font-size:13px':''}"><span>${a}</span><span>${b}</span></div>`,dv='<div style="border-top:1px dashed #000;margin:6px 0"></div>';
+  const html=`<html><head><meta charset="UTF-8"></head><body style="font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:12px;width:300px;color:#000">
+    <h2 style="text-align:center;font-size:16px;margin:0">🧾 تقرير المبيعات</h2><div style="text-align:center;font-size:11px">${esc(rn)}<br>${esc(axRangeLabel())}</div>${dv}
+    ${row('عدد الطلبات',R.n)}${row('عدد الأصناف المباعة',R.items)}${dv}
+    ${row('🪑 صالة ('+R.byType.salon.n+')',fmt(R.byType.salon.v))}${row('🥡 سفري ('+R.byType.takeaway.n+')',fmt(R.byType.takeaway.v))}${row('🏍️ دلفري ('+R.byType.delivery.n+')',fmt(R.byType.delivery.v))}${R.fees?row('أجور التوصيل',fmt(R.fees)):''}${dv}
+    ${row('💵 نقداً',fmt(R.cash))}${row('💳 بطاقة',fmt(R.card))}${R.later?row('⏳ آجل',fmt(R.later)):''}${R.cod?row('🏍️ عند الكباتن',fmt(R.cod)):''}${R.disc?row('٪ الخصومات','-'+fmt(R.disc)):''}${R.cancN?row('❌ ملغي ('+R.cancN+')',fmt(R.cancV)):''}${dv}
+    ${row('مجموع المبيعات',fmt(R.sales)+' د.ع',true)}${R.exp?row('💸 المصروفات','-'+fmt(R.exp)):''}
+    ${R.days.length>1?dv+R.days.map(d=>row(d.label,fmt(d.sales))).join(''):''}
+    ${dv}<div style="text-align:center;font-size:10px">طُبع ${esc(new Date().toLocaleString('ar-IQ-u-nu-latn'))}</div></body></html>`;
+  let f=document.getElementById('axPrt');if(!f){f=document.createElement('iframe');f.id='axPrt';f.style.cssText='position:fixed;left:-9999px;top:0;width:320px;height:600px;border:0';document.body.appendChild(f);}
+  f.onload=()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){}};f.srcdoc=html;
+};
+// ── التكلفة والربح للأصناف (تعديل التكلفة من الإدارة) ──
+const axHasRec=k=>{const r=(axDoc&&axDoc.recipes||{})[k];return !!(r&&r.length);};
+function axUnitCost(n,v){const k=n+'|'+v,mats=(axDoc&&axDoc.materials)||[];
+  if(axHasRec(k))return axDoc.recipes[k].reduce((s,x)=>{const m=mats.find(mm=>mm.id===x.mid);return s+(m?(Number(m.cost)||0)*(Number(x.q)||0):0);},0);
+  return Number(((axDoc&&axDoc.costs)||{})[k])||0;}
+window.axItemView=k=>{
+  window.axCurKey=k;const [n,v]=k.split('|');let price=0,cat='';axMenu.forEach(c=>(c.items||[]).forEach(it=>{if(it.name===n)(it.variants||[]).forEach(x=>{if(x.name===v){price=x.price;cat=c.cat;}});}));
+  const cost=axUnitCost(n,v),rec=axHasRec(k),mats=(axDoc&&axDoc.materials)||[];
+  axOpen(`<div class="modal-title">📋 ${esc(n)}${v!=='وحدة'?' ('+esc(v)+')':''}</div>
+    <div class="ax-kv"><b>الفرع</b><span>${esc(cat)}</span><b>سعر البيع</b><span>${fmt(price)} د.ع</span><b>التكلفة</b><span>${cost?fmt(Math.round(cost))+' د.ع':'غير محددة'}</span>
+      <b>الربح للحبة</b><span class="${price-cost>=0?'ax-pos':'ax-neg'}">${cost?fmt(Math.round(price-cost))+' د.ع ('+(price?Math.round((price-cost)*100/price):0)+'%)':'—'}</span></div>
+    ${rec?`<div style="font-weight:800;margin:6px 0">🧾 الوصفة</div><div class="ax-note">${axDoc.recipes[k].map(x=>{const m=mats.find(mm=>mm.id===x.mid);return esc(m?m.name:'؟')+' × '+axQ(x.q)+' '+esc(m?m.unit:'')+(m?' = '+fmt(Math.round((m.cost||0)*(x.q||0))):'');}).join('\n')}</div><div style="font-size:11px;color:var(--muted);margin-top:6px">التكلفة محسوبة من الوصفة وأسعار المواد — تُعدّل من تبويب الوصفات في الكاشير.</div>`
+      :canEditAcc()?`<div class="form-group" style="margin-top:12px"><label>🧮 تكلفة الإنتاج للحبة (د.ع)</label><input class="form-inp" id="axIcost" type="number" min="0" value="${Math.round(cost)||''}" oninput="axIprev(${price})"><div id="axIprev" style="font-size:13px;font-weight:800;margin-top:6px"></div></div>`:''}
+    <div class="modal-btns">${!rec&&canEditAcc()?`<button class="btn-primary" onclick="axItemSave(axCurKey)">💾 حفظ التكلفة</button>`:''}<button class="btn-sm" onclick="axClose()">إغلاق</button></div>`);
+  if(!rec)axIprev(price);
+};
+window.axIprev=price=>{const el=document.getElementById('axIprev'),c=Number((document.getElementById('axIcost')||{}).value)||0;if(!el)return;
+  el.innerHTML=c?`<span class="${price-c>=0?'ax-pos':'ax-neg'}">الربح ${fmt(price-c)} د.ع (${price?Math.round((price-c)*100/price):0}%)</span>`:'<span style="color:var(--muted)">أدخل التكلفة لحساب الربح</span>';};
+window.axItemSave=async k=>{
+  const c=Math.max(0,Math.round(Number(document.getElementById('axIcost').value)||0));
+  const costs={...((axDoc&&axDoc.costs)||{})};if(c)costs[k]=c;else delete costs[k];
+  try{const fb=window._fb;await fb.setDoc(fb.doc(fb.db,'accounting',axRid),{costs},{merge:true});audit('item.cost',{restaurantId:axRid,item:k,cost:c});toast('✅ تم حفظ التكلفة');axClose();}
+  catch(e){toast('❌ تعذّر الحفظ: '+(e.code||e.message),'error');}
+};
+window.axShiftView=id=>{
+  const x=axShifts.find(s=>s.id===id);if(!x)return;const r=x.report||{},bt=r.byType||{};
+  const it=(a,b)=>`<b>${a}</b><span>${b}</span>`;
+  axOpen(`<div class="modal-title">🧮 وردية ${esc(x.cashier||'')}</div>
+    <div class="ax-kv">${it('الكاشير',esc(x.cashier||'—'))}${it('الفتح',axFmtD(x.openedAtMs))}${it('الإغلاق',x.status==='open'?'مفتوحة':axFmtD(x.closedAtMs)+(x.autoClosed?' (تلقائي)':''))}
+      ${it('رصيد افتتاحي',fmt(x.openingCash))}${it('عدد الطلبات',toA(r.orders||0))}${it('صافي المبيعات',fmt(r.sales))}
+      ${it('🪑 صالة',fmt(bt.salon&&bt.salon.v))}${it('🥡 سفري',fmt(bt.takeaway&&bt.takeaway.v))}${it('🏍️ دلفري',fmt(bt.delivery&&bt.delivery.v))}
+      ${it('💵 نقداً',fmt(r.cash))}${it('💳 بطاقة',fmt(r.card))}${it('الخصومات',fmt(r.disc))}${it('ملغي',toA(r.cancelled||0)+' • '+fmt(r.cancelledV))}
+      ${it('المتوقع بالدرج',fmt(x.expectedCash))}${it('النقد الفعلي',x.countedCash!=null?fmt(x.countedCash):'—')}${it('الفرق',x.status==='closed'?`<span class="${(x.diff||0)<0?'ax-neg':'ax-pos'}">${fmt(x.diff||0)}</span>`:'—')}</div>
+    ${(x.cashMoves||[]).length?`<div style="font-weight:800;margin:6px 0">💵 الإيداعات والمسحوبات</div><div class="ax-note">${x.cashMoves.map(m=>(m.type==='in'?'➕ ':'➖ ')+fmt(m.amount)+' — '+esc(m.note||'')+' • '+axFmtD(m.ts)).join('\n')}</div>`:''}
+    ${x.note?`<div style="font-weight:800;margin:6px 0">📝 ملاحظة الإغلاق</div><div class="ax-note">${esc(x.note)}</div>`:''}
+    <div class="modal-btns"><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`);
 };
 function axOpen(html,refresh){document.getElementById('axMoBody').innerHTML=html;document.getElementById('axMo').classList.add('open');axView=refresh||null;}
 window.axClose=()=>{document.getElementById('axMo').classList.remove('open');axView=null;accRender();};
@@ -1668,8 +1774,9 @@ window.exportCSV=function(){
 };
 
 // ── RESTAURANT STAFF (CASHIERS) & PHONE LINES ──
-const PERMS=[['discount','٪ الخصم'],['cancel','❌ إلغاء الطلبات'],['reports','📊 التقارير'],['inventory','📦 المخزون والحسابات'],['menu','🍔 تعديل المنيو'],['settings','⚙️ الإعدادات']];
-const PERM_DEFAULT={discount:true,cancel:false,reports:false,inventory:false,menu:false,settings:false};
+// التقارير والأرباح صارت للإدارة فقط؛ الكاشير يطبع تقرير اليوم من الوردية
+const PERMS=[['discount','٪ الخصم'],['cancel','❌ إلغاء الطلبات'],['inventory','📦 المخزون والمصروفات (إضافة ومشاهدة)'],['menu','🍔 تعديل المنيو'],['settings','⚙️ الإعدادات']];
+const PERM_DEFAULT={discount:true,cancel:false,inventory:false,menu:false,settings:false};
 const MAX_LINES=10;
 // الدوام يُخزّن بالدقائق من منتصف الليل (بتوقيت بغداد)
 const toMins=v=>{const m=/^(\d{1,2}):(\d{2})$/.exec(v||'');return m?(+m[1])*60+(+m[2]):null;};
