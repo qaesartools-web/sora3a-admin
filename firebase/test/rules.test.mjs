@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { test, before, after, beforeEach } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, runTransaction, addDoc, serverTimestamp } from 'firebase/firestore';
 
 let env;
 const DAY = 86400000;
@@ -319,4 +319,25 @@ test('صاحب المطعم فقط يدير التوكنات', async () => {
   await assertFails(setDoc(doc(as('rest2'), 'lineTokens/' + t + 'y'), { restaurantId: 'R1', line: '3', active: true }));
   await assertFails(getDoc(doc(as('cash1'), 'lineTokens/' + t)));
   await assertSucceeds(updateDoc(doc(as('rest1'), 'lineTokens/' + t), { active: false }));
+});
+
+test('leads: any visitor can send a valid trial request, only super admin reads/manages it', async () => {
+  const lead = { owner: 'أحمد', restaurant: 'مطعم الذوق', phone: '07701234567', city: 'بغداد', email: 'a@b.com', kind: 'مطعم', services: ['pos', 'captain'], cashiers: 2, captains: 3, sections: 4, lines: 2, notes: 'x', wantsTrial: true, status: 'new', source: 'site', createdAt: serverTimestamp() };
+  await assertSucceeds(addDoc(collection(anon(), 'leads'), lead));
+  await assertSucceeds(addDoc(collection(anon(), 'leads'), { owner: 'علي', restaurant: 'كافيه', phone: '+964 770 123', status: 'new', createdAt: serverTimestamp() }));
+  // حقول ممنوعة أو قيم خاطئة
+  await assertFails(addDoc(collection(anon(), 'leads'), { ...lead, status: 'trial' }));
+  await assertFails(addDoc(collection(anon(), 'leads'), { ...lead, restaurantId: 'R1' }));
+  await assertFails(addDoc(collection(anon(), 'leads'), { ...lead, phone: '<script>' }));
+  await assertFails(addDoc(collection(anon(), 'leads'), { ...lead, sections: 99 }));
+  await assertFails(addDoc(collection(anon(), 'leads'), { ...lead, notes: 'x'.repeat(1001) }));
+  await assertFails(addDoc(collection(anon(), 'leads'), { ...lead, createdAt: new Date(0) }));
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'leads/L1'), { ...lead, createdAt: new Date() }); });
+  await assertFails(getDoc(doc(anon(), 'leads/L1')));
+  await assertFails(getDoc(doc(as('rest1'), 'leads/L1')));
+  await assertFails(getDocs(collection(as('staff1'), 'leads')));
+  await assertSucceeds(getDocs(collection(as('admin1'), 'leads')));
+  await assertSucceeds(updateDoc(doc(as('admin1'), 'leads/L1'), { status: 'trial', restaurantId: 'R9' }));
+  await assertFails(updateDoc(doc(as('rest1'), 'leads/L1'), { status: 'won' }));
+  await assertSucceeds(setDoc(doc(as('admin1'), 'restaurants/R9'), { name: 'تجربة', userId: 'u9', active: true, expiryMs: Date.now() + 2 * DAY, trial: true, leadId: 'L1' }));
 });
