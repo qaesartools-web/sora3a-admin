@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'admin-v10';
+const CACHE_VERSION = 'admin-v11';
 const CACHE_NAME = `app-cache-${CACHE_VERSION}`;
 const PRECACHE = ['/sora3a-admin/', '/sora3a-admin/index.html', '/sora3a-admin/manifest.json'];
 const RUNTIME_CACHE_PATTERNS = [
@@ -21,8 +21,12 @@ self.addEventListener('fetch', event => {
   if (url.hostname.includes('firebaseio.com') || url.hostname.includes('firebasedatabase.app') ||
       url.hostname.includes('script.google.com') || url.hostname.includes('googleapis.com') ||
       url.hostname.includes('imgbb.com') || url.hostname.includes('ibb.co')) return;
+  // موقع سرعة التسويقي ليس جزءاً من التطبيق: نتركه للمتصفح مباشرة
+  if (url.pathname.startsWith('/sora3a-admin/site')) return;
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(fetch(new Request(request.url, { cache: 'no-cache', credentials: 'same-origin' })).then(r => {
+      // رابط بدون / بالآخر يرجع تحويل — المتصفح يرفض الرد المحوَّل للصفحات، فنعيد التحويل له
+      if (r.redirected) return Response.redirect(r.url, 302);
       const clone = r.clone();
       caches.open(CACHE_NAME).then(c => c.put(request, clone)).catch(() => {});
       return r;
