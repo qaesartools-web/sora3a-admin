@@ -145,6 +145,21 @@ section{padding:clamp(72px,9vw,120px) 0;position:relative}
   .ticket{width:160px}
 }
 
+/* 3D-feel: حقل جزيئات + زر معدن سائل + ميلان مع المؤشر */
+#fx{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;opacity:.9}
+@property --ang{syntax:'<angle>';initial-value:0deg;inherits:false}
+.btn-metal{position:relative;isolation:isolate;color:#04210F;background:linear-gradient(135deg,#E9FFF1 0%,#7CF0A8 22%,#1FBF5F 48%,#B9F7CF 62%,#16A34A 82%,#D8FFE7 100%);background-size:220% 220%;animation:liquid 6s ease-in-out infinite;box-shadow:0 14px 34px -12px rgba(34,197,94,.75),inset 0 1px 0 rgba(255,255,255,.7),inset 0 -2px 6px rgba(4,60,25,.35);text-shadow:0 1px 0 rgba(255,255,255,.45)}
+.btn-metal::before{content:"";position:absolute;inset:-2px;border-radius:18px;z-index:-1;padding:2px;background:conic-gradient(from var(--ang),#fff,#4ADE80,#0F7A3D,#E9FFF1,#4ADE80,#fff);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:spinb 4s linear infinite}
+.btn-metal::after{content:"";position:absolute;inset:0;border-radius:16px;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.75) 48%,transparent 62%);background-size:250% 100%;background-position:150% 0;animation:sheen 3.2s ease-in-out infinite;pointer-events:none;mix-blend-mode:soft-light}
+.btn-metal:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 20px 44px -12px rgba(34,197,94,.95),inset 0 1px 0 rgba(255,255,255,.8)}
+@keyframes liquid{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@keyframes spinb{to{--ang:360deg}}
+@keyframes sheen{0%,35%{background-position:150% 0}75%,100%{background-position:-60% 0}}
+.btn-glass{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.2);color:#fff;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+.btn-glass:hover{background:rgba(255,255,255,.13)}
+.stage{transition:transform .25s ease-out;transform-style:preserve-3d;will-change:transform}
+.glow-orb{position:absolute;width:420px;height:420px;border-radius:50%;filter:blur(60px);opacity:.35;z-index:-1;pointer-events:none;transition:transform .6s ease-out}
+
 /* trust strip */
 .strip{background:var(--ink2);border-top:1px solid var(--line-d);border-bottom:1px solid var(--line-d);color:#DCE4EF;padding:26px 0}
 .strip .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
@@ -359,21 +374,23 @@ footer .brand svg{width:34px;height:34px}
 
 <main id="top">
 <!-- HERO -->
-<section class="hero">
+<section class="hero" id="hero">
+  <canvas id="fx" aria-hidden="true"></canvas>
+  <div class="glow-orb" id="orb" style="background:radial-gradient(circle,#2BC46A,transparent 65%);top:10%;right:5%"></div>
   <div class="wrap hero-grid">
     <div>
       <span class="eyebrow rv">🇮🇶 منظومة مطاعم عراقية · كاشير · مطبخ · دلفري</span>
       <h1 class="rv d1">مطعمك يشتغل <span class="hl">أسرع</span><br>من أول رنّة تلفون</h1>
       <p class="lead rv d2">الزبون يتصل، ورقمه وعنوانه وآخر طلباته تطلع عالكاشير قبل ما يحچي. الطلب يوصل للمطبخ بثواني، والكابتن ياخذه، والزبون يتابعه برابط. وكل هذا يشتغل <b style="color:#fff">حتى لو انقطع النت</b>.</p>
       <div class="hero-cta rv d3">
-        <a class="btn btn-g" href="#trial">🎁 ابدأ تجربتك المجانية</a>
-        <a class="btn btn-ghost" href="#flow">▶ شوف شلون يشتغل</a>
+        <a class="btn btn-metal" href="#trial">🎁 ابدأ تجربتك المجانية</a>
+        <a class="btn btn-glass" href="#flow">▶ شوف شلون يشتغل</a>
       </div>
       <div class="hero-note rv d4">
         <span><i>✓</i> يومين مجاناً</span><span><i>✓</i> بدون بطاقة دفع</span><span><i>✓</i> نجهزلك الحساب بنفسنا</span>
       </div>
     </div>
-    <div class="stage rv d2" aria-hidden="true">
+    <div class="stage rv d2" id="stage" aria-hidden="true">
       <div class="screen-mock">
         <div class="sm-top"><span class="dot"></span><b>سرعة</b><span style="font-size:12px;font-weight:700;color:#4A5361">الكاشير</span><small id="smClock">12:30</small></div>
         <div class="sm-body">
@@ -568,7 +585,7 @@ footer .brand svg{width:34px;height:34px}
         <span class="badge">⭐ الأكثر طلباً</span>
         <h3>الدلفري</h3><div class="price">للمطاعم اللي توصّل</div>
         <ul><li>كل الأساسية</li><li>تطبيق الكابتن</li><li>رابط تتبع للزبون</li><li>حسابات الكباتن وأجور التوصيل</li><li>المكالمات تتحول لطلبات</li></ul>
-        <a class="btn btn-g" href="#trial" data-plan="delivery">🎁 جرّبها مجاناً</a>
+        <a class="btn btn-metal" href="#trial" data-plan="delivery">🎁 جرّبها مجاناً</a>
       </div>
       <div class="plan rv d2">
         <h3>الإضافات</h3><div class="price">حسب احتياجك</div>
@@ -708,6 +725,40 @@ footer .brand svg{width:34px;height:34px}
   document.querySelectorAll('.rv').forEach(el=>io.observe(el));
   // fallback: إذا المتصفح ما يدعم
   if(!('IntersectionObserver' in window))document.querySelectorAll('.rv').forEach(el=>el.classList.add('in'));
+})();
+
+// ── حقل جزيئات «سرعة»: خطوط طلبات تطير مع ميلان المؤشر (بدون مكتبات، يتوقف خارج الشاشة)
+(()=>{
+  const cv=document.getElementById('fx'),hero=document.getElementById('hero'),stage=document.getElementById('stage'),orb=document.getElementById('orb');
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches,fine=matchMedia('(pointer:fine)').matches;
+  const ctx=cv.getContext('2d');let W=0,H=0,dpr=1,P=[],run=true,mx=.5,my=.5,tx=.5,ty=.5;
+  const COL=['74,222,128','43,196,106','107,134,255','255,193,77','217,249,157'];
+  function size(){dpr=Math.min(devicePixelRatio||1,2);W=hero.clientWidth;H=hero.clientHeight;cv.width=W*dpr;cv.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+    const n=Math.round(Math.min(110,W*H/14000));P=Array.from({length:n},mk);}
+  function mk(){const z=Math.random();return{x:Math.random()*W,y:Math.random()*H,z,v:.4+z*2.2,l:8+z*46,c:COL[(Math.random()*COL.length)|0],a:.15+z*.55};}
+  function frame(){
+    if(!run)return;
+    mx+=(tx-mx)*.05;my+=(ty-my)*.05;
+    ctx.clearRect(0,0,W,H);
+    const ox=(mx-.5)*40,oy=(my-.5)*30;
+    for(const p of P){
+      p.x-=p.v; if(p.x<-p.l){Object.assign(p,mk(),{x:W+p.l});}
+      const x=p.x+ox*p.z,y=p.y+oy*p.z;
+      const g=ctx.createLinearGradient(x,y,x+p.l,y);g.addColorStop(0,`rgba(${p.c},${p.a})`);g.addColorStop(1,`rgba(${p.c},0)`);
+      ctx.strokeStyle=g;ctx.lineWidth=.6+p.z*1.8;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+p.l,y);ctx.stroke();
+      if(p.z>.8){ctx.fillStyle=`rgba(${p.c},${p.a})`;ctx.beginPath();ctx.arc(x,y,1.4+p.z,0,7);ctx.fill();}
+    }
+    if(fine&&stage&&innerWidth>980){stage.style.transform=`perspective(1200px) rotateY(${(mx-.5)*-10}deg) rotateX(${(my-.5)*8}deg)`;}
+    if(orb)orb.style.transform=`translate(${(mx-.5)*-80}px,${(my-.5)*-60}px)`;
+    requestAnimationFrame(frame);
+  }
+  size();addEventListener('resize',()=>{clearTimeout(size.t);size.t=setTimeout(size,150);});
+  if(reduce){frame();run=false;return;}
+  hero.addEventListener('pointermove',e=>{const r=hero.getBoundingClientRect();tx=(e.clientX-r.left)/r.width;ty=(e.clientY-r.top)/r.height;});
+  hero.addEventListener('pointerleave',()=>{tx=.5;ty=.5;});
+  new IntersectionObserver(([e])=>{const was=run;run=e.isIntersecting&&!document.hidden;if(run&&!was)requestAnimationFrame(frame);}).observe(hero);
+  document.addEventListener('visibilitychange',()=>{const was=run;run=!document.hidden;if(run&&!was)requestAnimationFrame(frame);});
+  requestAnimationFrame(frame);
 })();
 
 // ── عرض حي بالبطل: مكالمة ← سلة ← تذكرة مطبخ ← تتبع
