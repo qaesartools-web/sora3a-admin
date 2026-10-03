@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>سرعة | منظومة إدارة المطاعم — المكالمة تصير طلب</title>
+<meta name="description" content="سرعة: كاشير يشتغل بدون نت، المكالمات والواتساب تتحول لطلبات، كل قسم مطبخ على طابعته، تطبيق كابتن ورابط تتبع للزبون، وأرباح كل صنف. جرّب مجاناً يومين.">
+<meta name="theme-color" content="#0B1220">
+<meta property="og:type" content="website">
+<meta property="og:title" content="سرعة — منظومة المطاعم اللي ما توقف">
+<meta property="og:description" content="المكالمة تصير طلب، الكاشير يشتغل بدون نت، والمطبخ والكابتن والزبون كلهم بنفس اللحظة. جرّب مجاناً يومين.">
+<meta property="og:image" content="https://qaesartools-web.github.io/sora3a-admin/site/og.png">
+<meta property="og:url" content="https://qaesartools-web.github.io/sora3a-admin/site/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Reem+Kufi:wght@500;600;700&family=Tajawal:wght@400;500;700;800;900&display=swap">
+<style>
+:root{
+  --ink:#0B1220; --ink2:#111A2E; --ink3:#18233A; --line-d:#22304A;
+  --paper:#F6F5F0; --paper2:#ECEEE7; --card:#FDFDFB; --line:#DDE1D8;
+  --txt:#0F1720; --muted:#4A5361; --muted-d:#A9B5C6;
+  --g:#16A34A; --g2:#2BC46A; --gd:#0F7A3D; --gl:#4ADE80;
+  --b:#4F6BED; --bd:#1E3A8A; --o:#F59E0B; --od:#D9480F;
+  --r:22px; --display:'Reem Kufi','Tajawal',Tahoma,sans-serif; --body:'Tajawal',Tahoma,Arial,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{font-family:var(--body);background:var(--paper);color:var(--txt);line-height:1.7;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+img,svg{display:block;max-width:100%}
+a{color:inherit;text-decoration:none}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
+.wrap{width:min(1180px,100% - 32px);margin-inline:auto}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:14px;letter-spacing:.3px;color:var(--gd);background:rgba(22,163,74,.1);border:1px solid rgba(22,163,74,.25);padding:6px 14px;border-radius:999px}
+.dark .eyebrow{color:var(--gl);background:rgba(74,222,128,.08);border-color:rgba(74,222,128,.25)}
+h1,h2,h3{font-family:var(--display);line-height:1.2;font-weight:700;text-wrap:balance}
+h2.sec{font-size:clamp(32px,4.6vw,54px);margin:16px 0 14px}
+p.lead{font-size:clamp(17px,1.6vw,20px);color:var(--muted);max-width:62ch}
+.dark p.lead{color:var(--muted-d)}
+section{padding:clamp(72px,9vw,120px) 0;position:relative}
+.dark{background:var(--ink);color:#EEF2F7}
+.center{text-align:center}.center p.lead{margin-inline:auto}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;font-weight:800;font-size:17px;padding:15px 26px;border-radius:16px;border:0;cursor:pointer;transition:transform .2s,box-shadow .2s,background .2s;white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.btn-g{background:linear-gradient(135deg,var(--g2),var(--gd));color:#fff;box-shadow:0 12px 30px -10px rgba(22,163,74,.7)}
+.btn-g:hover{box-shadow:0 18px 40px -12px rgba(22,163,74,.9);transform:translateY(-2px)}
+.btn-ghost{background:rgba(255,255,255,.06);color:#fff;border:1px solid rgba(255,255,255,.18)}
+.btn-ghost:hover{background:rgba(255,255,255,.12)}
+.btn-line{background:transparent;border:1.5px solid var(--line);color:var(--txt)}
+.btn-line:hover{border-color:var(--g);color:var(--gd)}
+
+/* NAV */
+.nav{position:fixed;inset:0 0 auto;z-index:50;transition:background .3s,box-shadow .3s,backdrop-filter .3s}
+.nav.solid{background:rgba(11,18,32,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 1px 0 rgba(255,255,255,.06)}
+.nav .wrap{display:flex;align-items:center;gap:20px;height:72px}
+.brand{display:flex;align-items:center;gap:10px;color:#fff;font-family:var(--display);font-size:26px;font-weight:700}
+.brand svg{width:40px;height:40px}
+.nav-links{display:flex;gap:4px;margin-inline-start:auto}
+.nav-links a{color:#C9D3E1;font-weight:700;font-size:15px;padding:8px 12px;border-radius:10px;transition:.2s}
+.nav-links a:hover{color:#fff;background:rgba(255,255,255,.07)}
+.nav .btn{padding:11px 18px;font-size:15px}
+.burger{display:none;margin-inline-start:auto;width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:#fff;font-size:22px;cursor:pointer}
+.mmenu{display:none}
+@media(max-width:920px){
+  .nav-links,.nav .btn{display:none}.burger{display:block}
+  .mmenu{position:fixed;inset:72px 0 auto;background:rgba(11,18,32,.97);backdrop-filter:blur(14px);padding:12px 16px 20px;display:none;flex-direction:column;gap:4px;z-index:49;border-bottom:1px solid var(--line-d)}
+  .mmenu.open{display:flex}
+  .mmenu a{color:#E3E9F2;font-weight:700;padding:12px;border-radius:12px}
+  .mmenu a:hover{background:rgba(255,255,255,.06)}
+  .mmenu .btn{margin-top:8px}
+}
+
+/* HERO */
+.hero{padding:140px 0 90px;background:var(--ink);color:#EEF2F7;overflow:hidden;isolation:isolate}
+.hero::before{content:"";position:absolute;inset:-20%;z-index:-1;background:
+  radial-gradient(40% 35% at 85% 20%,rgba(43,196,106,.28),transparent 70%),
+  radial-gradient(35% 30% at 10% 30%,rgba(79,107,237,.25),transparent 70%),
+  radial-gradient(35% 35% at 40% 100%,rgba(245,158,11,.16),transparent 70%)}
+.hero::after{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:56px 56px;mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent)}
+.hero-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
+.hero h1{font-size:clamp(42px,6.4vw,80px);margin:20px 0 18px;letter-spacing:-.5px}
+.hero h1 .hl{background:linear-gradient(90deg,var(--gl),#A3E635 60%,var(--o));-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .lead{color:#B7C3D4;font-size:clamp(18px,1.8vw,21px)}
+.hero-cta{display:flex;gap:12px;flex-wrap:wrap;margin:30px 0 26px}
+.hero-note{display:flex;gap:18px;flex-wrap:wrap;color:#9FB0C6;font-size:15px;font-weight:600}
+.hero-note span{display:inline-flex;align-items:center;gap:6px}
+.hero-note i{width:20px;height:20px;border-radius:50%;background:rgba(74,222,128,.15);color:var(--gl);display:grid;place-items:center;font-style:normal;font-size:12px}
+
+/* hero device mock */
+.stage{position:relative;height:540px}
+.screen-mock{position:absolute;inset:20px 0 auto 40px;height:430px;background:linear-gradient(180deg,#F4F6F3,#ECEFEA);border-radius:22px;box-shadow:0 40px 90px -30px rgba(0,0,0,.7),0 0 0 10px #1A2438,0 0 0 11px #2A3754;overflow:hidden;color:var(--txt);transform:perspective(1400px) rotateY(8deg) rotateX(4deg);transform-origin:left center}
+.sm-top{display:flex;align-items:center;gap:8px;padding:12px 16px;background:#fff;border-bottom:1px solid #E4E8E2}
+.sm-top b{font-family:var(--display);font-size:17px;color:var(--gd)}
+.sm-top .dot{width:8px;height:8px;border-radius:50%;background:var(--g)}
+.sm-top small{margin-inline-start:auto;font-size:12px;color:#6B7480;font-weight:700}
+.sm-body{display:grid;grid-template-columns:1fr 150px;gap:12px;padding:14px}
+.sm-items{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.sm-item{background:#fff;border:1px solid #E4E8E2;border-radius:14px;padding:10px;text-align:center;font-size:12px;font-weight:800}
+.sm-item span{display:block;font-size:30px;line-height:1.3}
+.sm-item em{display:block;font-style:normal;color:var(--gd);font-size:11px}
+.sm-cart{background:#fff;border:1px solid #E4E8E2;border-radius:14px;padding:10px;font-size:12px;display:flex;flex-direction:column;gap:6px}
+.sm-cart h4{font-size:13px;font-family:var(--body);font-weight:900}
+.sm-line{display:flex;justify-content:space-between;background:#F3F6F2;border-radius:8px;padding:5px 7px;font-weight:700;opacity:0;transform:translateY(6px);transition:.4s}
+.sm-line.in{opacity:1;transform:none}
+.sm-pager{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:auto}
+.sm-pager i{font-style:normal;text-align:center;background:#F0F2EE;border-radius:6px;font-weight:800;font-size:11px;padding:3px 0;transition:.3s}
+.sm-pager i.on{background:var(--g);color:#fff}
+.sm-total{display:flex;justify-content:space-between;font-weight:900;color:var(--gd);border-top:1px dashed #DDE1D8;padding-top:6px}
+.call-pop{position:absolute;top:70px;right:-10px;width:300px;background:#fff;color:var(--txt);border-radius:20px;padding:16px;box-shadow:0 30px 60px -20px rgba(0,0,0,.55);border:2px solid var(--g2);opacity:0;transform:translateY(-14px) scale(.96);transition:.45s cubic-bezier(.2,.9,.3,1.2);z-index:3}
+.call-pop.show{opacity:1;transform:none}
+.call-pop .cp-h{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:900;color:var(--gd)}
+.call-pop .ring{width:30px;height:30px;border-radius:50%;background:var(--g);color:#fff;display:grid;place-items:center;font-size:14px;animation:ring 1s infinite}
+@keyframes ring{0%,100%{transform:rotate(0)}20%{transform:rotate(-15deg)}40%{transform:rotate(15deg)}60%{transform:rotate(-8deg)}}
+.call-pop .num{font-size:26px;font-weight:900;letter-spacing:1px;text-align:center;background:#E8F7EE;color:#0F5C2E;border-radius:12px;padding:6px;margin:10px 0 8px;direction:ltr}
+.call-pop .who{font-size:13px;font-weight:800}
+.call-pop .hist{font-size:12px;color:#5B6573}
+.call-pop .cp-b{display:flex;gap:6px;margin-top:10px}
+.call-pop .cp-b span{flex:1;text-align:center;font-size:12px;font-weight:900;padding:8px;border-radius:10px;background:var(--gd);color:#fff}
+.call-pop .cp-b span+span{background:#FFF4EC;color:#B93D0B}
+.ticket{position:absolute;bottom:0;left:0;width:190px;background:#FFFEFA;color:#111;border-radius:6px;padding:0 0 12px;box-shadow:0 30px 60px -20px rgba(0,0,0,.6);font-size:12px;text-align:center;transform:rotate(-4deg) translateY(30px);opacity:0;transition:.5s;z-index:2}
+.ticket.show{opacity:1;transform:rotate(-4deg)}
+.ticket b{display:block;background:#111;color:#fff;padding:6px;border-radius:6px 6px 0 0;font-size:13px}
+.ticket strong{display:block;font-size:34px;line-height:1.2}
+.ticket i{display:block;border-top:1.5px dashed #bbb;margin:6px 12px;font-style:normal}
+.phone-mock{position:absolute;bottom:-10px;right:18px;width:170px;height:300px;background:#0E1626;border-radius:30px;padding:8px;box-shadow:0 30px 60px -20px rgba(0,0,0,.7),0 0 0 1px #2A3754;z-index:2}
+.phone-mock .ps{height:100%;border-radius:23px;background:#F2F3EE;overflow:hidden;color:var(--txt);display:flex;flex-direction:column}
+.ps-h{background:linear-gradient(135deg,var(--o),var(--od));color:#fff;text-align:center;padding:14px 8px 22px;font-family:var(--display);font-size:16px}
+.ps-c{background:#fff;margin:-12px 10px 0;border-radius:14px;padding:10px;text-align:center;box-shadow:0 6px 16px rgba(0,0,0,.08)}
+.ps-c b{font-size:13px}
+.steps-mini{display:flex;justify-content:space-between;margin-top:10px;position:relative}
+.steps-mini::before{content:"";position:absolute;top:7px;right:8px;left:8px;height:2px;background:#DDE1D8}
+.steps-mini i{width:16px;height:16px;border-radius:50%;background:#DDE1D8;position:relative;transition:.4s}
+.steps-mini i.on{background:var(--g)}
+.ps-r{display:flex;justify-content:space-between;font-size:11px;padding:6px 14px;font-weight:700}
+.ps-r span{color:#6B7480}
+@media(max-width:980px){.hero-grid{grid-template-columns:1fr}.stage{height:520px;max-width:560px;margin-inline:auto;width:100%}}
+@media(max-width:560px){
+  .stage{height:460px}
+  .screen-mock{inset:10px 0 auto 0;height:360px;transform:none}
+  .sm-body{grid-template-columns:1fr 118px}.sm-items{grid-template-columns:repeat(2,1fr)}.sm-item:nth-child(n+5){display:none}
+  .call-pop{width:250px;right:-4px;top:50px}.call-pop .num{font-size:21px}
+  .phone-mock{width:140px;height:250px;right:4px}
+  .ticket{width:160px}
+}
+
+/* trust strip */
+.strip{background:var(--ink2);border-top:1px solid var(--line-d);border-bottom:1px solid var(--line-d);color:#DCE4EF;padding:26px 0}
+.strip .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.stat{text-align:center}
+.stat b{display:block;font-family:var(--display);font-size:clamp(30px,3.6vw,44px);color:#fff;line-height:1.1}
+.stat b em{font-style:normal;color:var(--gl)}
+.stat span{font-size:14px;color:#9FB0C6;font-weight:700}
+@media(max-width:700px){.strip .wrap{grid-template-columns:repeat(2,1fr);gap:22px}}
+
+/* bento features */
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:18px;margin-top:48px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:28px;position:relative;overflow:hidden;transition:transform .3s,box-shadow .3s,border-color .3s}
+.tile:hover{transform:translateY(-4px);box-shadow:0 24px 50px -28px rgba(15,23,32,.35);border-color:#C9D0C4}
+.tile .ic{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;font-size:26px;margin-bottom:16px}
+.tile h3{font-size:24px;margin-bottom:8px}
+.tile p{color:var(--muted);font-size:16.5px}
+.tile .tag{position:absolute;top:22px;left:22px;font-size:12px;font-weight:900;padding:4px 10px;border-radius:999px}
+.t-g .ic{background:rgba(22,163,74,.12)}.t-b .ic{background:rgba(79,107,237,.12)}.t-o .ic{background:rgba(245,158,11,.15)}
+.t-g .tag{background:rgba(22,163,74,.12);color:var(--gd)}.t-b .tag{background:rgba(79,107,237,.12);color:var(--bd)}.t-o .tag{background:rgba(245,158,11,.15);color:#9A3412}
+.span3{grid-column:span 3}.span2{grid-column:span 2}.span4{grid-column:span 4}
+.tile.feature-big{background:linear-gradient(160deg,#0F1A2E,#14243D);color:#EEF2F7;border-color:#22304A}
+.tile.feature-big p{color:#B4C1D3}
+.tile .mini{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
+.tile .mini span{font-size:13px;font-weight:800;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12)}
+.tile:not(.feature-big) .mini span{background:var(--paper2);border-color:var(--line);color:var(--txt)}
+.tix{display:flex;gap:8px;margin-top:18px}
+.tix div{flex:1;background:#FFFEFA;color:#111;border:1.5px dashed #C4C9BE;border-radius:8px;text-align:center;font-size:12px;font-weight:800;padding-bottom:8px;overflow:hidden}
+.tix div b{display:block;background:#111;color:#fff;padding:4px;font-size:11px}
+.tix div strong{display:block;font-size:22px}
+.pgr{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:18px}
+.pgr i{font-style:normal;text-align:center;font-weight:900;background:var(--paper2);border-radius:10px;padding:8px 0}
+.pgr i.on{background:var(--g);color:#fff}
+@media(max-width:980px){.bento{grid-template-columns:repeat(2,1fr)}.span3,.span2,.span4{grid-column:span 1}.tile.wide{grid-column:span 2}}
+@media(max-width:620px){.bento{grid-template-columns:1fr}.tile.wide{grid-column:span 1}}
+
+/* flow */
+.flow{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:56px;position:relative}
+.flow::before{content:"";position:absolute;top:38px;right:10%;left:10%;height:3px;background:linear-gradient(90deg,var(--o),var(--g),var(--b));border-radius:3px;opacity:.6}
+.fstep{text-align:center;position:relative}
+.fstep .bub{width:78px;height:78px;margin:0 auto 16px;border-radius:24px;display:grid;place-items:center;font-size:34px;background:var(--ink3);border:1px solid var(--line-d);box-shadow:0 0 0 8px var(--ink);position:relative}
+.fstep .bub small{position:absolute;top:-8px;left:-8px;width:28px;height:28px;border-radius:50%;background:var(--g);color:#fff;font-size:14px;font-weight:900;display:grid;place-items:center;font-family:var(--body)}
+.fstep h3{font-size:21px;margin-bottom:6px}
+.fstep p{color:var(--muted-d);font-size:15px}
+.fstep .time{display:inline-block;margin-top:10px;font-size:13px;font-weight:800;color:var(--gl);background:rgba(74,222,128,.08);border-radius:999px;padding:3px 12px}
+@media(max-width:900px){.flow{grid-template-columns:1fr;gap:26px;max-width:520px;margin-inline:auto}.flow::before{top:0;bottom:0;right:38px;left:auto;width:3px;height:auto;background:linear-gradient(180deg,var(--o),var(--g),var(--b))}
+  .fstep{display:grid;grid-template-columns:78px 1fr;gap:18px;text-align:right;align-items:start}.fstep .bub{margin:0}}
+
+/* apps */
+.apps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:48px}
+.app{border-radius:28px;padding:30px;color:#fff;position:relative;overflow:hidden;min-height:340px;display:flex;flex-direction:column}
+.app::after{content:"";position:absolute;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.08);bottom:-110px;left:-80px}
+.app.a1{background:linear-gradient(150deg,#4F6BED,#1E3A8A)}
+.app.a2{background:linear-gradient(150deg,#22B35E,#0B6B34)}
+.app.a3{background:linear-gradient(150deg,#F7A41D,#C2410C)}
+.app svg{width:64px;height:64px;margin-bottom:18px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.25))}
+.app h3{font-size:28px;margin-bottom:4px}
+.app .who{font-size:14px;font-weight:800;opacity:.85;margin-bottom:14px}
+.app ul{list-style:none;display:flex;flex-direction:column;gap:8px;font-size:16px;font-weight:600;position:relative;z-index:1}
+.app li::before{content:"✓";display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.2);font-size:11px;margin-left:8px}
+@media(max-width:900px){.apps{grid-template-columns:1fr}}
+
+/* compare */
+.cmp{margin-top:44px;border-radius:26px;overflow:hidden;border:1px solid var(--line);background:var(--card)}
+.cmp-row{display:grid;grid-template-columns:1.1fr 1fr 1fr;border-top:1px solid var(--line)}
+.cmp-row:first-child{border-top:0;background:var(--paper2);font-weight:900}
+.cmp-row>div{padding:16px 20px;font-size:16px}
+.cmp-row>div:nth-child(2){color:#7A3B2E;background:rgba(229,72,77,.04)}
+.cmp-row>div:nth-child(3){color:var(--gd);font-weight:800;background:rgba(22,163,74,.05)}
+.cmp-row:first-child>div:nth-child(2){color:#9B2C2C}
+.cmp-row:first-child>div:nth-child(3){color:var(--gd)}
+@media(max-width:700px){.cmp-row{grid-template-columns:1fr 1fr}.cmp-row>div:first-child{grid-column:span 2;background:var(--paper2);font-weight:900;padding-bottom:8px}.cmp-row:first-child>div:first-child{display:none}.cmp-row>div{font-size:15px;padding:12px 14px}}
+
+/* plans */
+.plans{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:48px;align-items:stretch}
+.plan{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:32px;display:flex;flex-direction:column;gap:16px}
+.plan.pop{background:var(--ink);color:#EEF2F7;border-color:var(--ink);box-shadow:0 30px 70px -30px rgba(11,18,32,.7);transform:translateY(-10px)}
+.plan .badge{align-self:flex-start;background:var(--o);color:#1C1205;font-weight:900;font-size:13px;padding:5px 12px;border-radius:999px}
+.plan h3{font-size:28px}
+.plan .price{font-family:var(--display);font-size:22px;color:var(--gd)}
+.plan.pop .price{color:var(--gl)}
+.plan ul{list-style:none;display:flex;flex-direction:column;gap:10px;font-size:16px;flex:1}
+.plan li{display:flex;gap:10px;align-items:flex-start}
+.plan li::before{content:"✓";flex:none;width:22px;height:22px;border-radius:50%;background:rgba(22,163,74,.12);color:var(--gd);display:grid;place-items:center;font-size:12px;font-weight:900;margin-top:3px}
+.plan.pop li::before{background:rgba(74,222,128,.15);color:var(--gl)}
+.plan .btn{width:100%}
+@media(max-width:900px){.plans{grid-template-columns:1fr}.plan.pop{transform:none}}
+
+/* TRIAL FORM */
+.trial{background:radial-gradient(60% 60% at 90% 0%,rgba(43,196,106,.22),transparent 70%),radial-gradient(50% 50% at 0% 100%,rgba(79,107,237,.2),transparent 70%),var(--ink);color:#EEF2F7}
+.trial-grid{display:grid;grid-template-columns:.85fr 1.15fr;gap:48px;align-items:start}
+.perks{list-style:none;display:flex;flex-direction:column;gap:14px;margin-top:26px}
+.perks li{display:flex;gap:14px;align-items:flex-start;font-size:17px;color:#D3DCE8}
+.perks li b{display:block;color:#fff;font-size:18px}
+.perks .pi{flex:none;width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);display:grid;place-items:center;font-size:20px}
+.formcard{background:var(--card);color:var(--txt);border-radius:28px;padding:30px;box-shadow:0 40px 90px -40px rgba(0,0,0,.8)}
+.prog{display:flex;gap:8px;margin-bottom:22px}
+.prog i{flex:1;height:6px;border-radius:6px;background:var(--paper2);transition:.4s}
+.prog i.on{background:linear-gradient(90deg,var(--g2),var(--gd))}
+.fstep-t{font-family:var(--display);font-size:24px;margin-bottom:4px}
+.fstep-s{color:var(--muted);font-size:15px;margin-bottom:18px}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld.full{grid-column:span 2}
+.fld label{font-size:14px;font-weight:800}
+.fld label em{color:#C2410C;font-style:normal}
+.fld input,.fld select,.fld textarea{width:100%;border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:13px 14px;font-size:16px;outline:none;transition:.2s}
+.fld textarea{resize:vertical;min-height:90px}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--g);box-shadow:0 0 0 4px rgba(22,163,74,.12)}
+.fld.bad input{border-color:#DC2626;box-shadow:0 0 0 4px rgba(220,38,38,.1)}
+.fld .err{font-size:13px;color:#B91C1C;font-weight:700;display:none}
+.fld.bad .err{display:block}
+.ltr{direction:ltr;text-align:right}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chip{display:flex;align-items:center;gap:10px;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;cursor:pointer;font-weight:800;font-size:15px;transition:.2s;user-select:none;background:#fff}
+.chip input{position:absolute;opacity:0;pointer-events:none}
+.chip .bx{flex:none;width:22px;height:22px;border-radius:7px;border:2px solid #C4CAC0;display:grid;place-items:center;font-size:13px;color:transparent;transition:.2s}
+.chip:has(input:checked){border-color:var(--g);background:rgba(22,163,74,.06)}
+.chip:has(input:checked) .bx{background:var(--g);border-color:var(--g);color:#fff}
+.chip:has(input:disabled){cursor:default}
+.chip small{display:block;font-weight:600;color:var(--muted);font-size:12.5px}
+.steppers{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.stp{display:flex;align-items:center;gap:8px;border:1.5px solid var(--line);border-radius:14px;padding:8px 10px;background:#fff}
+.stp span{flex:1;font-weight:800;font-size:14px}
+.stp button{width:34px;height:34px;border-radius:10px;border:0;background:var(--paper2);font-size:20px;font-weight:900;cursor:pointer}
+.stp button:hover{background:#DDE5D9}
+.stp output{min-width:26px;text-align:center;font-weight:900;font-size:18px}
+.fnav{display:flex;gap:10px;margin-top:22px}
+.fnav .btn{flex:1}
+.fnav .back{flex:0 0 auto}
+.fstep-p{display:none}.fstep-p.on{display:block;animation:fin .35s}
+@keyframes fin{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.legal{font-size:13px;color:var(--muted);margin-top:12px;text-align:center}
+.done{text-align:center;padding:10px 0}
+.done .big{font-size:64px;line-height:1;animation:pop .6s cubic-bezier(.2,.9,.3,1.4)}
+@keyframes pop{from{transform:scale(.3);opacity:0}to{transform:none;opacity:1}}
+.done h3{font-size:30px;margin:14px 0 8px}
+.done p{color:var(--muted);font-size:16.5px;max-width:46ch;margin:0 auto 8px}
+.done .next{text-align:right;background:var(--paper);border-radius:18px;padding:16px 18px;margin:18px 0;display:flex;flex-direction:column;gap:10px;font-size:15.5px}
+.done .next div{display:flex;gap:10px}
+.done .next b{flex:none;width:26px;height:26px;border-radius:50%;background:var(--g);color:#fff;display:grid;place-items:center;font-size:13px}
+@media(max-width:980px){.trial-grid{grid-template-columns:1fr}}
+@media(max-width:560px){.fgrid,.chips,.steppers{grid-template-columns:1fr}.fld.full{grid-column:span 1}.formcard{padding:22px}}
+
+/* FAQ */
+.faq{max-width:860px;margin:44px auto 0;display:flex;flex-direction:column;gap:12px}
+.faq details{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:4px 22px;transition:.2s}
+.faq details[open]{box-shadow:0 18px 40px -28px rgba(15,23,32,.4);border-color:#C9D0C4}
+.faq summary{cursor:pointer;list-style:none;font-weight:800;font-size:18px;padding:16px 0;display:flex;align-items:center;gap:12px}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";margin-inline-start:auto;font-size:26px;color:var(--gd);transition:.3s;line-height:1}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq details p{color:var(--muted);padding:0 0 18px;font-size:16.5px}
+
+/* contact */
+.contact{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:40px}
+.cbox{display:flex;align-items:center;gap:16px;background:var(--ink2);border:1px solid var(--line-d);border-radius:22px;padding:22px;transition:.25s}
+.cbox:hover{transform:translateY(-3px);border-color:#34507A}
+.cbox .ci{flex:none;width:56px;height:56px;border-radius:18px;display:grid;place-items:center;font-size:26px}
+.cbox small{display:block;color:#9FB0C6;font-weight:700;font-size:14px}
+.cbox b{font-size:19px;color:#fff;direction:ltr;display:inline-block;word-break:break-all}
+@media(max-width:900px){.contact{grid-template-columns:1fr}}
+@media(max-width:420px){.cbox b{font-size:16px}}
+.trial p.lead{color:#B7C3D4}
+footer{background:#080D18;color:#8796AB;padding:34px 0;font-size:14px}
+footer .wrap{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+footer .brand{font-size:22px}
+footer .brand svg{width:34px;height:34px}
+.fab{position:fixed;left:18px;bottom:18px;z-index:40;width:60px;height:60px;border-radius:50%;background:#25D366;display:grid;place-items:center;box-shadow:0 14px 30px -8px rgba(37,211,102,.7);transition:transform .2s}
+.fab:hover{transform:scale(1.08)}
+.fab svg{width:32px;height:32px}
+.fab::before{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid #25D366;animation:pulse 2s infinite}
+@keyframes pulse{from{transform:scale(1);opacity:.8}to{transform:scale(1.6);opacity:0}}
+
+/* reveal */
+.rv{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+.rv.in{opacity:1;transform:none}
+.rv.d1{transition-delay:.08s}.rv.d2{transition-delay:.16s}.rv.d3{transition-delay:.24s}.rv.d4{transition-delay:.32s}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}html{scroll-behavior:auto}}
+:focus-visible{outline:3px solid var(--gl);outline-offset:2px;border-radius:8px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="lgG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2BC46A"/><stop offset="1" stop-color="#0F7A3D"/></linearGradient>
+    <linearGradient id="lgB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6B86FF"/><stop offset="1" stop-color="#1E3A8A"/></linearGradient>
+    <linearGradient id="lgO" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC14D"/><stop offset="1" stop-color="#D9480F"/></linearGradient>
+    <symbol id="sin" viewBox="0 0 120 120"><path d="M96 38 V54 A8 8 0 0 1 80 54 V46 V54 A8 8 0 0 1 64 54 V46 V60 A22 22 0 0 1 20 60 V54" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<header class="nav" id="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="سرعة — الرئيسية">
+      <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgG)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#D9F99D" stroke-width="7" stroke-linecap="round"/></svg>
+      سرعة
+    </a>
+    <nav class="nav-links" aria-label="القائمة">
+      <a href="#features">المزايا</a><a href="#flow">شلون يشتغل</a><a href="#apps">التطبيقات</a><a href="#plans">الباقات</a><a href="#faq">الأسئلة</a><a href="#contact">تواصل</a>
+    </nav>
+    <a class="btn btn-g" href="#trial">🎁 جرّب مجاناً يومين</a>
+    <button class="burger" id="burger" aria-label="فتح القائمة" aria-expanded="false">☰</button>
+  </div>
+</header>
+<div class="mmenu" id="mmenu">
+  <a href="#features">المزايا</a><a href="#flow">شلون يشتغل</a><a href="#apps">التطبيقات</a><a href="#plans">الباقات</a><a href="#faq">الأسئلة</a><a href="#contact">تواصل</a>
+  <a class="btn btn-g" href="#trial">🎁 جرّب مجاناً يومين</a>
+</div>
+
+<main id="top">
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow rv">🇮🇶 منظومة مطاعم عراقية · كاشير · مطبخ · دلفري</span>
+      <h1 class="rv d1">مطعمك يشتغل <span class="hl">أسرع</span><br>من أول رنّة تلفون</h1>
+      <p class="lead rv d2">الزبون يتصل، ورقمه وعنوانه وآخر طلباته تطلع عالكاشير قبل ما يحچي. الطلب يوصل للمطبخ بثواني، والكابتن ياخذه، والزبون يتابعه برابط. وكل هذا يشتغل <b style="color:#fff">حتى لو انقطع النت</b>.</p>
+      <div class="hero-cta rv d3">
+        <a class="btn btn-g" href="#trial">🎁 ابدأ تجربتك المجانية</a>
+        <a class="btn btn-ghost" href="#flow">▶ شوف شلون يشتغل</a>
+      </div>
+      <div class="hero-note rv d4">
+        <span><i>✓</i> يومين مجاناً</span><span><i>✓</i> بدون بطاقة دفع</span><span><i>✓</i> نجهزلك الحساب بنفسنا</span>
+      </div>
+    </div>
+    <div class="stage rv d2" aria-hidden="true">
+      <div class="screen-mock">
+        <div class="sm-top"><span class="dot"></span><b>سرعة</b><span style="font-size:12px;font-weight:700;color:#4A5361">الكاشير</span><small id="smClock">12:30</small></div>
+        <div class="sm-body">
+          <div class="sm-items">
+            <div class="sm-item"><span>🍔</span>زنكر<em>6,000</em></div>
+            <div class="sm-item"><span>🍕</span>بيتزا<em>12,000</em></div>
+            <div class="sm-item"><span>🌯</span>شاورما<em>3,500</em></div>
+            <div class="sm-item"><span>🍗</span>بروستد<em>9,000</em></div>
+            <div class="sm-item"><span>🥗</span>سلطة<em>2,500</em></div>
+            <div class="sm-item"><span>🥤</span>ببسي<em>1,000</em></div>
+          </div>
+          <div class="sm-cart">
+            <h4>🛒 السلة</h4>
+            <div class="sm-line" id="l1"><span>زنكر ×2</span><span>12,000</span></div>
+            <div class="sm-line" id="l2"><span>ببسي ×2</span><span>2,000</span></div>
+            <div class="sm-pager" id="smPager"><i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></div>
+            <div class="sm-total"><span>الإجمالي</span><span id="smTot">0</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="call-pop" id="callPop">
+        <div class="cp-h"><span class="ring">📞</span> مكالمة واردة · خط 1</div>
+        <div class="num">0770 111 2222</div>
+        <div class="who">أبو حسين · المنصور شارع 14</div>
+        <div class="hist">4 طلبات سابقة · آخر طلب: زنكر ×2</div>
+        <div class="cp-b"><span>استلام وبدء الطلب</span><span>كرر آخر طلب</span></div>
+      </div>
+      <div class="ticket" id="ticket"><b>قسم البرغر 🍔</b><strong>#12</strong>دلفري · 12:31<i></i>زنكر ×2</div>
+      <div class="phone-mock"><div class="ps">
+        <div class="ps-h">تتبع طلبك</div>
+        <div class="ps-c"><b id="psTxt">تم استلام طلبك</b>
+          <div class="steps-mini" id="psSteps"><i class="on"></i><i></i><i></i><i></i></div></div>
+        <div class="ps-r" style="margin-top:8px"><span>الكابتن</span>كرار</div>
+        <div class="ps-r"><span>الإجمالي</span>17,000</div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<div class="strip">
+  <div class="wrap">
+    <div class="stat rv"><b><em data-count="10">10</em></b><span>خطوط اتصال لكل مطعم</span></div>
+    <div class="stat rv d1"><b><em data-count="6">6</em></b><span>أقسام مطبخ بطابعاتها</span></div>
+    <div class="stat rv d2"><b>0 <em>نت</em></b><span>الكاشير يكمل بدونه</span></div>
+    <div class="stat rv d3"><b><em data-count="3">3</em></b><span>تطبيقات بقاعدة بيانات وحدة</span></div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="wrap">
+    <div class="center">
+      <span class="eyebrow rv">ليش سرعة؟</span>
+      <h2 class="sec rv d1">كل شي يحتاجه مطعمك، بمكان واحد</h2>
+      <p class="lead rv d2">ما بنينا كاشير عادي. بنينا منظومة تفهم شلون تشتغل مطاعمنا: تلفون يرن، نت ينقطع، مطبخ مزدحم، وكباتن بالشارع.</p>
+    </div>
+    <div class="bento">
+      <article class="tile feature-big span4 wide rv">
+        <span class="tag" style="background:rgba(74,222,128,.12);color:#4ADE80">الميزة الأقوى</span>
+        <div class="ic" style="background:rgba(74,222,128,.12)">📞</div>
+        <h3>المكالمة تتحول إلى طلب</h3>
+        <p>مكالمات الخط العادي ومكالمات واتساب توصل للكاشير تلقائياً. رقم الزبون، عنوانه، عدد طلباته وآخر طلب، كلها تطلع بشاشة وحدة، وبضغطة «كرر آخر طلب» يخلص.</p>
+        <div class="mini"><span>📱 شريحة عادية</span><span>💬 واتساب</span><span>☎️ حتى 10 خطوط</span><span>🔁 كرر آخر طلب</span></div>
+      </article>
+      <article class="tile t-g span2 rv d1">
+        <div class="ic">📶</div>
+        <h3>يشتغل بدون نت</h3>
+        <p>النت انقطع؟ الكاشير يبيع ويطبع عادي، وأول ما يرجع النت كل شي يتزامن لوحده.</p>
+      </article>
+      <article class="tile t-g span3 rv">
+        <div class="ic">🖨️</div>
+        <h3>كل قسم مطبخ على طابعته</h3>
+        <p>طلب واحد يتقسم تلقائياً: الشاورما لقسمها والبرغر لقسمه، كل وحدة بطابعتها وبنفس رقم الطلب.</p>
+        <div class="tix"><div><b>شاورما</b><strong>#9</strong>سندويش ×1</div><div><b>برغر</b><strong>#9</strong>زنكر ×2</div><div><b>بيتزا</b><strong>#9</strong>خضار ×1</div></div>
+      </article>
+      <article class="tile t-o span3 rv d1">
+        <div class="ic">🛵</div>
+        <h3>كابتن وتتبع مباشر</h3>
+        <p>تطبيق للكابتن يستلم ويوصّل ويثبت التسليم، ورابط للزبون يتابع بيه طلبه خطوة بخطوة بدون ما ينكشف رقمه أو عنوانه.</p>
+        <div class="mini"><span>✅ قبول</span><span>📦 استلام</span><span>🛵 بالطريق</span><span>🏁 تسليم</span></div>
+      </article>
+      <article class="tile t-g span2 rv">
+        <div class="ic">📟</div>
+        <h3>البيجر من 1 إلى 10</h3>
+        <p>أرقام البيجر فوق السلة، يتسجل ويا الطلب ويرجع متاح أول ما يتسلّم.</p>
+        <div class="pgr"><i>1</i><i>2</i><i>3</i><i class="on">4</i><i>5</i></div>
+      </article>
+      <article class="tile t-b span2 rv d1">
+        <div class="ic">📊</div>
+        <h3>ربح كل صنف</h3>
+        <p>الكلفة تنحسب من الوصفة وأسعار المواد، وتعرف بالضبط كم يربّحك كل صنف.</p>
+      </article>
+      <article class="tile t-b span2 rv d2">
+        <div class="ic">⏱️</div>
+        <h3>أوقات الطلبات</h3>
+        <p>كم ياخذ المطبخ؟ كم ياخذ التوصيل؟ لكل قسم ولكل كابتن، حتى تعرف وين التأخير.</p>
+      </article>
+      <article class="tile t-b span3 rv">
+        <div class="ic">🔐</div>
+        <h3>صلاحيات تطمّنك</h3>
+        <p>الكاشير يبيع ويضيف مصروف، بس ما يشوف الأرباح ولا يمسح شي. تحدد دوامه، وبنهايته الوردية تنقفل لوحدها وتنطبع فاتورة بالمبلغ الكلي.</p>
+      </article>
+      <article class="tile t-o span3 rv d1">
+        <div class="ic">📦</div>
+        <h3>مخزون ومصروفات وحسابات</h3>
+        <p>المواد تنقص مع كل بيع، تنبيه للمواد الناقصة، المصروفات اليومية، وتقرير لأي فترة تختارها ينطبع بضغطة.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- FLOW -->
+<section class="dark" id="flow">
+  <div class="wrap">
+    <div class="center">
+      <span class="eyebrow rv">رحلة الطلب</span>
+      <h2 class="sec rv d1">من الرنّة إلى باب الزبون</h2>
+      <p class="lead rv d2">كل خطوة تنقل للي بعدها لوحدها. ما أحد يصيح، وما ورقة تضيع.</p>
+    </div>
+    <div class="flow">
+      <div class="fstep rv"><div class="bub">📞<small>1</small></div><div><h3>الزبون يتصل</h3><p>رقمه وطلباته السابقة تطلع فوراً</p><span class="time">0 ثانية</span></div></div>
+      <div class="fstep rv d1"><div class="bub">🧾<small>2</small></div><div><h3>الكاشير يسجّل</h3><p>بضغطة «كرر آخر طلب» أو من المنيو</p><span class="time">بثواني</span></div></div>
+      <div class="fstep rv d2"><div class="bub">👨‍🍳<small>3</small></div><div><h3>المطبخ يجهّز</h3><p>كل قسم تنطبعله حصته بعدّاد وقت</p><span class="time">تلقائي</span></div></div>
+      <div class="fstep rv d3"><div class="bub">🛵<small>4</small></div><div><h3>الكابتن يوصّل</h3><p>يستلم بالتطبيق ويحدّث الحالة</p><span class="time">مباشر</span></div></div>
+      <div class="fstep rv d4"><div class="bub">📍<small>5</small></div><div><h3>الزبون يتابع</h3><p>رابط تتبع بدون ما يتصل يسأل</p><span class="time">لحظة بلحظة</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- APPS -->
+<section id="apps">
+  <div class="wrap">
+    <div class="center">
+      <span class="eyebrow rv">ثلاثة تطبيقات</span>
+      <h2 class="sec rv d1">كل واحد بالمطعم عنده تطبيقه</h2>
+      <p class="lead rv d2">تشتغل على أي جهاز: لابتوب، جهاز كاشير، تابلت أو موبايل. بدون تنصيب معقّد، وتتحدث لوحدها.</p>
+    </div>
+    <div class="apps">
+      <div class="app a1 rv">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgB)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#F5C451" stroke-width="7" stroke-linecap="round"/></svg>
+        <h3>لوحة الإدارة</h3><div class="who">لصاحب المطعم</div>
+        <ul><li>المنيو والأسعار والكلفة</li><li>الكاشيرية ودواماتهم</li><li>المخزون والمصروفات</li><li>التحليلات والتقارير</li></ul>
+      </div>
+      <div class="app a2 rv d1">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgG)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#D9F99D" stroke-width="7" stroke-linecap="round"/></svg>
+        <h3>الكاشير والمطبخ</h3><div class="who">للكاشير والمطبخ</div>
+        <ul><li>بيع سريع وطباعة فورية</li><li>المكالمات والبيجر</li><li>شاشة المطبخ بالأقسام</li><li>الورديات وتقرير اليوم</li></ul>
+      </div>
+      <div class="app a3 rv d2">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgO)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#FFF1C2" stroke-width="7" stroke-linecap="round"/></svg>
+        <h3>الكابتن والتتبع</h3><div class="who">للكباتن والزبائن</div>
+        <ul><li>استلام الطلبات بإشعار</li><li>حالة التوصيل خطوة بخطوة</li><li>إثبات التسليم</li><li>رابط تتبع للزبون</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section style="background:var(--paper2)">
+  <div class="wrap">
+    <div class="center">
+      <span class="eyebrow rv">الفرق</span>
+      <h2 class="sec rv d1">يوم بالمطعم، قبل وبعد سرعة</h2>
+    </div>
+    <div class="cmp rv d2" role="table" aria-label="مقارنة">
+      <div class="cmp-row" role="row"><div role="columnheader">الموقف</div><div role="columnheader">✗ بدون سرعة</div><div role="columnheader">✓ مع سرعة</div></div>
+      <div class="cmp-row" role="row"><div role="cell">التلفون يرن والكاشير مشغول</div><div role="cell">الزبون ينتظر أو يسكّر</div><div role="cell">رقمه وطلبه السابق جاهزين</div></div>
+      <div class="cmp-row" role="row"><div role="cell">انقطع النت</div><div role="cell">البيع يوقف</div><div role="cell">الكاشير يكمل عادي</div></div>
+      <div class="cmp-row" role="row"><div role="cell">الطلب فيه أصناف من أقسام مختلفة</div><div role="cell">ورقة وحدة ويصيحون بالمطبخ</div><div role="cell">كل قسم تنطبعله حصته</div></div>
+      <div class="cmp-row" role="row"><div role="cell">الزبون يسأل وين وصل الطلب</div><div role="cell">مكالمات ورا مكالمات</div><div role="cell">رابط تتبع مباشر</div></div>
+      <div class="cmp-row" role="row"><div role="cell">نهاية الوردية</div><div role="cell">حسابات يدوية وفروقات</div><div role="cell">تنقفل وتطبع المجموع لوحدها</div></div>
+      <div class="cmp-row" role="row"><div role="cell">شكد ربحت اليوم؟</div><div role="cell">تخمين</div><div role="cell">ربح كل صنف بالرقم</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- PLANS -->
+<section id="plans">
+  <div class="wrap">
+    <div class="center">
+      <span class="eyebrow rv">الباقات</span>
+      <h2 class="sec rv d1">ادفع على اللي تحتاجه بس</h2>
+      <p class="lead rv d2">ابدأ صغير، وكبّر وقت ما تريد. أي خدمة تنفتح بنفس اللحظة بدون تنصيب جديد.</p>
+    </div>
+    <div class="plans">
+      <div class="plan rv">
+        <h3>الأساسية</h3><div class="price">للمطاعم والكافيهات</div>
+        <ul><li>كاشير يشتغل بدون نت</li><li>شاشة المطبخ وطابعات الأقسام</li><li>الورديات وتقرير اليوم</li><li>المخزون والمصروفات</li><li>الكاشيرية والصلاحيات</li></ul>
+        <a class="btn btn-line" href="#trial" data-plan="basic">اطلب السعر</a>
+      </div>
+      <div class="plan pop rv d1">
+        <span class="badge">⭐ الأكثر طلباً</span>
+        <h3>الدلفري</h3><div class="price">للمطاعم اللي توصّل</div>
+        <ul><li>كل الأساسية</li><li>تطبيق الكابتن</li><li>رابط تتبع للزبون</li><li>حسابات الكباتن وأجور التوصيل</li><li>المكالمات تتحول لطلبات</li></ul>
+        <a class="btn btn-g" href="#trial" data-plan="delivery">🎁 جرّبها مجاناً</a>
+      </div>
+      <div class="plan rv d2">
+        <h3>الإضافات</h3><div class="price">حسب احتياجك</div>
+        <ul><li>📞 خطوط اتصال إضافية (حتى 10)</li><li>💬 مكالمات واتساب</li><li>📟 البيجر</li><li>🖨️ أقسام مطبخ إضافية</li></ul>
+        <a class="btn btn-line" href="#trial" data-plan="addons">اطلب السعر</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TRIAL -->
+<section class="trial" id="trial">
+  <div class="wrap trial-grid">
+    <div>
+      <span class="eyebrow rv">🎁 تجربة مجانية</span>
+      <h2 class="sec rv d1">جرّب سرعة بمطعمك<br>يومين، مجاناً</h2>
+      <p class="lead rv d2">املأ الطلب بدقيقة، ونجهزلك حساب كامل بكل الخدمات ونبعثلك بيانات الدخول على واتساب.</p>
+      <ul class="perks">
+        <li class="rv"><span class="pi">⚡</span><div><b>كل الخدمات مفتوحة</b>كاشير، مطبخ، كابتن، مكالمات، بيجر وتقارير</div></li>
+        <li class="rv d1"><span class="pi">🤝</span><div><b>نساعدك بالبداية</b>نرفع وياك أول أصناف المنيو ونجرب أول طلب</div></li>
+        <li class="rv d2"><span class="pi">💳</span><div><b>بدون دفع ولا التزام</b>بعد اليومين انت تقرر</div></li>
+      </ul>
+    </div>
+    <div class="formcard rv d1" id="formcard">
+      <form id="leadForm" novalidate>
+        <div class="prog" aria-hidden="true"><i class="on"></i><i></i><i></i></div>
+        <!-- step 1 -->
+        <div class="fstep-p on" data-step="1">
+          <div class="fstep-t">معلوماتك</div>
+          <div class="fstep-s">الخطوة 1 من 3 · حتى نعرف منو نكلّم</div>
+          <div class="fgrid">
+            <div class="fld"><label for="fOwner">اسمك <em>*</em></label><input id="fOwner" name="owner" autocomplete="name" maxlength="60" placeholder="مثال: أحمد علي"><span class="err">اكتب اسمك</span></div>
+            <div class="fld"><label for="fRest">اسم المطعم <em>*</em></label><input id="fRest" name="restaurant" maxlength="80" placeholder="مثال: مطعم الذوق"><span class="err">اكتب اسم المطعم</span></div>
+            <div class="fld"><label for="fPhone">رقم الهاتف (واتساب) <em>*</em></label><input id="fPhone" name="phone" class="ltr" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" placeholder="07xx xxx xxxx"><span class="err">اكتب رقم صحيح، مثل 07701234567</span></div>
+            <div class="fld"><label for="fCity">المدينة / المنطقة</label><input id="fCity" name="city" maxlength="40" placeholder="مثال: بغداد، المنصور"></div>
+            <div class="fld full"><label for="fEmail">الإيميل (اختياري — يصير إيميل الدخول)</label><input id="fEmail" name="email" class="ltr" type="email" autocomplete="email" maxlength="100" placeholder="name@gmail.com"><span class="err">الإيميل غير صحيح</span></div>
+          </div>
+        </div>
+        <!-- step 2 -->
+        <div class="fstep-p" data-step="2">
+          <div class="fstep-t">شنو يحتاج مطعمك؟</div>
+          <div class="fstep-s">الخطوة 2 من 3 · اختار كل اللي يهمك</div>
+          <div class="fld full" style="margin-bottom:14px"><label for="fKind">نوع المحل</label>
+            <select id="fKind" name="kind"><option>مطعم</option><option>وجبات سريعة</option><option>كافيه</option><option>مطعم ودلفري</option><option>مخبز / حلويات</option><option>أخرى</option></select></div>
+          <div class="chips" id="svcChips">
+            <label class="chip"><input type="checkbox" value="pos" checked disabled><span class="bx">✓</span><span>🧾 كاشير ومطبخ<small>أساسي بكل الباقات</small></span></label>
+            <label class="chip"><input type="checkbox" value="captain"><span class="bx">✓</span><span>🛵 كابتن ودلفري<small>تطبيق كابتن + تتبع</small></span></label>
+            <label class="chip"><input type="checkbox" value="calls"><span class="bx">✓</span><span>📞 المكالمات لطلبات<small>من خط الشريحة</small></span></label>
+            <label class="chip"><input type="checkbox" value="whatsapp"><span class="bx">✓</span><span>💬 مكالمات واتساب<small>على نفس الخط</small></span></label>
+            <label class="chip"><input type="checkbox" value="pager"><span class="bx">✓</span><span>📟 البيجر<small>أرقام 1 إلى 10</small></span></label>
+            <label class="chip"><input type="checkbox" value="kitchen"><span class="bx">✓</span><span>🖨️ أقسام وطابعات<small>طابعة لكل قسم</small></span></label>
+            <label class="chip"><input type="checkbox" value="inventory"><span class="bx">✓</span><span>📦 مخزون وحسابات<small>مواد ومصروفات</small></span></label>
+            <label class="chip"><input type="checkbox" value="analytics"><span class="bx">✓</span><span>📊 تقارير وأرباح<small>ربح كل صنف</small></span></label>
+          </div>
+        </div>
+        <!-- step 3 -->
+        <div class="fstep-p" data-step="3">
+          <div class="fstep-t">حجم الشغل</div>
+          <div class="fstep-s">الخطوة 3 من 3 · تقريبي، حتى نجهزلك الحساب صح</div>
+          <div class="steppers">
+            <div class="stp"><span>🧾 عدد الكاشيرية</span><button type="button" data-k="cashiers" data-d="-1" aria-label="أقل">−</button><output id="o-cashiers">1</output><button type="button" data-k="cashiers" data-d="1" aria-label="أكثر">+</button></div>
+            <div class="stp"><span>🛵 عدد الكباتن</span><button type="button" data-k="captains" data-d="-1" aria-label="أقل">−</button><output id="o-captains">0</output><button type="button" data-k="captains" data-d="1" aria-label="أكثر">+</button></div>
+            <div class="stp"><span>👨‍🍳 أقسام المطبخ</span><button type="button" data-k="sections" data-d="-1" aria-label="أقل">−</button><output id="o-sections">1</output><button type="button" data-k="sections" data-d="1" aria-label="أكثر">+</button></div>
+            <div class="stp"><span>☎️ خطوط الاتصال</span><button type="button" data-k="lines" data-d="-1" aria-label="أقل">−</button><output id="o-lines">1</output><button type="button" data-k="lines" data-d="1" aria-label="أكثر">+</button></div>
+          </div>
+          <div class="fld full" style="margin-top:14px"><label for="fNotes">شي ثاني تحب تخبرنا بيه؟</label><textarea id="fNotes" name="notes" maxlength="1000" placeholder="مثال: عندنا فرعين، ونريد نربط طابعة المشويات..."></textarea></div>
+          <div class="hp" aria-hidden="true"><label>اترك هذا فارغ<input id="fHp" tabindex="-1" autocomplete="off"></label></div>
+        </div>
+        <div class="fnav">
+          <button type="button" class="btn btn-line back" id="bBack" hidden>→ رجوع</button>
+          <button type="button" class="btn btn-g" id="bNext">التالي ←</button>
+        </div>
+        <p class="legal">بياناتك تنستخدم بس حتى نتواصل وياك ونجهز حسابك.</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq">
+  <div class="wrap">
+    <div class="center">
+      <span class="eyebrow rv">أسئلة متكررة</span>
+      <h2 class="sec rv d1">عندك سؤال؟ أكيد هنا جوابه</h2>
+    </div>
+    <div class="faq">
+      <details class="rv"><summary>هل أحتاج أجهزة خاصة؟</summary><p>لا. سرعة يشتغل على أي لابتوب أو جهاز كاشير أو تابلت أو موبايل بمتصفح حديث. للطباعة تكفي طابعة فواتير حرارية عادية، ولربط المكالمات يكفي تلفون أندرويد عادي على الخط.</p></details>
+      <details class="rv"><summary>شنو يصير إذا انقطع النت؟</summary><p>الكاشير يكمل بيع وطباعة طبيعي. الطلبات تنحفظ بالجهاز، وأول ما يرجع النت تتزامن تلقائياً مع المطبخ ولوحة الإدارة.</p></details>
+      <details class="rv"><summary>شلون المكالمة تتحول لطلب؟</summary><p>نربط تلفون الخط بالمنظومة. أول ما يتصل الزبون، تطلع بطاقة بالكاشير فيها رقمه وعنوانه وعدد طلباته وآخر طلب، وتگدر تبدأ طلب جديد أو تكرر آخر طلب بضغطة. نفس الشي لمكالمات واتساب.</p></details>
+      <details class="rv"><summary>هل الكاشير يگدر يشوف الأرباح أو يمسح شي؟</summary><p>لا. الكاشير يبيع ويضيف مصروف بس. الأرباح والتقارير والتعديل والحذف لصاحب المطعم والإدارة فقط. وتگدر تحدد دوام كل كاشير، وبنهايته الوردية تنقفل وتنطبع فاتورة بالمبلغ الكلي.</p></details>
+      <details class="rv"><summary>شكد ياخذ تجهيز المطعم؟</summary><p>نفتح الحساب بنفس اليوم، ونساعدك ترفع المنيو وتضيف الكاشيرية والكباتن. أغلب المطاعم تبدأ تبيع من أول يوم.</p></details>
+      <details class="rv"><summary>شنو يصير بعد اليومين المجانية؟</summary><p>نتواصل وياك. إذا عجبك، نفعّل الاشتراك بالباقة اللي تناسبك وتكمل بنفس بياناتك. وإذا ما عجبك، الحساب يتوقف لوحده وما تدفع شي.</p></details>
+      <details class="rv"><summary>بياناتي آمنة؟</summary><p>كل مطعم معزول تماماً، ما يشوف بياناته غيره. الحماية مفروضة على السيرفر نفسه ومختبرة آلياً، والمنظومة مبنية على Google Firebase.</p></details>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT -->
+<section class="dark" id="contact">
+  <div class="wrap">
+    <div class="center">
+      <span class="eyebrow rv">تواصل ويانا</span>
+      <h2 class="sec rv d1">نحچي ويّاك بأي وقت</h2>
+      <p class="lead rv d2">اتصل، راسلنا واتساب، أو ابعث إيميل. نرد بسرعة، طبعاً.</p>
+    </div>
+    <div class="contact">
+      <a class="cbox rv" href="https://wa.me/9647711391715?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%20%D8%A3%D8%B1%D9%8A%D8%AF%20%D8%A3%D8%B9%D8%B1%D9%81%20%D8%A3%D9%83%D8%AB%D8%B1%20%D8%B9%D9%86%20%D9%85%D9%86%D8%B8%D9%88%D9%85%D8%A9%20%D8%B3%D8%B1%D8%B9%D8%A9" target="_blank" rel="noopener"><span class="ci" style="background:rgba(37,211,102,.15)">💬</span><span><small>واتساب</small><b>0771 139 1715</b></span></a>
+      <a class="cbox rv d1" href="tel:+9647711391715"><span class="ci" style="background:rgba(79,107,237,.18)">📞</span><span><small>اتصال مباشر</small><b>0771 139 1715</b></span></a>
+      <a class="cbox rv d2" href="mailto:qaesar.thelove@gmail.com?subject=%D8%B3%D8%B1%D8%B9%D8%A9%20-%20%D8%A7%D8%B3%D8%AA%D9%81%D8%B3%D8%A7%D8%B1"><span class="ci" style="background:rgba(245,158,11,.16)">✉️</span><span><small>الإيميل</small><b>qaesar.thelove@gmail.com</b></span></a>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgG)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#D9F99D" stroke-width="7" stroke-linecap="round"/></svg>سرعة</a>
+    <span>© <span id="yr">2026</span> سرعة لإدارة المطاعم · صُنع في العراق 🇮🇶</span>
+    <a href="#trial" style="color:#4ADE80;font-weight:800">🎁 جرّب مجاناً</a>
+  </div>
+</footer>
+
+<a class="fab" href="https://wa.me/9647711391715?text=%D9%85%D8%B1%D8%AD%D8%A8%D8%A7%D9%8B%20%D8%A3%D8%B1%D9%8A%D8%AF%20%D8%A3%D8%B9%D8%B1%D9%81%20%D8%A3%D9%83%D8%AB%D8%B1%20%D8%B9%D9%86%20%D9%85%D9%86%D8%B8%D9%88%D9%85%D8%A9%20%D8%B3%D8%B1%D8%B9%D8%A9" target="_blank" rel="noopener" aria-label="راسلنا على واتساب">
+  <svg viewBox="0 0 32 32" aria-hidden="true"><path fill="#fff" d="M16 3C9 3 3.4 8.6 3.4 15.5c0 2.4.7 4.7 1.9 6.7L3 29l7-2.2c1.9 1 4 1.6 6 1.6 7 0 12.6-5.6 12.6-12.6S23 3 16 3zm0 23c-1.9 0-3.8-.5-5.4-1.5l-.4-.2-4.1 1.3 1.3-4-.3-.4c-1.1-1.7-1.7-3.6-1.7-5.6C5.4 9.8 10.1 5.2 16 5.2s10.5 4.6 10.5 10.4S21.8 26 16 26zm5.8-7.8c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-.3-.2-1.3-.5-2.5-1.6-.9-.8-1.6-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.5-.6c.2-.2.2-.3.3-.6.1-.2 0-.4 0-.6l-1-2.4c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.2 1.1-1.2 2.8s1.2 3.2 1.4 3.5c.2.2 2.4 3.6 5.7 5 .8.3 1.4.5 1.9.7.8.3 1.6.2 2.2.1.7-.1 1.9-.8 2.2-1.5.3-.8.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4z"/></svg>
+</a>
+
+<script>
+// ── واجهة: القائمة، الظهور عند التمرير، العدّادات
+(()=>{
+  const nav=document.getElementById('nav'),burger=document.getElementById('burger'),mm=document.getElementById('mmenu');
+  const onScroll=()=>nav.classList.toggle('solid',scrollY>20);addEventListener('scroll',onScroll,{passive:true});onScroll();
+  burger.onclick=()=>{const o=mm.classList.toggle('open');burger.setAttribute('aria-expanded',o);burger.textContent=o?'✕':'☰';};
+  mm.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{mm.classList.remove('open');burger.textContent='☰';burger.setAttribute('aria-expanded','false');}));
+  document.getElementById('yr').textContent=new Date().getFullYear();
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);
+    e.target.querySelectorAll('[data-count]').forEach(c=>{const n=+c.dataset.count;let i=0;c.textContent=0;const t=setInterval(()=>{i++;c.textContent=i;if(i>=n)clearInterval(t);},Math.max(30,600/n));});}}),{threshold:.15,rootMargin:'0px 0px -40px 0px'});
+  document.querySelectorAll('.rv').forEach(el=>io.observe(el));
+  // fallback: إذا المتصفح ما يدعم
+  if(!('IntersectionObserver' in window))document.querySelectorAll('.rv').forEach(el=>el.classList.add('in'));
+})();
+
+// ── عرض حي بالبطل: مكالمة ← سلة ← تذكرة مطبخ ← تتبع
+(()=>{
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches){document.getElementById('callPop').classList.add('show');document.getElementById('l1').classList.add('in');return;}
+  const $=id=>document.getElementById(id),pg=[...document.querySelectorAll('#smPager i')],st=[...document.querySelectorAll('#psSteps i')];
+  const txt=['تم استلام طلبك','المطبخ يجهّز طلبك','طلبك بالطريق 🛵','تم التسليم ✅'];
+  const setStep=n=>{st.forEach((s,i)=>s.classList.toggle('on',i<=n));$('psTxt').textContent=txt[n];};
+  const clock=()=>{const d=new Date();$('smClock').textContent=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');};clock();setInterval(clock,30000);
+  const seq=[
+    [0,()=>{$('callPop').classList.remove('show');$('ticket').classList.remove('show');$('l1').classList.remove('in');$('l2').classList.remove('in');$('smTot').textContent='0';pg.forEach(p=>p.classList.remove('on'));setStep(0);}],
+    [700,()=>$('callPop').classList.add('show')],
+    [2900,()=>{$('callPop').classList.remove('show');$('l1').classList.add('in');$('smTot').textContent='12,000';}],
+    [3600,()=>{$('l2').classList.add('in');$('smTot').textContent='14,000';pg[3].classList.add('on');}],
+    [4500,()=>{$('ticket').classList.add('show');setStep(1);}],
+    [6200,()=>setStep(2)],
+    [7800,()=>setStep(3)],
+  ];
+  const run=()=>seq.forEach(([t,f])=>setTimeout(f,t));run();setInterval(run,10000);
+})();
+</script>
+
+<script type="module">
+// ── نموذج طلب التجربة: يُحفظ بقاعدة البيانات ويظهر بلوحة الإدارة ← «طلبات التجربة»
+const WA='9647711391715';
+const form=document.getElementById('leadForm'),steps=[...form.querySelectorAll('.fstep-p')],bars=[...form.querySelectorAll('.prog i')];
+const bNext=document.getElementById('bNext'),bBack=document.getElementById('bBack');
+const counts={cashiers:1,captains:0,sections:1,lines:1},MAX={cashiers:50,captains:200,sections:6,lines:10};
+let step=1,sending=false;
+const SVC={pos:'كاشير ومطبخ',captain:'كابتن ودلفري',calls:'المكالمات لطلبات',whatsapp:'مكالمات واتساب',pager:'البيجر',kitchen:'أقسام وطابعات',inventory:'مخزون وحسابات',analytics:'تقارير وأرباح'};
+
+// زر الباقة يختار الخدمات المناسبة
+document.querySelectorAll('[data-plan]').forEach(a=>a.addEventListener('click',()=>{
+  const p=a.dataset.plan,pick=p==='delivery'?['captain','calls']:p==='addons'?['calls','whatsapp','pager','kitchen']:['kitchen','inventory'];
+  form.querySelectorAll('#svcChips input:not(:disabled)').forEach(i=>{if(pick.includes(i.value))i.checked=true;});
+}));
+form.querySelectorAll('.stp button').forEach(b=>b.addEventListener('click',()=>{
+  const k=b.dataset.k;counts[k]=Math.min(MAX[k],Math.max(0,counts[k]+(+b.dataset.d)));document.getElementById('o-'+k).textContent=counts[k];
+}));
+const v=id=>document.getElementById(id).value.trim();
+const normPhone=s=>s.replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[^0-9+ ]/g,'').trim();
+function bad(id,on){document.getElementById(id).closest('.fld').classList.toggle('bad',on);return on;}
+function valid1(){
+  let ok=true;
+  if(bad('fOwner',v('fOwner').length<2))ok=false;
+  if(bad('fRest',v('fRest').length<2))ok=false;
+  const ph=normPhone(v('fPhone')).replace(/\s/g,'');document.getElementById('fPhone').value=normPhone(v('fPhone'));
+  if(bad('fPhone',!/^(\+?964|0)?7\d{9}$/.test(ph)&&!/^\+?\d{7,15}$/.test(ph)))ok=false;
+  const em=v('fEmail');if(bad('fEmail',!!em&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)))ok=false;
+  if(!ok)form.querySelector('.fld.bad input')?.focus();
+  return ok;
+}
+function show(n){
+  step=n;steps.forEach(s=>s.classList.toggle('on',+s.dataset.step===n));bars.forEach((b,i)=>b.classList.toggle('on',i<n));
+  bBack.hidden=n===1;bNext.innerHTML=n===3?'🎁 أرسل طلب التجربة':'التالي ←';
+  if(innerWidth<980)document.getElementById('formcard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+bBack.onclick=()=>show(step-1);
+bNext.onclick=()=>{if(step===1&&!valid1())return;if(step<3)return show(step+1);submit();};
+form.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName!=='TEXTAREA'){e.preventDefault();bNext.click();}});
+
+function waText(d){
+  return `مرحباً فريق سرعة 👋\nأريد تجربة مجانية:\n🍽️ ${d.restaurant}\n👤 ${d.owner}\n📞 ${d.phone}${d.city?'\n📍 '+d.city:''}\n🏷️ ${d.kind}\n✅ ${d.services.map(k=>SVC[k]).join('، ')}\n🧾 ${d.cashiers} كاشير · 🛵 ${d.captains} كابتن · 👨‍🍳 ${d.sections} قسم · ☎️ ${d.lines} خط${d.notes?'\n📝 '+d.notes:''}`;
+}
+async function submit(){
+  if(sending)return;
+  if(document.getElementById('fHp').value)return; // روبوت
+  sending=true;bNext.disabled=true;bNext.innerHTML='⏳ جاري الإرسال...';
+  const d={owner:v('fOwner').slice(0,60),restaurant:v('fRest').slice(0,80),phone:normPhone(v('fPhone')).slice(0,20),city:v('fCity').slice(0,40),email:v('fEmail').toLowerCase().slice(0,100),
+    kind:v('fKind').slice(0,30),services:[...form.querySelectorAll('#svcChips input:checked')].map(i=>i.value),...counts,notes:v('fNotes').slice(0,1000),wantsTrial:true,status:'new',source:'site'};
+  let saved=false;
+  try{
+    const [{initializeApp},{getFirestore,collection,addDoc,serverTimestamp}]=await Promise.all([
+      import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'),import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js')]);
+    const app=initializeApp({apiKey:"AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ",authDomain:"sora3a-system.firebaseapp.com",projectId:"sora3a-system",storageBucket:"sora3a-system.firebasestorage.app",messagingSenderId:"516304449260",appId:"1:516304449260:web:e0d2e20d8964e4d6656733"},'site');
+    const db=getFirestore(app);
+    await Promise.race([addDoc(collection(db,'leads'),{...d,createdAt:serverTimestamp()}),new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),9000))]);
+    saved=true;
+  }catch(e){console.warn('lead',e);}
+  done(d,saved);
+}
+function done(d,saved){
+  const wa=`https://wa.me/${WA}?text=${encodeURIComponent(waText(d))}`;
+  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  document.getElementById('formcard').innerHTML=`<div class="done">
+    <div class="big">🎉</div>
+    <h3>أهلاً بيك بعائلة سرعة، ${esc(d.owner)}!</h3>
+    <p>${saved?`وصلنا طلبك لمطعم <b>${esc(d.restaurant)}</b>، وفريقنا هسه يجهزلك حساب تجريبي كامل.`:`خطوة وحدة باقية: اضغط الزر الأخضر حتى يوصلنا طلبك على واتساب ونجهز حسابك فوراً.`}</p>
+    <div class="next">
+      <div><b>1</b><span>نجهز حساب <b>${esc(d.restaurant)}</b> بكل الخدمات مفتوحة</span></div>
+      <div><b>2</b><span>نبعثلك بيانات الدخول وروابط التطبيقات على واتساب <span class="ltr" style="display:inline-block">${esc(d.phone)}</span></span></div>
+      <div><b>3</b><span>تجرب يومين كاملة مجاناً، واحنا وياك خطوة بخطوة</span></div>
+    </div>
+    <a class="btn btn-g" style="width:100%" href="${wa}" target="_blank" rel="noopener">💬 ${saved?'سرّع حسابك — راسلنا واتساب':'أرسل الطلب على واتساب'}</a>
+    <p style="margin-top:14px;font-size:14px">تفضّل الاتصال؟ <a href="tel:+9647711391715" style="color:var(--gd);font-weight:800" class="ltr">0771 139 1715</a></p>
+  </div>`;
+  document.getElementById('formcard').scrollIntoView({behavior:'smooth',block:'center'});
+}
+</script>
+</body>
+</html>

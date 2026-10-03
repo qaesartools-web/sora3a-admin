@@ -345,6 +345,26 @@ service cloud.firestore {
         && request.resource.data.get('restaurantId', '') == me().get('restaurantId', '');
     }
 
+    // ── leads (طلبات التجربة من موقع سرعة — أي زائر يرسل، المدير الأعلى فقط يقرأ ويدير) ──
+    function leadInt(d, k, mx) { return d.get(k, 0) is int && d.get(k, 0) >= 0 && d.get(k, 0) <= mx; }
+    function leadStr(d, k, mx) { return d.get(k, '') is string && d.get(k, '').size() <= mx; }
+    match /leads/{id} {
+      allow read, update, delete: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['owner','restaurant','phone','city','email','kind','services','cashiers','captains','sections','lines','notes','wantsTrial','status','source','createdAt'])
+        && request.resource.data.keys().hasAll(['owner','restaurant','phone','status','createdAt'])
+        && request.resource.data.owner is string && request.resource.data.owner.size() >= 2 && request.resource.data.owner.size() <= 60
+        && request.resource.data.restaurant is string && request.resource.data.restaurant.size() >= 2 && request.resource.data.restaurant.size() <= 80
+        && request.resource.data.phone is string && request.resource.data.phone.matches('^[0-9+ ]{7,20}$')
+        && leadStr(request.resource.data, 'city', 40) && leadStr(request.resource.data, 'email', 100)
+        && leadStr(request.resource.data, 'kind', 30) && leadStr(request.resource.data, 'notes', 1000)
+        && request.resource.data.get('services', []) is list && request.resource.data.get('services', []).size() <= 10
+        && leadInt(request.resource.data, 'cashiers', 50) && leadInt(request.resource.data, 'captains', 200)
+        && leadInt(request.resource.data, 'sections', 6) && leadInt(request.resource.data, 'lines', 10)
+        && request.resource.data.get('wantsTrial', true) is bool
+        && request.resource.data.status == 'new' && request.resource.data.get('source', 'site') == 'site'
+        && request.resource.data.createdAt == request.time;
+    }
+
     // ── auditLog (سجل العمليات الحساسة — إضافة فقط) ──────────
     match /auditLog/{id} {
       allow read: if isOffice();

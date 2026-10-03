@@ -276,6 +276,24 @@ body.staff-mode .staff-banner{display:block;}
 .svc{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 11px;font-size:12px;font-weight:800;cursor:pointer;border:1.5px solid var(--line);background:var(--panel2);color:var(--muted);font-family:inherit;}
 .svc.on{border-color:var(--green);background:rgba(34,197,94,.12);color:var(--green);}
 .svc.off{text-decoration:line-through;opacity:.75;}
+.ld-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;}
+.ld-stat{background:var(--panel2);border-radius:12px;padding:10px;text-align:center;}
+.ld-stat b{display:block;font-size:20px;font-weight:900;}
+.ld-stat span{font-size:11px;color:var(--muted);font-weight:700;}
+.ld-filters{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;}
+.ld-filters button{flex-shrink:0;border:1.5px solid var(--line);background:var(--panel2);color:var(--muted);border-radius:20px;padding:6px 12px;font-family:inherit;font-size:12px;font-weight:800;cursor:pointer;}
+.ld-filters button.on{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.12);}
+.ld-card{border-right:4px solid var(--line);}
+.ld-card.st-new{border-right-color:var(--yellow);}
+.ld-card.st-trial{border-right-color:var(--blue);}
+.ld-card.st-won{border-right-color:var(--green);}
+.ld-card.st-lost{border-right-color:var(--red);opacity:.8;}
+.ld-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0;}
+.ld-grid div{background:var(--panel2);border-radius:10px;padding:6px;text-align:center;font-size:11px;color:var(--muted);font-weight:700;}
+.ld-grid b{display:block;font-size:15px;color:var(--text);}
+.ld-note{background:var(--panel2);border-radius:10px;padding:8px 10px;font-size:12px;margin:6px 0;white-space:pre-wrap;}
+.ld-cred{background:var(--panel2);border:1.5px dashed var(--line);border-radius:12px;padding:12px;font-size:14px;line-height:2;direction:ltr;text-align:left;}
+@media(max-width:600px){.ld-stats,.ld-grid{grid-template-columns:repeat(2,1fr);}}
 .perm-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
 .tok{font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;word-break:break-all;direction:ltr;text-align:left;}
 .setup{font-size:12px;line-height:1.9;background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:8px;}
@@ -405,6 +423,18 @@ body.staff-mode .staff-banner{display:block;}
       <div id="restList"></div>
     </div>
 
+
+    <!-- طلبات التجربة من الموقع -->
+    <div class="screen admin-only" id="scLeads">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> 🎁 طلبات التجربة من الموقع</div>
+        <div class="entity-sub" style="margin-bottom:10px">كل زبون يملأ نموذج «جرّب مجاناً» بالموقع يظهر هنا مع طلباته. فعّل له تجربة يومين بضغطة، وابعث له بيانات الدخول على واتساب.</div>
+        <div class="ld-stats" id="ldStats"></div>
+        <div class="ld-filters" id="ldFilters"></div>
+      </div>
+      <div id="ldList"></div>
+    </div>
+    <div class="modal-ov" id="ldMo"><div class="modal" id="ldMoBody"></div></div>
 
     <!-- Map -->
     <div class="screen" id="scMap">
@@ -786,6 +816,7 @@ const tabs=[
   {id:'orders',label:'الطلبات',icon:'📋',screen:'scOrders',adminOnly:false},
   {id:'captains',label:'الكباتن',icon:'🛵',screen:'scCaptains',adminOnly:false,feat:'captain'},
   {id:'rests',label:'المطاعم',icon:'🍽️',screen:'scRests',adminOnly:true},
+  {id:'leads',label:'طلبات التجربة',icon:'🎁',screen:'scLeads',adminOnly:true},
   {id:'map',label:'الخريطة',icon:'🗺️',screen:'scMap',adminOnly:false,feat:'captain'},
   {id:'analytics',label:'التحليلات',icon:'📊',screen:'scAnalytics',adminOnly:false},
   {id:'times',label:'أوقات الطلبات',icon:'⏱️',screen:'scTimes',manage:true},
@@ -822,6 +853,7 @@ window.goTab=function(screenId,btn){
   if(screenId==='scTimes')renderTimes();
   if(screenId==='scAcc')accInit();
   if(screenId==='scRests')renderRests();
+  if(screenId==='scLeads')renderLeads();
   if(screenId==='scStaff')renderStaffList();
   if(screenId==='scSecurity')secLoadAudit();
   if(screenId==='scMyRest')mrInit();
@@ -875,6 +907,13 @@ function startListeners(){
       populateRestSelect();
       renderDash();
     }));
+    let ldFirst=true;
+    unsubs.push(fb.onSnapshot(fb.collection(fb.db,'leads'),snap=>{
+      allLeads=snap.docs.map(d=>({id:d.id,...d.data()}));
+      if(!ldFirst)snap.docChanges().forEach(ch=>{if(ch.type==='added'){const l=ch.doc.data();toast('🎁 طلب تجربة جديد: '+(l.restaurant||''));try{navigator.vibrate&&navigator.vibrate(200);}catch(e){}}});
+      ldFirst=false;
+      renderLeads();
+    },()=>{}));
     unsubs.push(fb.onSnapshot(fb.collection(fb.db,'staff'),snap=>{
       allStaff=snap.docs.map(d=>({id:d.id,...d.data()}));
       renderStaffList();
@@ -1266,6 +1305,115 @@ window.addRestaurant=async function(){
     else toast('❌ تعذّرت الإضافة: '+(e.code||e.message),'error');
     console.error(e);
   }finally{btn.innerHTML='➕ إضافة المطعم';btn.disabled=false;}
+};
+
+// ═══ طلبات التجربة (من موقع سرعة) ═══
+let allLeads=[],ldFilter='all';
+const LD_ST={new:['🟡','جديد'],contacted:['📞','تم التواصل'],trial:['🎁','تجربة فعّالة'],won:['✅','مشترك'],lost:['❌','غير مهتم']};
+const LD_SVC={pos:'🧾 كاشير ومطبخ',captain:'🛵 كابتن ودلفري',calls:'📞 اتصال الشريحة',whatsapp:'💬 مكالمات واتساب',pager:'📟 بيجر',kitchen:'🖨️ أقسام وطابعات',inventory:'📦 مخزون وحسابات',analytics:'📊 تقارير وأرباح'};
+const ldMs=l=>l.createdAt&&l.createdAt.toMillis?l.createdAt.toMillis():(l.createdAtMs||0);
+const ldWa=p=>{let d=String(p||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);if(d.startsWith('0'))d='964'+d.slice(1);else if(!d.startsWith('964'))d='964'+d;return d;};
+const ldEff=l=>{if(l.status==='trial'&&l.trialEndsMs&&l.trialEndsMs<Date.now())return 'ended';return l.status||'new';};
+window.ldSetFilter=f=>{ldFilter=f;renderLeads();};
+function renderLeads(){
+  const box=document.getElementById('ldList');if(!box)return;
+  const L=[...allLeads].sort((a,b)=>ldMs(b)-ldMs(a));
+  const cnt=k=>L.filter(l=>(l.status||'new')===k).length;
+  document.getElementById('ldStats').innerHTML=[['الكل',L.length],['جديد',cnt('new')],['تجربة',cnt('trial')],['مشترك',cnt('won')]].map(([t,n])=>`<div class="ld-stat"><b>${toA(n)}</b><span>${t}</span></div>`).join('');
+  document.getElementById('ldFilters').innerHTML=[['all','الكل'],...Object.entries(LD_ST).map(([k,v])=>[k,v[0]+' '+v[1]])].map(([k,t])=>`<button class="${ldFilter===k?'on':''}" onclick="ldSetFilter('${k}')">${t}</button>`).join('');
+  const shown=L.filter(l=>ldFilter==='all'||(l.status||'new')===ldFilter);
+  if(!shown.length){box.innerHTML=`<div class="card" style="text-align:center;color:var(--muted);padding:30px">${L.length?'لا توجد طلبات بهذا التصنيف':'لا توجد طلبات بعد — شارك رابط الموقع: <b style="direction:ltr;display:inline-block">qaesartools-web.github.io</b>'}</div>`;return;}
+  box.innerHTML=shown.map(l=>{
+    const st=l.status||'new',eff=ldEff(l),ms=ldMs(l);
+    const left=l.trialEndsMs?Math.ceil((l.trialEndsMs-Date.now())/3600000):0;
+    const badge=eff==='ended'?'<span class="sub-badge sub-expired">⌛ انتهت التجربة</span>':st==='trial'?`<span class="sub-badge sub-active">🎁 باقي ${toA(Math.max(0,left))} ساعة</span>`:`<span class="sub-badge" style="background:var(--panel2)">${LD_ST[st]?LD_ST[st].join(' '):esc(st)}</span>`;
+    return `<div class="card ld-card st-${esc(st)}">
+      <div style="display:flex;align-items:flex-start;gap:8px">
+        <div style="flex:1;min-width:0"><div class="entity-name">🍽️ ${esc(l.restaurant||'—')} ${badge}</div>
+        <div class="entity-sub">👤 ${esc(l.owner||'')} • 📞 <span style="direction:ltr;display:inline-block">${esc(l.phone||'')}</span>${l.city?' • 📍 '+esc(l.city):''}${l.kind?' • '+esc(l.kind):''}</div>
+        ${l.email?`<div class="entity-sub">📧 ${esc(l.email)}</div>`:''}
+        <div class="entity-sub">🕒 ${ms?new Date(ms).toLocaleString('en-GB',{dateStyle:'short',timeStyle:'short'}):'—'}</div></div>
+      </div>
+      <div class="svc-row"><span class="svc-l">يحتاج:</span>${(l.services||[]).map(k=>`<span class="svc on" style="cursor:default">${esc(LD_SVC[k]||k)}</span>`).join('')||'<span class="entity-sub">—</span>'}</div>
+      <div class="ld-grid"><div><b>${toA(l.cashiers||0)}</b>كاشير</div><div><b>${toA(l.captains||0)}</b>كابتن</div><div><b>${toA(l.sections||0)}</b>قسم مطبخ</div><div><b>${toA(l.lines||0)}</b>خط اتصال</div></div>
+      ${l.notes?`<div class="ld-note">📝 ${esc(l.notes)}</div>`:''}
+      ${l.restaurantId?`<div class="entity-sub">🔗 الحساب: ${esc(l.trialEmail||'')}</div>`:''}
+      <div class="entity-actions" style="flex-wrap:wrap">
+        <a class="btn-sm btn-cap" style="text-decoration:none" href="https://wa.me/${ldWa(l.phone)}?text=${encodeURIComponent(ldWelcome(l))}" target="_blank" rel="noopener" onclick="ldTouch('${esc(l.id)}')">💬 واتساب</a>
+        <a class="btn-sm btn-edit" style="text-decoration:none" href="tel:${esc(String(l.phone||'').replace(/[^0-9+]/g,''))}" onclick="ldTouch('${esc(l.id)}')">📞 اتصال</a>
+        ${l.restaurantId?(eff==='ended'||st==='trial'?`<button class="btn-sm btn-edit" onclick="ldExtend('${esc(l.id)}')">⏳ تمديد يومين</button><button class="btn-sm btn-cap" onclick="ldSetSt('${esc(l.id)}','won')">✅ اشترك</button>`:''):`<button class="btn-sm btn-cap" onclick="ldTrialOpen('${esc(l.id)}')">🎁 تفعيل تجربة يومين</button>`}
+        <select class="form-sel" style="width:auto;padding:5px 8px;font-size:12px" onchange="ldSetSt('${esc(l.id)}',this.value)">${Object.entries(LD_ST).map(([k,v])=>`<option value="${k}" ${k===st?'selected':''}>${v[0]} ${v[1]}</option>`).join('')}</select>
+        <button class="btn-sm btn-del" onclick="ldDel('${esc(l.id)}')">🗑️</button>
+      </div></div>`;
+  }).join('');
+}
+function ldWelcome(l){
+  return `أهلاً ${l.owner||''} 👋\nمعك فريق *سرعة* لإدارة المطاعم 🚀\n\nوصلنا طلبك لتجربة المنظومة لمطعم *${l.restaurant||''}*، وفرحانين بيك!\n\nخلال دقائق نجهزلك حساب تجريبي مجاني لمدة يومين، تجرب بيه:\n📞 المكالمات تتحول لطلبات تلقائياً\n🧾 كاشير يشتغل حتى بدون نت\n🖨️ كل قسم مطبخ على طابعته\n🛵 تطبيق الكابتن ورابط تتبع للزبون\n📊 أرباح كل صنف وتقارير دقيقة\n\nإذا عندك أي سؤال، احنا هنا 🌟`;
+}
+function ldCredMsg(l,email,pass,endMs){
+  const end=new Date(endMs).toLocaleDateString('en-GB');
+  return `🎉 مبروك ${l.owner||''}! حسابك التجريبي بـ *سرعة* جاهز\n\n🍽️ المطعم: ${l.restaurant||''}\n📧 الإيميل: ${email}\n🔑 كلمة المرور: ${pass}\n⏳ التجربة مجانية لغاية: ${end}\n\n👇 روابط التطبيقات:\n🧾 الكاشير والمطبخ:\nhttps://qaesartools-web.github.io/sora3a-rest2/\n🛡️ لوحة الإدارة (المنيو، الموظفين، التقارير):\nhttps://qaesartools-web.github.io/sora3a-admin/\n🛵 تطبيق الكابتن:\nhttps://qaesartools-web.github.io/sora3a-captain/captain.html\n\n💡 نصيحة: ابدأ بإضافة 3 أصناف من المنيو، وسوّي أول طلب من الكاشير، وشوف شلون يوصل للمطبخ بثواني.\n\nأي مساعدة تحتاجها، راسلنا هنا مباشرة. نتمنالك تجربة ممتعة 🚀`;
+}
+window.ldTouch=async id=>{const l=allLeads.find(x=>x.id===id);if(l&&(l.status||'new')==='new')try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'leads',id),{status:'contacted'});}catch(e){}};
+window.ldSetSt=async(id,v)=>{try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'leads',id),{status:v});toast('✅ تم التحديث');}catch(e){toast('❌ تعذّر التحديث: '+(e.code||e.message),'error');}};
+window.ldDel=async id=>{if(!confirm('حذف هذا الطلب نهائياً؟'))return;try{await window._fb.deleteDoc(window._fb.doc(window._fb.db,'leads',id));toast('🗑️ تم الحذف');}catch(e){toast('❌ تعذّر الحذف: '+(e.code||e.message),'error');}};
+const ldPass=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';const r=crypto.getRandomValues(new Uint32Array(8));r.forEach(x=>s+=a[x%a.length]);return 'Sr-'+s;};
+const ymdPlus=d=>{const t=new Date(Date.now()+d*86400000);return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');};
+window.ldClose=()=>document.getElementById('ldMo').classList.remove('open');
+window.ldTrialOpen=function(id){
+  const l=allLeads.find(x=>x.id===id);if(!l)return;
+  const em=(l.email||'').trim().toLowerCase()||('trial'+String(l.phone||'').replace(/\D/g,'').slice(-8)+'@sora3a.app');
+  document.getElementById('ldMoBody').innerHTML=`<div class="modal-title">🎁 تفعيل تجربة يومين</div>
+    <div class="entity-sub" style="margin-bottom:10px">ينشأ مطعم «${esc(l.restaurant||'')}» مع حساب صاحب المطعم، وكل الخدمات مفتوحة. ينتهي تلقائياً بعد يومين.</div>
+    <div class="form-group"><label>اسم المطعم</label><input class="form-inp" id="ldName" value="${esc(l.restaurant||'')}"></div>
+    <div class="form-group"><label>المنطقة</label><input class="form-inp" id="ldArea" value="${esc(l.city||'')}"></div>
+    <div class="form-group"><label>إيميل الدخول</label><input class="form-inp" id="ldEmail" type="email" value="${esc(em)}" style="direction:ltr"></div>
+    <div class="form-group"><label>كلمة المرور</label><input class="form-inp" id="ldPassI" value="${ldPass()}" style="direction:ltr"></div>
+    <div class="modal-btns"><button class="btn-primary" id="ldGo" onclick="ldTrialGo('${esc(id)}')">🎁 تفعيل وإنشاء الحساب</button><button class="btn-sm" style="background:var(--panel2)" onclick="ldClose()">إلغاء</button></div>`;
+  document.getElementById('ldMo').classList.add('open');
+};
+window.ldTrialGo=async function(id){
+  const l=allLeads.find(x=>x.id===id);if(!l)return;
+  const name=document.getElementById('ldName').value.trim(),area=document.getElementById('ldArea').value.trim()||'—';
+  const email=document.getElementById('ldEmail').value.trim().toLowerCase(),pass=document.getElementById('ldPassI').value;
+  if(!name){toast('⚠️ أدخل اسم المطعم','warn');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('⚠️ الإيميل غير صحيح','warn');return;}
+  if(pass.length<8){toast('⚠️ كلمة المرور 8 أحرف على الأقل','warn');return;}
+  const btn=document.getElementById('ldGo');btn.innerHTML='<div class="spin"></div>';btn.disabled=true;
+  const fb=window._fb;
+  try{
+    const cred=await fb.createUserWithEmailAndPassword(fb.auth2,email,pass);
+    const uid=cred.user.uid;await fb.signOut(fb.auth2);
+    const expiry=ymdPlus(2),endMs=dayEndMs(expiry);
+    const restRef=fb.doc(fb.collection(fb.db,'restaurants'));
+    await fb.setDoc(restRef,{name,area,email,phone:l.phone||'',subscription:0,userId:uid,active:true,expiry,expiryMs:endMs,trial:true,leadId:id,createdAt:new Date().toISOString(),createdAtMs:Date.now()});
+    await fb.setDoc(fb.doc(fb.db,'users',uid),{email,role:'restaurant',name,restaurantId:restRef.id,createdAtMs:Date.now()});
+    await fb.updateDoc(fb.doc(fb.db,'leads',id),{status:'trial',restaurantId:restRef.id,trialEmail:email,trialEndsMs:endMs});
+    audit('lead.trial',{leadId:id,restaurantId:restRef.id,email});
+    const msg=ldCredMsg(l,email,pass,endMs);
+    document.getElementById('ldMoBody').innerHTML=`<div class="modal-title">🎉 الحساب التجريبي جاهز</div>
+      <div class="entity-sub" style="margin-bottom:8px">احفظ كلمة المرور هسه — ما تنحفظ بالنظام. ابعثها للزبون:</div>
+      <div class="ld-cred">📧 ${esc(email)}<br>🔑 ${esc(pass)}<br>⏳ ${new Date(endMs).toLocaleString('en-GB',{dateStyle:'short',timeStyle:'short'})}</div>
+      <div class="modal-btns" style="margin-top:12px">
+        <a class="btn-primary" style="text-decoration:none;text-align:center" href="https://wa.me/${ldWa(l.phone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 إرسال بيانات الدخول بواتساب</a>
+        <button class="btn-sm" style="background:var(--panel2)" onclick="navigator.clipboard&&navigator.clipboard.writeText(${esc(JSON.stringify(msg))}).then(()=>toast('📋 تم النسخ'))">📋 نسخ الرسالة</button>
+        <button class="btn-sm" style="background:var(--panel2)" onclick="ldClose()">إغلاق</button></div>`;
+    toast('✅ تم تفعيل التجربة: '+name);
+  }catch(e){
+    if(e.code==='auth/email-already-in-use')toast('❌ هذا الإيميل مستخدم — غيّره','error');
+    else toast('❌ تعذّر التفعيل: '+(e.code||e.message),'error');
+    console.error(e);btn.innerHTML='🎁 تفعيل وإنشاء الحساب';btn.disabled=false;
+  }
+};
+window.ldExtend=async function(id){
+  const l=allLeads.find(x=>x.id===id);if(!l||!l.restaurantId)return;
+  const expiry=ymdPlus(2),endMs=dayEndMs(expiry);
+  try{
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',l.restaurantId),{expiry,expiryMs:endMs,active:true});
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'leads',id),{status:'trial',trialEndsMs:endMs});
+    audit('lead.extend',{leadId:id,restaurantId:l.restaurantId});
+    toast('⏳ تم تمديد التجربة لغاية '+new Date(endMs).toLocaleDateString('en-GB'));
+  }catch(e){toast('❌ تعذّر التمديد: '+(e.code||e.message),'error');}
 };
 
 // EDIT RESTAURANT
