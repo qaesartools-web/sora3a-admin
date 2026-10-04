@@ -74,7 +74,15 @@ test('admin and captain update silently and keep their screen', async () => {
   await c.waitForTimeout(2500);
   await touch(ROOTS['sora3a-captain'] + '/captain.html');
   await c.waitForTimeout(11000);
+  // الكابتن بوضع الاستلام (لمس الشاشة وهو متاح): ما نعيد التحميل حتى ما ينطفي الرنين
+  assert.equal(await c.evaluate(() => window.__stby().standby), true);
   await c.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await c.waitForTimeout(8000);
+  assert.equal(await c.evaluate(() => window.__mark), 1, 'no reload during standby');
+  // بعد ما يصير غير متاح: التحديث ينزل بصمت بالخلفية
+  await c.evaluate(() => document.getElementById('availBtn').click());
+  await c.waitForFunction(() => !window.__stby().standby, null, { timeout: 5000 });
+  await c.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await c.waitForFunction(() => window.__mark === undefined, null, { timeout: 20000 });
   await c.waitForFunction(() => document.querySelector('.nav button[data-tab="history"]').classList.contains('on'), null, { timeout: 15000 });
   await c.context().close();
