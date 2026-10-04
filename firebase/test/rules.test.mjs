@@ -349,3 +349,12 @@ test('loyalty settings: owner/admin write, cashier only reads', async () => {
   await assertFails(setDoc(doc(as('cash1'), 'restaurants/R1/loyalty/main'), { on: true, every: 2, type: 'pct', value: 100 }));
   await assertFails(setDoc(doc(as('rest2'), 'restaurants/R1/loyalty/main'), { on: true, every: 2, type: 'pct', value: 100 }));
 });
+
+test('config: any active account reads, only super admin writes', async () => {
+  await assertSucceeds(setDoc(doc(as('admin1'), 'config/push'), { url: 'https://x.netlify.app/api/notify' }));
+  await assertSucceeds(getDoc(doc(as('cash1'), 'config/push')));
+  await assertSucceeds(getDoc(doc(as('rest1'), 'config/push')));
+  await assertFails(getDoc(doc(anon(), 'config/push')));
+  await assertFails(setDoc(doc(as('rest1'), 'config/push'), { url: 'https://evil' }));
+  await assertFails(setDoc(doc(as('cash1'), 'config/push'), { url: 'https://evil' }));
+});

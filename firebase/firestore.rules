@@ -365,6 +365,12 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
+    // ── config (إعدادات عامة يقرأها كل حساب فعّال، ويكتبها المدير الأعلى فقط — مثل رابط سيرفر الإشعارات) ──
+    match /config/{id} {
+      allow read: if active();
+      allow write: if isAdmin();
+    }
+
     // ── auditLog (سجل العمليات الحساسة — إضافة فقط) ──────────
     match /auditLog/{id} {
       allow read: if isOffice();
