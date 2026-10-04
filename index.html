@@ -276,6 +276,8 @@ body.staff-mode .staff-banner{display:block;}
 .svc{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:5px 11px;font-size:12px;font-weight:800;cursor:pointer;border:1.5px solid var(--line);background:var(--panel2);color:var(--muted);font-family:inherit;}
 .svc.on{border-color:var(--green);background:rgba(34,197,94,.12);color:var(--green);}
 .svc.off{text-decoration:line-through;opacity:.75;}
+.ly-status{border-radius:12px;padding:10px 12px;font-size:13px;font-weight:800;margin-bottom:10px;background:var(--panel2);}
+.ly-status.on{background:rgba(34,197,94,.12);color:var(--green);}
 .ld-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;}
 .ld-stat{background:var(--panel2);border-radius:12px;padding:10px;text-align:center;}
 .ld-stat b{display:block;font-size:20px;font-weight:900;}
@@ -502,6 +504,23 @@ body.staff-mode .staff-banner{display:block;}
     <div class="screen" id="scMyRest">
       <div class="card admin-only" id="mrPick">
         <div class="form-group" style="margin:0"><label>المطعم</label><select class="form-sel" id="mrRest" onchange="mrLoad()"></select></div>
+      </div>
+      <div class="card" id="lyCard">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <div class="card-title" style="margin:0;flex:1"><span class="dot"></span> 🎁 خصم الزبائن الدائمين (الدلفري)</div>
+          <label class="tgl" title="تشغيل/إيقاف"><input type="checkbox" id="lyOn" onchange="lySave(true)"><span class="tgl-slider"></span></label>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">لما الزبون يوصل لعدد طلبات الدلفري اللي تحدده، يطلع للكاشير شريط «هذا الزبون يستحق خصم»، يبلّغ الزبون ويطبّقه بضغطة. الخصم يتكرر كل نفس العدد، وإذا أوقفته يوقف فوراً بكل الأجهزة.</div>
+        <div class="ly-status" id="lyStatus"></div>
+        <div class="form-row">
+          <div class="form-group"><label>كل كم طلب دلفري؟</label><input class="form-inp" id="lyEvery" type="number" min="2" max="50" value="5"></div>
+          <div class="form-group"><label>نوع الخصم</label><select class="form-sel" id="lyType" onchange="lyTypeCh()"><option value="pct">نسبة ٪</option><option value="amt">مبلغ ثابت (د.ع)</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label id="lyValL">قيمة الخصم ٪</label><input class="form-inp" id="lyValue" type="number" min="1" value="40"></div>
+          <div class="form-group" id="lyCapG"><label>حد أعلى للخصم (د.ع) — اختياري</label><input class="form-inp" id="lyCap" type="number" min="0" placeholder="بدون حد"></div>
+        </div>
+        <button class="btn-primary" id="lyBtn" onclick="lySave()">💾 حفظ إعدادات الخصم</button>
       </div>
       <div class="card">
         <div class="card-title"><span class="dot"></span> 👥 حسابات الكاشير وصلاحياتهم</div>
@@ -1962,10 +1981,49 @@ window.mrLoad=function(){
   mrUnsubs.push(fb.onSnapshot(fb.query(fb.collection(fb.db,'users'),fb.where('restaurantId','==',mrRid),fb.where('role','==','cashier')),s=>{
     mcRender(s.docs.map(d=>({id:d.id,...d.data()})));
   },e=>{document.getElementById('mcList').innerHTML='<div style="color:var(--red);font-size:12px">تعذّر التحميل — تأكد من نشر قواعد الحماية الجديدة</div>';}));
+  mrUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',mrRid,'loyalty','main'),s=>{lyFill(s.exists()?s.data():{});},()=>{}));
   mrUnsubs.push(fb.onSnapshot(fb.query(fb.collection(fb.db,'lineTokens'),fb.where('restaurantId','==',mrRid)),s=>{
     mlRender(s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(+a.line||0)-(+b.line||0)));
   },e=>{document.getElementById('mlList').innerHTML='<div style="color:var(--red);font-size:12px">تعذّر التحميل — تأكد من نشر قواعد الحماية الجديدة</div>';}));
   unsubs.push(()=>{mrUnsubs.forEach(u=>u&&u());mrUnsubs=[];});
+};
+// ═══ خصم الزبائن الدائمين ═══
+let lyCur={};
+function lyStatusTxt(d){
+  if(!d.on)return '⏸️ الخدمة موقوفة حالياً';
+  const v=d.type==='amt'?fmt(d.value)+' د.ع':toA(d.value)+'٪'+(d.cap?' (بحد أقصى '+fmt(d.cap)+' د.ع)':'');
+  return '✅ مفعّلة: كل '+toA(d.every)+' طلبات دلفري ← خصم '+v;
+}
+function lyFill(d){
+  lyCur=d||{};
+  document.getElementById('lyOn').checked=!!d.on;
+  if(!/INPUT|SELECT/.test((document.activeElement||{}).tagName||'')){
+    document.getElementById('lyEvery').value=d.every||5;
+    document.getElementById('lyType').value=d.type||'pct';
+    document.getElementById('lyValue').value=d.value||40;
+    document.getElementById('lyCap').value=d.cap||'';
+    lyTypeCh();
+  }
+  const st=document.getElementById('lyStatus');st.className='ly-status'+(d.on?' on':'');st.textContent=lyStatusTxt(d);
+}
+window.lyTypeCh=()=>{const pct=document.getElementById('lyType').value==='pct';document.getElementById('lyValL').textContent=pct?'قيمة الخصم ٪':'قيمة الخصم (د.ع)';document.getElementById('lyCapG').style.display=pct?'':'none';};
+window.lySave=async function(toggleOnly){
+  if(!mrRid){toast('⚠️ اختر المطعم أولاً','warn');document.getElementById('lyOn').checked=!!lyCur.on;return;}
+  const on=document.getElementById('lyOn').checked;
+  const every=Math.round(+document.getElementById('lyEvery').value||0);
+  const type=document.getElementById('lyType').value==='amt'?'amt':'pct';
+  const value=Math.round(+document.getElementById('lyValue').value||0);
+  const cap=type==='pct'?Math.max(0,Math.round(+document.getElementById('lyCap').value||0)):0;
+  if(!toggleOnly||on){
+    if(every<2||every>50){toast('⚠️ عدد الطلبات من 2 إلى 50','warn');document.getElementById('lyOn').checked=!!lyCur.on;return;}
+    if(value<=0||(type==='pct'&&value>100)){toast(type==='pct'?'⚠️ النسبة من 1 إلى 100':'⚠️ أدخل مبلغ الخصم','warn');document.getElementById('lyOn').checked=!!lyCur.on;return;}
+  }
+  const d=toggleOnly&&!on?{...lyCur,on:false}:{on,every,type,value,cap};
+  try{
+    await window._fb.setDoc(window._fb.doc(window._fb.db,'restaurants',mrRid,'loyalty','main'),{...d,updatedAtMs:Date.now()});
+    audit('loyalty.update',{restaurantId:mrRid,on:d.on,every:d.every,type:d.type,value:d.value});
+    toast(d.on?'✅ تم حفظ خصم الزبائن الدائمين — يطبّق فوراً بالكاشير':'⏸️ تم إيقاف خصم الزبائن الدائمين');
+  }catch(e){toast('❌ تعذّر الحفظ: '+(e.code||e.message),'error');document.getElementById('lyOn').checked=!!lyCur.on;}
 };
 function mcRender(list){
   const el=document.getElementById('mcList');
