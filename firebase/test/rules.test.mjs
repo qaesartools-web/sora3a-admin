@@ -341,3 +341,11 @@ test('leads: any visitor can send a valid trial request, only super admin reads/
   await assertFails(updateDoc(doc(as('rest1'), 'leads/L1'), { status: 'won' }));
   await assertSucceeds(setDoc(doc(as('admin1'), 'restaurants/R9'), { name: 'تجربة', userId: 'u9', active: true, expiryMs: Date.now() + 2 * DAY, trial: true, leadId: 'L1' }));
 });
+
+test('loyalty settings: owner/admin write, cashier only reads', async () => {
+  await assertSucceeds(setDoc(doc(as('rest1'), 'restaurants/R1/loyalty/main'), { on: true, every: 5, type: 'pct', value: 40, cap: 0 }));
+  await assertSucceeds(setDoc(doc(as('admin1'), 'restaurants/R1/loyalty/main'), { on: false, every: 5, type: 'pct', value: 40, cap: 0 }));
+  await assertSucceeds(getDoc(doc(as('cash1'), 'restaurants/R1/loyalty/main')));
+  await assertFails(setDoc(doc(as('cash1'), 'restaurants/R1/loyalty/main'), { on: true, every: 2, type: 'pct', value: 100 }));
+  await assertFails(setDoc(doc(as('rest2'), 'restaurants/R1/loyalty/main'), { on: true, every: 2, type: 'pct', value: 100 }));
+});
