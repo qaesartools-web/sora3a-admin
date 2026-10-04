@@ -552,6 +552,16 @@ body.staff-mode .staff-banner{display:block;}
 
     <!-- Security (admin only) -->
     <div class="screen admin-only" id="scSecurity">
+      <div class="card" id="pushCard">
+        <div class="card-title"><span class="dot"></span> 🔔 سيرفر إشعارات الكابتن (يرن والتطبيق مسكّر)</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:10px">سيرفر مجاني على Netlify يدز إشعار لتلفون الكابتن أول ما الكاشير يرسل طلب دلفري، حتى لو التطبيق مسكّر. الصق رابطه هنا (ينتهي بـ <b style="direction:ltr;display:inline-block">/api/notify</b>) واضغط حفظ ثم فحص.</div>
+        <div class="form-group"><label>رابط السيرفر</label><input class="form-inp" id="pushUrl" type="url" placeholder="https://اسم-موقعك.netlify.app/api/notify" style="direction:ltr"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-primary" style="flex:1" onclick="pushSave()">💾 حفظ</button>
+          <button class="btn-sm btn-edit" style="flex:1;padding:12px" onclick="pushTest()">🧪 فحص السيرفر</button>
+        </div>
+        <div id="pushStatus" style="font-size:13px;font-weight:800;margin-top:10px"></div>
+      </div>
       <div class="card">
         <div class="card-title"><span class="dot"></span> 🛡️ ربط الحسابات بنظام الحماية الجديد</div>
         <div style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:12px;">
@@ -874,7 +884,7 @@ window.goTab=function(screenId,btn){
   if(screenId==='scRests')renderRests();
   if(screenId==='scLeads')renderLeads();
   if(screenId==='scStaff')renderStaffList();
-  if(screenId==='scSecurity')secLoadAudit();
+  if(screenId==='scSecurity'){secLoadAudit();pushLoad();}
   if(screenId==='scMyRest')mrInit();
 };
 
@@ -2259,6 +2269,28 @@ window.secToggleUser=async function(uid,disabled){
     toast(disabled?'⛔ تم إيقاف الحساب':'✅ تم التفعيل');
     secScan();
   }catch(e){toast('❌ تعذّر التحديث','error');}
+};
+// ═══ سيرفر إشعارات الكابتن ═══
+async function pushLoad(){
+  try{const s=await window._fb.getDoc(window._fb.doc(window._fb.db,'config','push'));const u=s.exists()?(s.data().url||''):'';
+    if(document.activeElement!==document.getElementById('pushUrl'))document.getElementById('pushUrl').value=u;
+    document.getElementById('pushStatus').textContent=u?'🔗 الرابط محفوظ — اضغط «فحص السيرفر» للتأكد':'⚪ ما محفوظ رابط بعد';
+  }catch(e){document.getElementById('pushStatus').textContent='⚠️ تعذّر التحميل — تأكد من نشر قواعد الحماية الجديدة';}
+}
+window.pushSave=async function(){
+  const u=document.getElementById('pushUrl').value.trim();
+  if(u&&!/^https:\/\/[^\s]+$/.test(u)){toast('⚠️ الرابط لازم يبدأ بـ https://','warn');return;}
+  try{await window._fb.setDoc(window._fb.doc(window._fb.db,'config','push'),{url:u,updatedAtMs:Date.now()});audit('push.url',{url:u});toast(u?'✅ تم حفظ رابط سيرفر الإشعارات':'🗑️ تم حذف الرابط');pushLoad();}
+  catch(e){toast('❌ تعذّر الحفظ: '+(e.code||e.message),'error');}
+};
+window.pushTest=async function(){
+  const u=document.getElementById('pushUrl').value.trim(),st=document.getElementById('pushStatus');
+  if(!u){st.textContent='⚠️ الصق الرابط أولاً';return;}
+  st.textContent='⏳ جاري الفحص…';
+  try{
+    const r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
+    st.textContent=r.status===401?'✅ السيرفر شغّال ومضبوط — الإشعارات راح توصل للكباتن':r.status===503?'⚠️ السيرفر شغّال بس ناقصه مفتاح فايربيس (FIREBASE_SERVICE_ACCOUNT) بإعدادات Netlify':'⚠️ السيرفر رد بشكل غير متوقع ('+r.status+') — تأكد من الرابط';
+  }catch(e){st.textContent='❌ ما گدرنا نوصل للسيرفر — تأكد من الرابط وإنه منشور';}
 };
 window.secLoadAudit=async function(){
   const el=document.getElementById('secAudit');if(!el)return;

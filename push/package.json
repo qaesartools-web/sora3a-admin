@@ -1,0 +1,10 @@
+{
+  "name": "sora3a-push",
+  "private": true,
+  "type": "module",
+  "description": "سرعة — إشعار الكابتن بطلب الدلفري حتى والتطبيق مسكّر (بدون Blaze)",
+  "dependencies": {
+    "@netlify/functions": "^2.8.0",
+    "firebase-admin": "^12.7.0"
+  }
+}
