@@ -98,9 +98,11 @@ async function handle(req, env, sa, h) {
         method: 'POST', headers: { authorization: 'Bearer ' + at, 'content-type': 'application/json' },
         body: JSON.stringify({ message: {
           token: t.token,
-          // رسالة data فقط: الـ Service Worker مال الكابتن يعرضها ويكرر الرنة لحد ما يفتحها
+          // رسالة data فقط: الـ Service Worker (ويب) أو تطبيق الأندرويد يعرضها ويرن لحد ما يفتحها
           data: { kind: 'order', title, body: text, link: CAPTAIN_URL, tag, orderId },
           webpush: { headers: { Urgency: 'high', TTL: '600' } },
+          // تطبيق الأندرويد: أولوية عالية حتى يصحى التلفون ويرن والتطبيق مسكّر
+          android: { priority: 'HIGH', ttl: '600s' },
         } }),
       });
       if (r.ok) { sent++; return; }
