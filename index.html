@@ -554,8 +554,8 @@ body.staff-mode .staff-banner{display:block;}
     <div class="screen admin-only" id="scSecurity">
       <div class="card" id="pushCard">
         <div class="card-title"><span class="dot"></span> 🔔 سيرفر إشعارات الكابتن (يرن والتطبيق مسكّر)</div>
-        <div style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:10px">سيرفر مجاني على Netlify يدز إشعار لتلفون الكابتن أول ما الكاشير يرسل طلب دلفري، حتى لو التطبيق مسكّر. الصق رابطه هنا (ينتهي بـ <b style="direction:ltr;display:inline-block">/api/notify</b>) واضغط حفظ ثم فحص.</div>
-        <div class="form-group"><label>رابط السيرفر</label><input class="form-inp" id="pushUrl" type="url" placeholder="https://اسم-موقعك.netlify.app/api/notify" style="direction:ltr"></div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:10px">سيرفر مجاني (Cloudflare Workers) يدز إشعار لتلفون الكابتن أول ما الكاشير يرسل طلب دلفري، حتى لو التطبيق مسكّر. الصق رابط الـ Worker هنا (مثل <b style="direction:ltr;display:inline-block">https://sora3a-push.xxx.workers.dev</b>) واضغط حفظ ثم فحص.</div>
+        <div class="form-group"><label>رابط السيرفر</label><input class="form-inp" id="pushUrl" type="url" placeholder="https://sora3a-push.xxxx.workers.dev" style="direction:ltr"></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn-primary" style="flex:1" onclick="pushSave()">💾 حفظ</button>
           <button class="btn-sm btn-edit" style="flex:1;padding:12px" onclick="pushTest()">🧪 فحص السيرفر</button>
@@ -2289,7 +2289,7 @@ window.pushTest=async function(){
   st.textContent='⏳ جاري الفحص…';
   try{
     const r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
-    st.textContent=r.status===401?'✅ السيرفر شغّال ومضبوط — الإشعارات راح توصل للكباتن':r.status===503?'⚠️ السيرفر شغّال بس ناقصه مفتاح فايربيس (FIREBASE_SERVICE_ACCOUNT) بإعدادات Netlify':'⚠️ السيرفر رد بشكل غير متوقع ('+r.status+') — تأكد من الرابط';
+    st.textContent=r.status===401?'✅ السيرفر شغّال ومضبوط — الإشعارات راح توصل للكباتن':r.status===503?'⚠️ السيرفر شغّال بس ناقصه مفتاح فايربيس — أضف السر FIREBASE_SERVICE_ACCOUNT بإعدادات الـ Worker':'⚠️ السيرفر رد بشكل غير متوقع ('+r.status+') — تأكد من الرابط';
   }catch(e){st.textContent='❌ ما گدرنا نوصل للسيرفر — تأكد من الرابط وإنه منشور';}
 };
 window.secLoadAudit=async function(){
