@@ -2289,7 +2289,13 @@ window.pushTest=async function(){
   st.textContent='⏳ جاري الفحص…';
   try{
     const r=await fetch(u,{method:'POST',headers:{'content-type':'application/json'},body:'{}'});
-    st.textContent=r.status===401?'✅ السيرفر شغّال ومضبوط — الإشعارات راح توصل للكباتن':r.status===503?'⚠️ السيرفر شغّال بس ناقصه مفتاح فايربيس — أضف السر FIREBASE_SERVICE_ACCOUNT بإعدادات الـ Worker':'⚠️ السيرفر رد بشكل غير متوقع ('+r.status+') — تأكد من الرابط';
+    const why={missing:'السر FIREBASE_SERVICE_ACCOUNT مو موجود — أضفه بإعدادات الـ Worker (Settings ← Variables and Secrets) واضغط Deploy',
+      not_json_paste_file_content:'القيمة الملصوقة مو محتوى الملف (يمكن انلصق اسم الملف) — افتح ملف الـ json بالـ Notepad وانسخ كل اللي بداخله',
+      bad_json_incomplete_copy:'محتوى الملف انلصق ناقص — بالـ Notepad اضغط Ctrl+A ثم Ctrl+C والصقه من جديد',
+      wrong_file_need_service_account:'هذا مو ملف حساب الخدمة — نزّله من Firebase ← Project settings ← Service accounts ← Generate new private key',
+      missing_project_id:'الملف ناقص project_id — نزّل مفتاح جديد من Service accounts'};
+    const k=r.status===503?((await r.json().catch(()=>({}))).key||'missing'):'';
+    st.textContent=r.status===401?'✅ السيرفر شغّال ومضبوط — الإشعارات راح توصل للكباتن':r.status===503?'⚠️ السيرفر شغّال بس المفتاح فيه مشكلة: '+(why[k]||why.missing):'⚠️ السيرفر رد بشكل غير متوقع ('+r.status+') — تأكد من الرابط';
   }catch(e){st.textContent='❌ ما گدرنا نوصل للسيرفر — تأكد من الرابط وإنه منشور';}
 };
 window.secLoadAudit=async function(){
