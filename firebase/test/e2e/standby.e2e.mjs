@@ -37,6 +37,10 @@ test('standby keeps the app awake, rings a looping sound on a new order, and blo
   });
   await p.waitForSelector('#incoming.show', { timeout: 10000 });
   await p.waitForFunction(() => window.__stby().ring, null, { timeout: 5000 });
+  // الكابتن لمس الطلب → الرنة توقف والطلب يبقى ظاهر
+  await p.click('#inAddr');
+  await p.waitForFunction(() => !window.__stby().ring, null, { timeout: 5000 });
+  assert.equal(await p.isVisible('#incoming.show'), true);
   await p.click('#rejectBtn');
   await p.waitForFunction(() => !window.__stby().ring, null, { timeout: 8000 });
   // غير متاح ← يوقف وضع الاستلام
