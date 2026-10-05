@@ -66,9 +66,11 @@ async function handle(req, env, sa, h) {
   }
   if (!allowed) return reply({ ok: false, error: 'forbidden' }, 403, h);
 
-  // 3) بس طلب دلفري بانتظار الكابتن، ومرة وحدة لكل كابتن
+  // 3) بس طلب دلفري بانتظار الكابتن، ومرة وحدة لكل تخصيص
+  //    (n = وقت التخصيص من الكاشير: إعادة المحاولة نفس n فما تتكرر، وإعادة التخصيص لنفس الكابتن n جديد فيرن من جديد)
   if (o.status !== 'pending' || (o.orderType || 'delivery') !== 'delivery') return reply({ ok: true, skipped: 'not_pending' }, 200, h);
-  const key = o.captainId || 'all';
+  const n = Math.floor(Number(body.n) || 0);
+  const key = (o.captainId || 'all') + (n > 0 ? ':' + n : '');
   if (o.pushedFor === key) return reply({ ok: true, skipped: 'already_sent' }, 200, h);
 
   let captainIds;
@@ -96,13 +98,9 @@ async function handle(req, env, sa, h) {
         method: 'POST', headers: { authorization: 'Bearer ' + at, 'content-type': 'application/json' },
         body: JSON.stringify({ message: {
           token: t.token,
-          data: { title, body: text, link: CAPTAIN_URL, tag, orderId },
-          webpush: {
-            headers: { Urgency: 'high', TTL: '600' },
-            notification: { title, body: text, tag, icon: '/sora3a-captain/icon-192.png', badge: '/sora3a-captain/icon-192.png',
-              requireInteraction: true, renotify: true, vibrate: [400, 150, 400, 150, 600], dir: 'rtl', lang: 'ar' },
-            fcm_options: { link: CAPTAIN_URL },
-          },
+          // رسالة data فقط: الـ Service Worker مال الكابتن يعرضها ويكرر الرنة لحد ما يفتحها
+          data: { kind: 'order', title, body: text, link: CAPTAIN_URL, tag, orderId },
+          webpush: { headers: { Urgency: 'high', TTL: '600' } },
         } }),
       });
       if (r.ok) { sent++; return; }

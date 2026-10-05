@@ -49,6 +49,8 @@ test('cashier notifies the push server for each new delivery order (with the use
   assert.ok(hit, 'push server was called');
   assert.match(hit.auth, /^Bearer ey/);
   assert.match(JSON.parse(hit.body).orderId, /^[A-Za-z0-9]{20}$/);
+  // وقت التخصيص: يخلي إعادة تخصيص نفس الكابتن ترن من جديد
+  assert.ok(Math.abs(JSON.parse(hit.body).n - Date.now()) < 60000);
   await p.context().close();
 });
 
