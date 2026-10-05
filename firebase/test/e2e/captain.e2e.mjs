@@ -114,7 +114,7 @@ test('inside the Android app: native token is saved, no web permission sheet', a
   await p.fill('#email', 'cap@x.com'); await p.fill('#password', 'secret123'); await p.click('#loginBtn');
   const tok = await until(async () => { const d = await read('pushTokens/' + uid); return d && d.tokens.includes('NATIVE_TOKEN_123') ? d : null; });
   assert.ok(tok, 'native token saved');
-  assert.equal(tok.tokens[0], 'NATIVE_TOKEN_123');
+  assert.deepEqual(tok.tokens, ['NATIVE_TOKEN_123']); // تسجيلات الويب القديمة انشالت
   assert.equal(tok.role, 'captain'); assert.equal(tok.captainId, 'C1');
   assert.equal(await p.isVisible('#notifSheet.open, #notifSheet.on'), false);
   assert.equal(await p.$('[data-act="enable-notif"]'), null);
