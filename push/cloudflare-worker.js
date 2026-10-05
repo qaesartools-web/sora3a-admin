@@ -13,15 +13,30 @@ export default {
   async fetch(req, env) {
     const h = cors(req);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: h });
-    if (req.method === 'GET') return reply({ ok: true, service: 'sora3a-push' }, 200, h);
+    const { sa, key } = readServiceAccount(env.FIREBASE_SERVICE_ACCOUNT);
+    // افتح رابط السيرفر بالمتصفح: key = ok يعني المفتاح مضبوط، غيرها تبيّن السبب
+    if (req.method === 'GET') return reply({ ok: true, service: 'sora3a-push', key }, 200, h);
     if (req.method !== 'POST') return reply({ ok: false, error: 'method_not_allowed' }, 405, h);
-    let sa;
-    try { sa = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT || ''); } catch { sa = null; }
-    if (!sa || !sa.project_id || !sa.private_key) return reply({ ok: false, error: 'not_configured' }, 503, h);
+    if (!sa) return reply({ ok: false, error: 'not_configured', key }, 503, h);
     try { return await handle(req, env, sa, h); }
     catch (e) { return reply({ ok: false, error: 'server_error', detail: String(e && e.message || e).slice(0, 200) }, 500, h); }
   },
 };
+
+// يقرأ مفتاح حساب الخدمة ويتسامح مع أخطاء اللصق الشائعة (BOM، علامات تنصيص، base64)
+function readServiceAccount(raw) {
+  if (raw == null || raw === '') return { sa: null, key: 'missing' };
+  let t = String(raw).replace(/^\uFEFF/, '').trim();
+  let sa = null;
+  try { sa = JSON.parse(t); } catch {}
+  if (!sa && /^['"`]/.test(t) && t.slice(-1) === t[0]) { t = t.slice(1, -1).trim(); try { sa = JSON.parse(t); } catch {} }
+  if (typeof sa === 'string') { try { sa = JSON.parse(sa); } catch { sa = null; } }
+  if (!sa && /^[A-Za-z0-9+/=\s]+$/.test(t)) { try { sa = JSON.parse(atob(t.replace(/\s+/g, ''))); } catch {} }
+  if (!sa || typeof sa !== 'object') return { sa: null, key: t.startsWith('{') ? 'bad_json_incomplete_copy' : 'not_json_paste_file_content' };
+  if (!sa.private_key || !sa.client_email) return { sa: null, key: 'wrong_file_need_service_account' };
+  if (!sa.project_id) return { sa: null, key: 'missing_project_id' };
+  return { sa, key: 'ok' };
+}
 
 async function handle(req, env, sa, h) {
   const pid = sa.project_id;
