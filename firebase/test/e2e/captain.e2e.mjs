@@ -100,3 +100,23 @@ test('public tracking page shows status without personal data', async () => {
   assert.match(await p.textContent('.msg h2'), /غير صالح/);
   await p.context().close();
 });
+
+test('inside the Android app: native token is saved, no web permission sheet', async () => {
+  const p = await page(B);
+  await p.addInitScript(() => {
+    window.SoraNative = {
+      requestToken() { window.__asked = (window.__asked || 0) + 1; setTimeout(() => window.__soraNativeToken('NATIVE_TOKEN_123', '', true), 50); },
+      openNotificationSettings() { window.__opened = 1; },
+      version() { return '1.1'; },
+    };
+  });
+  await p.goto('http://localhost:5050/sora3a-captain/captain.html');
+  await p.fill('#email', 'cap@x.com'); await p.fill('#password', 'secret123'); await p.click('#loginBtn');
+  const tok = await until(async () => { const d = await read('pushTokens/' + uid); return d && d.tokens.includes('NATIVE_TOKEN_123') ? d : null; });
+  assert.ok(tok, 'native token saved');
+  assert.equal(tok.tokens[0], 'NATIVE_TOKEN_123');
+  assert.equal(tok.role, 'captain'); assert.equal(tok.captainId, 'C1');
+  assert.equal(await p.isVisible('#notifSheet.open, #notifSheet.on'), false);
+  assert.equal(await p.$('[data-act="enable-notif"]'), null);
+  await p.context().close();
+});
