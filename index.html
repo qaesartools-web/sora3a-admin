@@ -299,6 +299,10 @@ body.staff-mode .staff-banner{display:block;}
 .perm-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
 .tok{font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;word-break:break-all;direction:ltr;text-align:left;}
 .setup{font-size:12px;line-height:1.9;background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:8px;}
+.ml-app{font-size:12.5px;line-height:1.9;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.35);border-radius:12px;padding:10px 12px;margin-bottom:10px;}
+.ml-app .btn-primary{display:block;text-align:center;text-decoration:none;margin-top:8px;}
+.ml-adv{margin-top:10px;font-size:12.5px;}
+.ml-adv summary{cursor:pointer;color:var(--muted);font-weight:700;padding:6px 0;}
 .setup .easy{background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.35);border-radius:10px;padding:8px 10px;margin-bottom:8px;}
 .setup pre{white-space:pre-wrap;word-break:break-all;direction:ltr;text-align:left;font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0;}
 
@@ -541,13 +545,18 @@ body.staff-mode .staff-banner{display:block;}
         <div id="mcList" style="margin-top:14px"></div>
       </div>
       <div class="card" id="mlCard">
-        <div class="card-title"><span class="dot"></span> 📞 خطوط الاتصال — توكن جوكر</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">لكل خط (جهاز) توكن سري خاص. عند ورود مكالمة على الجهاز يرسل رقم المتصل للكاشير فوراً، ويظهر للكاشير اسم الزبون وعنوانه وطلباته السابقة. حتى 10 خطوط.</div>
-        <div class="form-row">
-          <div class="form-group"><label>اسم الخط</label><input class="form-inp" id="mlLabel" maxlength="40" placeholder="مثال: خط زين 1"></div>
-          <div class="form-group" style="display:flex;align-items:flex-end"><button class="btn-primary" onclick="mlAdd()">➕ إضافة خط</button></div>
-        </div>
+        <div class="card-title"><span class="dot"></span> 📞 خطوط الاتصال</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">كل تلفون عليه رقم المطعم (شريحة أو واتساب) يرسل رقم المتصل للكاشير فوراً، ويطلع للكاشير اسم الزبون وعنوانه وطلباته السابقة. حتى 10 خطوط.</div>
+        <div class="ml-app">📲 <b>إضافة خط:</b> على تلفون الخط نزّل تطبيق <b>«سرعة — خط المطعم»</b> ← سجّل دخول بحساب صاحب المطعم ← اكتب الرقم ← «اربط». الخط يطلع هنا وحده.
+          <a class="btn-primary" href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/line-android/sora3a-line.apk" target="_blank" rel="noopener">⬇️ تنزيل تطبيق خط المطعم</a></div>
         <div id="mlList"></div>
+        <details class="ml-adv"><summary>⚙️ متقدم: خط يدوي (سنترال / هاتف IP / MacroDroid)</summary>
+          <div class="form-row">
+            <div class="form-group"><label>اسم الخط</label><input class="form-inp" id="mlLabel" maxlength="40" placeholder="مثال: سنترال الصالة"></div>
+            <div class="form-group" style="display:flex;align-items:flex-end"><button class="btn-primary" onclick="mlAdd()">➕ إضافة خط يدوي</button></div>
+          </div>
+          <div style="font-size:12px;color:var(--muted)">بعد الإضافة اضغط «📋 طريقة الربط» على الخط حتى تطلع لك الرابط والتوكن.</div>
+        </details>
       </div>
     </div>
 
@@ -2144,9 +2153,9 @@ window.mlSetup=function(id){
   const body=lineBody(l,'[call_number]');
   box.innerHTML=`<div class="setup">
     <div class="easy">⭐ <b>الطريقة الأسهل — بدون MacroDroid:</b><br>
-    1) على تلفون المطعم (اللي بيه الشريحة أو الواتساب) نزّل <a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/cashier-android/sora3a-cashier.apk" target="_blank" rel="noopener"><b>تطبيق الكاشير للأندرويد</b></a> وثبّته.<br>
-    2) سجّل دخول بحساب <b>صاحب المطعم</b> ← الإعدادات ← <b>📞 خط المطعم</b> ← اكتب الرقم واضغط «اربط»، واسمح بالأذونات اللي يطلبها.<br>
-    <small>الرقم ينضاف هنا كخط جديد وحده (أو يستخدم هذا الخط إذا نفس الرقم مكتوب بالوصف).</small></div>
+    1) على تلفون المطعم (اللي بيه الشريحة أو الواتساب) نزّل <a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/line-android/sora3a-line.apk" target="_blank" rel="noopener"><b>تطبيق «سرعة — خط المطعم»</b></a> وثبّته.<br>
+    2) سجّل دخول بحساب <b>صاحب المطعم</b> ← اكتب الرقم واضغط «اربط»، واسمح بالأذونات اللي يطلبها.<br>
+    <small>إذا وصف هذا الخط هو نفس الرقم، التطبيق يستخدم هذا الخط؛ وإلا ينضاف خط جديد وحده.</small></div>
     <b>🔑 توكن جوكر (سرّي — لا تشاركه):</b><div class="tok">${esc(l.id)}</div>
     <b>📱 أو: تطبيق MacroDroid المجاني — مرة واحدة لكل جهاز:</b><br>
     1) ثبّت <b>MacroDroid</b> من Google Play وافتحه ← <b>Add Macro</b><br>

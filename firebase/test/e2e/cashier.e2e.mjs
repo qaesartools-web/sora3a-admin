@@ -52,8 +52,11 @@ test('owner creates a cashier with default permissions and a phone line', async 
   assert.deepEqual(cu.perms, { discount: true, cancel: false, inventory: false, menu: false, settings: false });
   U.cash = cu.id;
   await p.waitForSelector('#mcList .entity');
+  // الطريقة الأساسية هي تطبيق «خط المطعم»؛ الإضافة اليدوية (سنترال/MacroDroid) تحت «متقدم»
+  assert.match(await p.getAttribute('.ml-app a', 'href'), /download\/line-android\/sora3a-line\.apk$/);
+  await p.click('.ml-adv summary');
   await p.fill('#mlLabel', 'خط زين');
-  await p.click('button >> text=إضافة خط');
+  await p.click('button >> text=إضافة خط يدوي');
   LINE = await until(async () => (await all('lineTokens', 'restaurantId', 'RC'))[0]);
   assert.ok(LINE.id.length >= 24); assert.equal(LINE.line, '1'); assert.equal(LINE.active, true);
   await p.waitForSelector('#mlList .entity');

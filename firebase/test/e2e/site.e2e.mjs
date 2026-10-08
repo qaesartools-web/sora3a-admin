@@ -32,6 +32,27 @@ for (const w of [390, 1280]) {
   });
 }
 
+test('features are grouped in 4 tabs (one group shown at a time), all 14 cards kept, «next» walks through them', async () => {
+  const p = await page(B, { w: 390, h: 900 });
+  await p.goto(SITE); await p.waitForSelector('.ftabs');
+  const shown = () => p.evaluate(() => [...document.querySelectorAll('.fpanel')].filter((x) => !x.hidden).map((x) => x.id));
+  assert.deepEqual(await shown(), ['fp-calls']);
+  assert.equal(await p.$$eval('.fpanel .tile', (t) => t.length), 14, 'all feature cards still on the page');
+  assert.match(await p.textContent('#fp-calls'), /المكالمة تتحول إلى طلب.*خط المطعم/s);
+  await p.click('#fp-calls .fnext'); assert.deepEqual(await shown(), ['fp-pos']);
+  assert.match(await p.textContent('#fp-pos'), /على كل جهاز، ويفتح وحده/);
+  await p.click('#ft-del'); assert.deepEqual(await shown(), ['fp-del']);
+  assert.equal(await p.getAttribute('#ft-del', 'aria-selected'), 'true');
+  assert.match(await p.textContent('#fp-del'), /يرن عند الكابتن/);
+  await p.click('#fp-del .fnext'); assert.deepEqual(await shown(), ['fp-acc']);
+  assert.equal(await p.$$eval('#apps .app', (a) => a.length), 4);
+  assert.match(await p.textContent('#apps'), /خط المطعم/);
+  const over = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  assert.ok(over <= 1, 'horizontal overflow ' + over);
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('trial form validates, saves the lead with requirements, shows the welcome', async () => {
   const p = await page(B, { w: 390, h: 900 });
   await p.goto(SITE);

@@ -182,6 +182,14 @@ section{padding:clamp(72px,9vw,120px) 0;position:relative}
 .t-g .ic{background:rgba(22,163,74,.12)}.t-b .ic{background:rgba(79,107,237,.12)}.t-o .ic{background:rgba(245,158,11,.15)}
 .t-g .tag{background:rgba(22,163,74,.12);color:var(--gd)}.t-b .tag{background:rgba(79,107,237,.12);color:var(--bd)}.t-o .tag{background:rgba(245,158,11,.15);color:#9A3412}
 .span3{grid-column:span 3}.span2{grid-column:span 2}.span4{grid-column:span 4}
+.ftabs{display:flex;justify-content:center;gap:10px;margin-top:40px;flex-wrap:wrap}
+.ftabs button{font:inherit;font-size:16px;font-weight:800;padding:12px 20px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--txt);cursor:pointer;transition:background .2s,color .2s,border-color .2s}
+.ftabs button:hover{border-color:#C9D0C4}
+.ftabs button.on{background:#0F1A2E;color:#fff;border-color:#0F1A2E}
+.ftabs~.fpanel{margin-top:26px}
+.fpanel[hidden]{display:none}
+.fnext{grid-column:1/-1;justify-self:center;font:inherit;font-size:15px;font-weight:800;color:var(--gd);background:none;border:0;padding:8px 14px;cursor:pointer;text-decoration:none}
+.fnext:hover{text-decoration:underline}
 .tile.feature-big{background:linear-gradient(160deg,#0F1A2E,#14243D);color:#EEF2F7;border-color:#22304A}
 .tile.feature-big p{color:#B4C1D3}
 .tile .mini{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap}
@@ -195,7 +203,9 @@ section{padding:clamp(72px,9vw,120px) 0;position:relative}
 .pgr i{font-style:normal;text-align:center;font-weight:900;background:var(--paper2);border-radius:10px;padding:8px 0}
 .pgr i.on{background:var(--g);color:#fff}
 @media(max-width:980px){.bento{grid-template-columns:repeat(2,1fr)}.span3,.span2,.span4{grid-column:span 1}.tile.wide{grid-column:span 2}}
-@media(max-width:620px){.bento{grid-template-columns:1fr}.tile.wide{grid-column:span 1}}
+@media(max-width:620px){.bento{grid-template-columns:1fr}.tile.wide{grid-column:span 1}
+  .ftabs{flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;margin-inline:-16px;padding:2px 16px 6px}
+  .ftabs::-webkit-scrollbar{display:none}.ftabs button{flex:0 0 auto;font-size:15px;padding:10px 16px}}
 
 /* flow */
 .flow{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:56px;position:relative}
@@ -210,18 +220,20 @@ section{padding:clamp(72px,9vw,120px) 0;position:relative}
   .fstep{display:grid;grid-template-columns:78px 1fr;gap:18px;text-align:right;align-items:start}.fstep .bub{margin:0}}
 
 /* apps */
-.apps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:48px}
+.apps{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:48px}
 .app{border-radius:28px;padding:30px;color:#fff;position:relative;overflow:hidden;min-height:340px;display:flex;flex-direction:column}
 .app::after{content:"";position:absolute;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.08);bottom:-110px;left:-80px}
 .app.a1{background:linear-gradient(150deg,#4F6BED,#1E3A8A)}
 .app.a2{background:linear-gradient(150deg,#22B35E,#0B6B34)}
 .app.a3{background:linear-gradient(150deg,#F7A41D,#C2410C)}
+.app.a4{background:linear-gradient(150deg,#14B8A6,#0F5F59)}
 .app svg{width:64px;height:64px;margin-bottom:18px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.25))}
 .app h3{font-size:28px;margin-bottom:4px}
 .app .who{font-size:14px;font-weight:800;opacity:.85;margin-bottom:14px}
 .app ul{list-style:none;display:flex;flex-direction:column;gap:8px;font-size:16px;font-weight:600;position:relative;z-index:1}
 .app li::before{content:"✓";display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.2);font-size:11px;margin-left:8px}
-@media(max-width:900px){.apps{grid-template-columns:1fr}}
+@media(max-width:1100px){.apps{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.apps{grid-template-columns:1fr}}
 
 /* compare */
 .cmp{margin-top:44px;border-radius:26px;overflow:hidden;border:1px solid var(--line);background:var(--card)}
@@ -351,7 +363,7 @@ footer .brand svg{width:34px;height:34px}
   <defs>
     <linearGradient id="lgG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2BC46A"/><stop offset="1" stop-color="#0F7A3D"/></linearGradient>
     <linearGradient id="lgB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6B86FF"/><stop offset="1" stop-color="#1E3A8A"/></linearGradient>
-    <linearGradient id="lgO" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC14D"/><stop offset="1" stop-color="#D9480F"/></linearGradient>
+    <linearGradient id="lgO" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC14D"/><stop offset="1" stop-color="#D9480F"/></linearGradient><linearGradient id="lgT" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2DD4BF"/><stop offset="1" stop-color="#0F766E"/></linearGradient>
     <symbol id="sin" viewBox="0 0 120 120"><path d="M96 38 V54 A8 8 0 0 1 80 54 V46 V54 A8 8 0 0 1 64 54 V46 V60 A22 22 0 0 1 20 60 V54" fill="none" stroke="#fff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   </defs>
 </svg>
@@ -437,7 +449,7 @@ footer .brand svg{width:34px;height:34px}
     <div class="stat rv"><b><em data-count="10">10</em></b><span>خطوط اتصال لكل مطعم</span></div>
     <div class="stat rv d1"><b><em data-count="6">6</em></b><span>أقسام مطبخ بطابعاتها</span></div>
     <div class="stat rv d2"><b>0 <em>نت</em></b><span>الكاشير يكمل بدونه</span></div>
-    <div class="stat rv d3"><b><em data-count="3">3</em></b><span>تطبيقات بقاعدة بيانات وحدة</span></div>
+    <div class="stat rv d3"><b><em data-count="4">4</em></b><span>تطبيقات بقاعدة بيانات وحدة</span></div>
   </div>
 </div>
 
@@ -449,70 +461,61 @@ footer .brand svg{width:34px;height:34px}
       <h2 class="sec rv d1">كل شي يحتاجه مطعمك، بمكان واحد</h2>
       <p class="lead rv d2">ما بنينا كاشير عادي. بنينا منظومة تفهم شلون تشتغل مطاعمنا: تلفون يرن، نت ينقطع، مطبخ مزدحم، وكباتن بالشارع.</p>
     </div>
-    <div class="bento">
-      <article class="tile feature-big span4 wide rv">
+    <div class="ftabs rv" role="tablist" aria-label="مجموعات المزايا">
+      <button type="button" role="tab" class="on" id="ft-calls" aria-controls="fp-calls" aria-selected="true">📞 المكالمات والزبائن</button>
+      <button type="button" role="tab" id="ft-pos" aria-controls="fp-pos" aria-selected="false">🧾 الكاشير والمطبخ</button>
+      <button type="button" role="tab" id="ft-del" aria-controls="fp-del" aria-selected="false">🛵 التوصيل والكباتن</button>
+      <button type="button" role="tab" id="ft-acc" aria-controls="fp-acc" aria-selected="false">📊 الأرباح والحسابات</button>
+    </div>
+    <div class="bento fpanel" id="fp-calls" role="tabpanel" aria-labelledby="ft-calls">
+      <article class="tile feature-big span3 wide rv">
         <span class="tag" style="background:rgba(74,222,128,.12);color:#4ADE80">الميزة الأقوى</span>
         <div class="ic" style="background:rgba(74,222,128,.12)">📞</div>
         <h3>المكالمة تتحول إلى طلب</h3>
-        <p>مكالمات الخط العادي ومكالمات واتساب توصل للكاشير تلقائياً. رقم الزبون، عنوانه، عدد طلباته وآخر طلب، كلها تطلع بشاشة وحدة، وبضغطة «كرر آخر طلب» يخلص. والربط؟ تكتب رقم المطعم بتطبيق سرعة على تلفون الخط، وبس.</p>
+        <p>مكالمات الخط العادي ومكالمات واتساب توصل للكاشير تلقائياً. رقم الزبون، عنوانه، عدد طلباته وآخر طلب، كلها تطلع بشاشة وحدة، وبضغطة «كرر آخر طلب» يخلص. والربط؟ تنزّل تطبيق «سرعة — خط المطعم» على تلفون الخط وتكتب الرقم، وبس.</p>
         <div class="mini"><span>📱 شريحة عادية</span><span>💬 واتساب</span><span>☎️ حتى 10 خطوط</span><span>🔁 كرر آخر طلب</span></div>
       </article>
-      <article class="tile t-g span2 rv d1">
-        <div class="ic">📶</div>
-        <h3>يشتغل بدون نت</h3>
-        <p>النت انقطع؟ الكاشير يبيع ويطبع عادي، وأول ما يرجع النت كل شي يتزامن لوحده.</p>
-      </article>
-      <article class="tile t-g span3 rv">
-        <div class="ic">🖨️</div>
-        <h3>كل قسم مطبخ على طابعته</h3>
-        <p>طلب واحد يتقسم تلقائياً: الشاورما لقسمها والبرغر لقسمه، كل وحدة بطابعتها وبنفس رقم الطلب.</p>
-        <div class="tix"><div><b>شاورما</b><strong>#9</strong>سندويش ×1</div><div><b>برغر</b><strong>#9</strong>زنكر ×2</div><div><b>بيتزا</b><strong>#9</strong>خضار ×1</div></div>
-      </article>
-      <article class="tile t-o span3 rv d1">
-        <div class="ic">🛵</div>
-        <h3>كابتن وتتبع مباشر</h3>
-        <p>تطبيق للكابتن يستلم ويوصّل ويثبت التسليم، ورابط للزبون يتابع بيه طلبه خطوة بخطوة بدون ما ينكشف رقمه أو عنوانه.</p>
-        <div class="mini"><span>✅ قبول</span><span>📦 استلام</span><span>🛵 بالطريق</span><span>🏁 تسليم</span></div>
-      </article>
-      <article class="tile t-g span2 rv">
-        <div class="ic">📟</div>
-        <h3>البيجر من 1 إلى 10</h3>
-        <p>أرقام البيجر فوق السلة، يتسجل ويا الطلب ويرجع متاح أول ما يتسلّم.</p>
-        <div class="pgr"><i>1</i><i>2</i><i>3</i><i class="on">4</i><i>5</i></div>
-      </article>
-      <article class="tile t-b span2 rv d1">
-        <div class="ic">📊</div>
-        <h3>ربح كل صنف</h3>
-        <p>الكلفة تنحسب من الوصفة وأسعار المواد، وتعرف بالضبط كم يربّحك كل صنف.</p>
-      </article>
-      <article class="tile t-b span2 rv d2">
-        <div class="ic">⏱️</div>
-        <h3>أوقات الطلبات</h3>
-        <p>كم ياخذ المطبخ؟ كم ياخذ التوصيل؟ لكل قسم ولكل كابتن، حتى تعرف وين التأخير.</p>
-      </article>
-      <article class="tile t-b span3 rv">
-        <div class="ic">🔐</div>
-        <h3>صلاحيات تطمّنك</h3>
-        <p>الكاشير يبيع ويضيف مصروف، بس ما يشوف الأرباح ولا يمسح شي. تحدد دوامه، وبنهايته الوردية تنقفل لوحدها وتنطبع فاتورة بالمبلغ الكلي.</p>
-      </article>
-      <article class="tile t-o span3 rv d1">
-        <div class="ic">📦</div>
-        <h3>مخزون ومصروفات وحسابات</h3>
-        <p>المواد تنقص مع كل بيع، تنبيه للمواد الناقصة، المصروفات اليومية، وتقرير لأي فترة تختارها ينطبع بضغطة.</p>
-      </article>
-      <article class="tile feature-big span4 wide rv">
+      <article class="tile feature-big span3 wide rv d1">
         <span class="tag" style="background:rgba(245,158,11,.15);color:#FBBF24">جديد</span>
         <div class="ic" style="background:rgba(245,158,11,.15)">🎁</div>
         <h3>الزبون الدائم ياخذ خصمه… والكاشير ما يحتاج يتذكر</h3>
         <p>تحدد من لوحة الإدارة: كل 5 طلبات دلفري مثلاً ← خصم 40%. أول ما يتصل الزبون المستحق، يطلع للكاشير «هذا الزبون يستحق خصم»، يبلّغه بالتلفون ويطبّقه بضغطة. يتكرر تلقائياً، وتوقفه بأي وقت.</p>
         <div class="mini"><span>🔢 أنت تحدد عدد الطلبات</span><span>٪ نسبة أو مبلغ</span><span>🛡️ حد أعلى للخصم</span><span>⏸️ إيقاف فوري</span></div>
       </article>
-      <article class="tile t-g span2 rv d1">
-        <div class="ic">🛵</div>
-        <h3>أجرة توصيل مرنة</h3>
-        <p>من توصيل مجاني لحد 4,000 بأزرار جاهزة، وتنطبع بالفاتورة بوضوح.</p>
-        <div class="pgr" style="grid-template-columns:repeat(3,1fr)"><i class="on">مجاني</i><i>1,000</i><i>2,000</i></div>
+      <button type="button" class="fnext" data-go="pos">التالي: 🧾 الكاشير والمطبخ ←</button>
+    </div>
+    <div class="bento fpanel" id="fp-pos" role="tabpanel" aria-labelledby="ft-pos">
+      <article class="tile t-g span3 rv">
+        <div class="ic">🖨️</div>
+        <h3>كل قسم مطبخ على طابعته</h3>
+        <p>طلب واحد يتقسم تلقائياً: الشاورما لقسمها والبرغر لقسمه، كل وحدة بطابعتها وبنفس رقم الطلب.</p>
+        <div class="tix"><div><b>شاورما</b><strong>#9</strong>سندويش ×1</div><div><b>برغر</b><strong>#9</strong>زنكر ×2</div><div><b>بيتزا</b><strong>#9</strong>خضار ×1</div></div>
       </article>
+      <article class="tile t-b span3 rv d1">
+        <div class="ic">💻</div>
+        <h3>على كل جهاز، ويفتح وحده</h3>
+        <p>ويندوز، ماك، لينكس، أو جهاز كاشير أندرويد. يطبع على طابعاتك مباشرة بدون أي برنامج ثاني، ويفتح وحده أول ما تشغّل الجهاز.</p>
+        <div class="mini"><span>🪟 ويندوز</span><span>🍎 ماك</span><span>🐧 لينكس</span><span>🤖 أندرويد</span></div>
+      </article>
+      <article class="tile t-g span2 rv">
+        <div class="ic">📶</div>
+        <h3>يشتغل بدون نت</h3>
+        <p>النت انقطع؟ الكاشير يبيع ويطبع عادي، وأول ما يرجع النت كل شي يتزامن لوحده.</p>
+      </article>
+      <article class="tile t-g span2 rv d1">
+        <div class="ic">📟</div>
+        <h3>البيجر من 1 إلى 10</h3>
+        <p>أرقام البيجر فوق السلة، يتسجل ويا الطلب ويرجع متاح أول ما يتسلّم.</p>
+        <div class="pgr"><i>1</i><i>2</i><i>3</i><i class="on">4</i><i>5</i></div>
+      </article>
+      <article class="tile t-b span2 rv d2">
+        <div class="ic">🔐</div>
+        <h3>صلاحيات تطمّنك</h3>
+        <p>الكاشير يبيع ويضيف مصروف، بس ما يشوف الأرباح ولا يمسح شي. تحدد دوامه، وبنهايته الوردية تنقفل لوحدها وتنطبع فاتورة بالمبلغ الكلي.</p>
+      </article>
+      <button type="button" class="fnext" data-go="del">التالي: 🛵 التوصيل والكباتن ←</button>
+    </div>
+    <div class="bento fpanel" id="fp-del" role="tabpanel" aria-labelledby="ft-del">
       <article class="tile feature-big span4 wide rv">
         <span class="tag" style="background:rgba(245,158,11,.15);color:#FBBF24">جديد</span>
         <div class="ic" style="background:rgba(245,158,11,.15)">📲</div>
@@ -525,6 +528,37 @@ footer .brand svg{width:34px;height:34px}
         <h3>وين الكابتن هسه؟</h3>
         <p>خريطة حية بلوحة الإدارة تبين مكان كل كابتن وهو يوصل، والزبون يتابعه برابط.</p>
       </article>
+      <article class="tile t-o span3 rv">
+        <div class="ic">🛵</div>
+        <h3>كابتن وتتبع مباشر</h3>
+        <p>تطبيق للكابتن يستلم ويوصّل ويثبت التسليم، ورابط للزبون يتابع بيه طلبه خطوة بخطوة بدون ما ينكشف رقمه أو عنوانه.</p>
+        <div class="mini"><span>✅ قبول</span><span>📦 استلام</span><span>🛵 بالطريق</span><span>🏁 تسليم</span></div>
+      </article>
+      <article class="tile t-g span3 rv d1">
+        <div class="ic">🛵</div>
+        <h3>أجرة توصيل مرنة</h3>
+        <p>من توصيل مجاني لحد 4,000 بأزرار جاهزة، وتنطبع بالفاتورة بوضوح.</p>
+        <div class="pgr" style="grid-template-columns:repeat(3,1fr)"><i class="on">مجاني</i><i>1,000</i><i>2,000</i></div>
+      </article>
+      <button type="button" class="fnext" data-go="acc">التالي: 📊 الأرباح والحسابات ←</button>
+    </div>
+    <div class="bento fpanel" id="fp-acc" role="tabpanel" aria-labelledby="ft-acc">
+      <article class="tile t-b span2 rv">
+        <div class="ic">📊</div>
+        <h3>ربح كل صنف</h3>
+        <p>الكلفة تنحسب من الوصفة وأسعار المواد، وتعرف بالضبط كم يربّحك كل صنف.</p>
+      </article>
+      <article class="tile t-o span2 rv d1">
+        <div class="ic">📦</div>
+        <h3>مخزون ومصروفات وحسابات</h3>
+        <p>المواد تنقص مع كل بيع، تنبيه للمواد الناقصة، المصروفات اليومية، وتقرير لأي فترة تختارها ينطبع بضغطة.</p>
+      </article>
+      <article class="tile t-b span2 rv d2">
+        <div class="ic">⏱️</div>
+        <h3>أوقات الطلبات</h3>
+        <p>كم ياخذ المطبخ؟ كم ياخذ التوصيل؟ لكل قسم ولكل كابتن، حتى تعرف وين التأخير.</p>
+      </article>
+      <a class="fnext" href="#apps">التالي: التطبيقات ←</a>
     </div>
   </div>
 </section>
@@ -551,7 +585,7 @@ footer .brand svg{width:34px;height:34px}
 <section id="apps">
   <div class="wrap">
     <div class="center">
-      <span class="eyebrow rv">ثلاثة تطبيقات</span>
+      <span class="eyebrow rv">أربعة تطبيقات</span>
       <h2 class="sec rv d1">كل واحد بالمطعم عنده تطبيقه</h2>
       <p class="lead rv d2">تشتغل على أي جهاز: لابتوب، جهاز كاشير، تابلت أو موبايل. بدون تنصيب معقّد، وتتحدث لوحدها.</p>
     </div>
@@ -559,17 +593,22 @@ footer .brand svg{width:34px;height:34px}
       <div class="app a1 rv">
         <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgB)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#F5C451" stroke-width="7" stroke-linecap="round"/></svg>
         <h3>لوحة الإدارة</h3><div class="who">لصاحب المطعم</div>
-        <ul><li>المنيو والأسعار والكلفة</li><li>الكاشيرية ودواماتهم</li><li>المخزون والمصروفات</li><li>التحليلات والتقارير</li></ul>
+        <ul><li>الكاشيرية ودواماتهم</li><li>خطوط الاتصال والخدمات</li><li>الكلفة وربح كل صنف</li><li>التحليلات والتقارير</li></ul>
       </div>
       <div class="app a2 rv d1">
         <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgG)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#D9F99D" stroke-width="7" stroke-linecap="round"/></svg>
         <h3>الكاشير والمطبخ</h3><div class="who">للكاشير والمطبخ</div>
-        <ul><li>بيع سريع وطباعة فورية</li><li>المكالمات والبيجر</li><li>شاشة المطبخ بالأقسام</li><li>الورديات وتقرير اليوم</li></ul>
+        <ul><li>بيع سريع وطابعة لكل قسم</li><li>ويندوز، ماك، لينكس، أندرويد</li><li>المكالمات والبيجر</li><li>الورديات وتقرير اليوم</li></ul>
       </div>
       <div class="app a3 rv d2">
         <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgO)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#FFF1C2" stroke-width="7" stroke-linecap="round"/></svg>
         <h3>الكابتن والتتبع</h3><div class="who">للكباتن والزبائن</div>
         <ul><li>يرن مثل المكالمة حتى والتلفون مقفول</li><li>تطبيق أندرويد + نسخة آيفون</li><li>صورة التسليم بالكاميرا</li><li>رابط تتبع للزبون</li></ul>
+      </div>
+      <div class="app a4 rv d3">
+        <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgT)"/><g transform="translate(30,26) scale(2.6)"><path fill="#fff" d="M20,15.5c-1.25,0 -2.45,-0.2 -3.57,-0.57 -0.35,-0.11 -0.74,-0.03 -1.02,0.24l-2.2,2.2c-2.83,-1.44 -5.15,-3.75 -6.59,-6.59l2.2,-2.21c0.28,-0.26 0.36,-0.65 0.25,-1C8.7,6.45 8.5,5.25 8.5,4c0,-0.55 -0.45,-1 -1,-1H4c-0.55,0 -1,0.45 -1,1 0,9.39 7.61,17 17,17 0.55,0 1,-0.45 1,-1v-3.5c0,-0.55 -0.45,-1 -1,-1zM19,12h2c0,-4.97 -4.03,-9 -9,-9v2c3.87,0 7,3.13 7,7zM15,12h2c0,-2.76 -2.24,-5 -5,-5v2c1.66,0 3,1.34 3,3z"/></g></svg>
+        <h3>خط المطعم</h3><div class="who">لتلفون رقم المطعم</div>
+        <ul><li>رقم المتصل يطلع بالكاشير</li><li>الشريحة والواتساب</li><li>تكتب الرقم وبس</li><li>يشتغل بالخلفية</li></ul>
       </div>
     </div>
   </div>
@@ -700,9 +739,9 @@ footer .brand svg{width:34px;height:34px}
       <h2 class="sec rv d1">عندك سؤال؟ أكيد هنا جوابه</h2>
     </div>
     <div class="faq">
-      <details class="rv"><summary>هل أحتاج أجهزة خاصة؟</summary><p>لا. سرعة يشتغل على أي لابتوب أو جهاز كاشير أو تابلت أو موبايل بمتصفح حديث. للطباعة تكفي طابعة فواتير حرارية عادية، ولربط المكالمات تكتب رقم المطعم بتطبيق سرعة على أي تلفون أندرويد عليه الخط أو الواتساب، بدون أي برنامج ثاني. وتطبيق الكاشير يفتح وحده مع تشغيل الجهاز.</p></details>
+      <details class="rv"><summary>هل أحتاج أجهزة خاصة؟</summary><p>لا. سرعة يشتغل على أي لابتوب أو جهاز كاشير أو تابلت أو موبايل بمتصفح حديث. للطباعة تكفي طابعة فواتير حرارية عادية، ولربط المكالمات تنزّل تطبيق «سرعة — خط المطعم» على أي تلفون أندرويد عليه الخط أو الواتساب وتكتب الرقم، بدون أي برنامج ثاني. وتطبيق الكاشير يفتح وحده مع تشغيل الجهاز.</p></details>
       <details class="rv"><summary>شنو يصير إذا انقطع النت؟</summary><p>الكاشير يكمل بيع وطباعة طبيعي. الطلبات تنحفظ بالجهاز، وأول ما يرجع النت تتزامن تلقائياً مع المطبخ ولوحة الإدارة.</p></details>
-      <details class="rv"><summary>شلون المكالمة تتحول لطلب؟</summary><p>نربط تلفون الخط بالمنظومة. أول ما يتصل الزبون، تطلع بطاقة بالكاشير فيها رقمه وعنوانه وعدد طلباته وآخر طلب، وتگدر تبدأ طلب جديد أو تكرر آخر طلب بضغطة. نفس الشي لمكالمات واتساب.</p></details>
+      <details class="rv"><summary>شلون المكالمة تتحول لطلب؟</summary><p>تنزّل تطبيق «سرعة — خط المطعم» على تلفون الخط وتكتب رقم المطعم. أول ما يتصل الزبون، تطلع بطاقة بالكاشير فيها رقمه وعنوانه وعدد طلباته وآخر طلب، وتگدر تبدأ طلب جديد أو تكرر آخر طلب بضغطة. نفس الشي لمكالمات واتساب.</p></details>
       <details class="rv"><summary>هل الكاشير يگدر يشوف الأرباح أو يمسح شي؟</summary><p>لا. الكاشير يبيع ويضيف مصروف بس. الأرباح والتقارير والتعديل والحذف لصاحب المطعم والإدارة فقط. وتگدر تحدد دوام كل كاشير، وبنهايته الوردية تنقفل وتنطبع فاتورة بالمبلغ الكلي.</p></details>
       <details class="rv"><summary>شكد ياخذ تجهيز المطعم؟</summary><p>نفتح الحساب بنفس اليوم، ونساعدك ترفع المنيو وتضيف الكاشيرية والكباتن. أغلب المطاعم تبدأ تبيع من أول يوم.</p></details>
       <details class="rv"><summary>شنو يصير بعد اليومين المجانية؟</summary><p>نتواصل وياك. إذا عجبك، نفعّل الاشتراك بالباقة اللي تناسبك وتكمل بنفس بياناتك. وإذا ما عجبك، الحساب يتوقف لوحده وما تدفع شي.</p></details>
@@ -809,6 +848,20 @@ footer .brand svg{width:34px;height:34px}
   ];
   const run=()=>seq.forEach(([t,f])=>setTimeout(f,t));run();setInterval(run,10000);
 })();
+
+// المزايا: مجموعة وحدة ظاهرة بكل مرة حتى الصفحة تبقى مرتّبة وقصيرة
+(()=>{
+  const tabs=[...document.querySelectorAll('.ftabs [role=tab]')];
+  if(!tabs.length)return;
+  const show=(id,focus)=>{tabs.forEach(t=>{const on=t.id==='ft-'+id;t.classList.toggle('on',on);t.setAttribute('aria-selected',on);t.tabIndex=on?0:-1;
+    const p=document.getElementById(t.getAttribute('aria-controls'));p.hidden=!on;if(on)p.querySelectorAll('.rv').forEach(e=>e.classList.add('in'));});
+    if(focus){const bar=document.querySelector('.ftabs');bar.scrollIntoView({behavior:'smooth',block:'start'});}};
+  tabs.forEach(t=>t.addEventListener('click',()=>{show(t.id.slice(3));t.scrollIntoView({block:'nearest',inline:'center'});}));
+  document.querySelector('.ftabs').addEventListener('keydown',e=>{const i=tabs.indexOf(document.activeElement);if(i<0)return;
+    const d=e.key==='ArrowLeft'?1:e.key==='ArrowRight'?-1:0;if(!d)return;const n=tabs[(i+d+tabs.length)%tabs.length];n.focus();n.click();});
+  document.querySelectorAll('.fnext[data-go]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.go,true)));
+  show('calls');
+})();
 </script>
 
 <script type="module">
@@ -887,6 +940,7 @@ function done(d,saved){
   </div>`;
   document.getElementById('formcard').scrollIntoView({behavior:'smooth',block:'center'});
 }
+
 </script>
 </body>
 </html>
