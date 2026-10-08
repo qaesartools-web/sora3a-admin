@@ -136,3 +136,33 @@ test('orders filter bar stays visible and clickable with a long list', async () 
   await p.click('#f-salon'); await p.click('#f-delivery'); await p.click('#f-all');
   await p.context().close();
 });
+
+test('no duplicates: owner cashier sends reports to the admin panel; stock keeps daily work only; admin has no read-only recipes tab', async () => {
+  const p = await page(B, { w: 1280, h: 900 });
+  await p.addInitScript(() => { window.open = (u) => { window.__opened = u; return null; }; });
+  await p.goto('http://localhost:5050/sora3a-rest2/index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#inEmail', 'rown@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
+  await p.waitForSelector('#prods .prod', { timeout: 15000 });
+  assert.ok((await p.textContent('.dnb[data-tab="reports"]')).includes('↗'));
+  await p.click('.dnb[data-tab="reports"]');
+  assert.equal(await p.evaluate(() => window.__opened), 'http://localhost:5050/sora3a-admin/');
+  assert.equal(await p.evaluate(() => document.getElementById('cashierScreen').classList.contains('on')), true, 'stays on the cashier');
+  await p.click('.dnb[data-tab="acc"]');
+  const tabs = await p.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
+  assert.deepEqual(tabs, ['📦 المخزون', '🧾 الوصفات والتكلفة', '💸 المصروفات', '🧰 أدوات', '💰 قائمة الدخل والحركات ↗']);
+  await p.click('#acTabs .ac-ext');
+  assert.equal(await p.evaluate(() => window.__opened), 'http://localhost:5050/sora3a-admin/');
+  await p.context().close();
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.goto('http://localhost:5050/sora3a-admin/index.html');
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await a.fill('#lEmail', 'rown@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#appPage', { state: 'visible' });
+  await a.click('.dnav-btn[data-screen="scAcc"]');
+  await a.waitForSelector('#axTabs button');
+  const ax = await a.$$eval('#axTabs button', (b) => b.map((x) => x.textContent.trim()));
+  assert.ok(ax.includes('💰 قائمة الدخل') && ax.includes('🔄 حركات المخزون') && ax.includes('🧾 تقرير المبيعات'));
+  assert.equal(ax.includes('🧾 الوصفات'), false);
+  await a.context().close();
+});

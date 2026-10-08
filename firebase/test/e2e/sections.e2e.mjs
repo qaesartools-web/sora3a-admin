@@ -128,6 +128,8 @@ test('QZ Tray mode: each section to its own printer, unassigned section falls ba
       async print(cfg, data) { window.__qzJobs.push({ printer: cfg.printer, html: data[0].data }); } };
   });
   await posLogin(p);
+  // QZ Tray يبقى شغّال للأجهزة اللي مفعّلته من قبل (الجديدة تستخدم تطبيق الكاشير)
+  await p.evaluate(() => qzCfgSet({ on: true, printers: {} }));
   await p.evaluate(() => { goTab('menu'); showMTab('settings'); });
   await p.waitForSelector('#stQzOn');
   await p.selectOption('#stQzOn', '1');
@@ -226,7 +228,8 @@ test('browser on Windows (not the app): settings offer the Windows app download'
   await p.evaluate(() => { goTab('menu'); showMTab('settings'); });
   await p.waitForSelector('.dp-promo a');
   assert.equal(await p.getAttribute('.dp-promo a', 'href'), 'https://github.com/qaesartools-web/sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe');
-  assert.ok(await p.$('#stQzOn'), 'QZ option still available in the browser');
+  assert.equal(await p.$('#stQzOn'), null, 'new browser setups use the cashier app instead of QZ Tray');
+  assert.ok((await p.textContent('#mSetSec')).includes('شغّل الكاشير من تطبيق سرعة'));
   await p.context().close();
 });
 
