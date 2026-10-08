@@ -299,6 +299,7 @@ body.staff-mode .staff-banner{display:block;}
 .perm-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
 .tok{font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;word-break:break-all;direction:ltr;text-align:left;}
 .setup{font-size:12px;line-height:1.9;background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:8px;}
+.setup .easy{background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.35);border-radius:10px;padding:8px 10px;margin-bottom:8px;}
 .setup pre{white-space:pre-wrap;word-break:break-all;direction:ltr;text-align:left;font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0;}
 
 /* Scrollbar */
@@ -2142,8 +2143,12 @@ window.mlSetup=function(id){
   if(box.innerHTML){box.innerHTML='';return;}
   const body=lineBody(l,'[call_number]');
   box.innerHTML=`<div class="setup">
+    <div class="easy">⭐ <b>الطريقة الأسهل — بدون MacroDroid:</b><br>
+    1) على تلفون المطعم (اللي بيه الشريحة أو الواتساب) نزّل <a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/cashier-android/sora3a-cashier.apk" target="_blank" rel="noopener"><b>تطبيق الكاشير للأندرويد</b></a> وثبّته.<br>
+    2) سجّل دخول بحساب <b>صاحب المطعم</b> ← الإعدادات ← <b>📞 خط المطعم</b> ← اكتب الرقم واضغط «اربط»، واسمح بالأذونات اللي يطلبها.<br>
+    <small>الرقم ينضاف هنا كخط جديد وحده (أو يستخدم هذا الخط إذا نفس الرقم مكتوب بالوصف).</small></div>
     <b>🔑 توكن جوكر (سرّي — لا تشاركه):</b><div class="tok">${esc(l.id)}</div>
-    <b>📱 جهاز أندرويد (تطبيق MacroDroid المجاني) — مرة واحدة لكل جهاز:</b><br>
+    <b>📱 أو: تطبيق MacroDroid المجاني — مرة واحدة لكل جهاز:</b><br>
     1) ثبّت <b>MacroDroid</b> من Google Play وافتحه ← <b>Add Macro</b><br>
     2) <b>Trigger</b>: Phone/Call ← <b>Call Incoming</b> ← Any number<br>
     3) <b>Action</b>: Connectivity ← <b>HTTP Request</b> ← Method: <b>POST</b><br>
