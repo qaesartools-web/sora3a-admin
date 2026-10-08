@@ -151,6 +151,85 @@ test('QZ Tray mode: each section to its own printer, unassigned section falls ba
   await p.context().close();
 });
 
+test('Windows cashier app: built-in printing (no QZ) — receipt + each section to its printer, copies, fallback warning, no print dialog', async () => {
+  const p = await page(B, { w: 1280, h: 900 });
+  await p.addInitScript(() => {
+    window.__dJobs = []; window.__auto = false;
+    const PR = [{ name: 'XP-80 Cashier', displayName: 'XP-80 Cashier', isDefault: true, ok: true, statusText: 'جاهزة' },
+      { name: 'Shawarma-PR', displayName: 'Shawarma-PR', isDefault: false, ok: true, statusText: 'جاهزة' },
+      { name: 'KFC-PR', displayName: 'KFC-PR', isDefault: false, ok: false, statusText: 'مطفية أو مفصولة' }];
+    window.SoraDesktop = {
+      version: '1.0.7',
+      printers: async () => PR,
+      print: async (html, o) => {
+        window.__dJobs.push({ html, ...o });
+        if (o.printer === 'KFC-PR') return { ok: false, fallback: true, error: 'الطابعة مطفية أو مفصولة', printer: o.fallback };
+        return { ok: true, printer: o.printer };
+      },
+      jobs: async () => window.__dJobs.map((j, i) => ({ id: i + 1, at: Date.now(), title: j.title, printer: j.printer || 'الافتراضية', ok: j.printer !== 'KFC-PR', fallback: j.printer === 'KFC-PR' ? j.fallback : '', error: '', canReprint: true })).reverse(),
+      reprint: async () => ({ ok: true }),
+      getAutoStart: async () => window.__auto, setAutoStart: async (v) => (window.__auto = v),
+      onUpdate() {},
+    };
+  });
+  await posLogin(p);
+  await p.evaluate(() => { goTab('menu'); showMTab('settings'); });
+  // داخل البرنامج: لوحة الطباعة المدمجة بدال QZ
+  await p.waitForSelector('#dpMain');
+  assert.equal(await p.$('#stQzOn'), null, 'no QZ setup inside the Windows app');
+  await p.waitForFunction(() => document.querySelectorAll('#dpMain option').length >= 4);
+  assert.match(await p.textContent('#dpStatus'), /KFC-PR — مطفية أو مفصولة/);
+  assert.match(await p.textContent('#dpMain'), /XP-80 Cashier \(الافتراضية\)/);
+  await p.selectOption('#dpMain', 'XP-80 Cashier'); await p.fill('#dpRc', '2');
+  await p.selectOption('#dpP_k1', 'Shawarma-PR'); await p.fill('#dpC_k1', '2');
+  await p.selectOption('#dpP_k2', 'KFC-PR');
+  await p.check('#dpAutoChk'); await until(() => p.evaluate(() => window.__auto));
+  await p.click('button[onclick="dpTest(\'k1\')"]');
+  await p.waitForFunction(() => window.__dJobs.length === 1);
+  assert.equal(await p.evaluate(() => window.__dJobs[0].printer), 'Shawarma-PR');
+  await p.locator('.sh-card', { has: p.locator('#dpMain') }).screenshot({ path: 'shots/pos-desktop-printing.png' });
+  await p.click('button >> text=حفظ الإعدادات');
+  const cfg = await p.evaluate(() => dpCfgGet());
+  assert.deepEqual({ main: cfg.main, rc: cfg.receiptCopies, pr: cfg.printers, cp: cfg.copies, fb: cfg.fallback },
+    { main: 'XP-80 Cashier', rc: 2, pr: { k1: 'Shawarma-PR', k2: 'KFC-PR' }, cp: { k1: 2 }, fb: true });
+  // طلب: شاورما (طابعتها) + كنتاكي (طابعتها مطفية) + بيتزا (بدون طابعة → الرئيسية)
+  await p.evaluate(() => { window.__dJobs = []; goTab('cashier'); });
+  await addByName(p, 'شاورما'); await addByName(p, '٣ قطع'); await addByName(p, 'بيتزا');
+  await p.click('#sendBtn'); await p.keyboard.press('1');
+  await p.waitForSelector('#payOv.on'); await p.click('#payOk');
+  await p.waitForFunction(() => window.__dJobs.length >= 4);
+  await p.waitForTimeout(500);
+  const jobs = await p.evaluate(() => window.__dJobs.map((j) => ({ printer: j.printer, copies: j.copies, fallback: j.fallback, w: j.widthMm,
+    kind: j.html.includes('قسم الشاورما') ? 'sh' : j.html.includes('قسم الكنتاكي') ? 'kfc' : j.html.includes('قسم البيتزا') ? 'pz' : 'receipt' })));
+  const by = Object.fromEntries(jobs.map((j) => [j.kind, j]));
+  assert.equal(jobs.length, 4, JSON.stringify(jobs));
+  assert.deepEqual(by.receipt, { printer: 'XP-80 Cashier', copies: 2, fallback: null, w: 80, kind: 'receipt' });
+  assert.deepEqual(by.sh, { printer: 'Shawarma-PR', copies: 2, fallback: 'XP-80 Cashier', w: 80, kind: 'sh' });
+  assert.deepEqual(by.kfc, { printer: 'KFC-PR', copies: 1, fallback: 'XP-80 Cashier', w: 80, kind: 'kfc' });
+  assert.deepEqual(by.pz, { printer: 'XP-80 Cashier', copies: 1, fallback: null, w: 80, kind: 'pz' });
+  // الفاتورة ما بيها تذاكر الأقسام (كل تذكرة ورقة مستقلة)، وما انفتحت نافذة طباعة المتصفح
+  assert.ok(!(await p.evaluate(() => window.__dJobs.find((j) => !j.html.includes('قسم ')).html.includes('قسم الشاورما'))));
+  assert.equal(await p.evaluate(() => (document.getElementById('prtFr') || {}).srcdoc || ''), '');
+  await p.waitForSelector('text=انطبعت على الطابعة الرئيسية');
+  // أي طباعة ثانية (إعادة فاتورة) تروح مباشرة للرئيسية
+  await p.evaluate(() => { window.__dJobs = []; printHTML('<html><body>تقرير</body></html>'); });
+  await p.waitForFunction(() => window.__dJobs.length === 1);
+  assert.equal(await p.evaluate(() => window.__dJobs[0].printer), 'XP-80 Cashier');
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
+test('browser on Windows (not the app): settings offer the Windows app download', async () => {
+  const p = await page(B, { w: 1280, h: 900 });
+  await p.addInitScript(() => { Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/140.0' }); });
+  await posLogin(p);
+  await p.evaluate(() => { goTab('menu'); showMTab('settings'); });
+  await p.waitForSelector('.dp-promo a');
+  assert.equal(await p.getAttribute('.dp-promo a', 'href'), 'https://github.com/qaesartools-web/sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe');
+  assert.ok(await p.$('#stQzOn'), 'QZ option still available in the browser');
+  await p.context().close();
+});
+
 test('admin: order times analytics (restaurant owner)', async () => {
   const p = await page(B, { w: 1280, h: 900 });
   await p.goto('http://localhost:5050/sora3a-admin/index.html');
