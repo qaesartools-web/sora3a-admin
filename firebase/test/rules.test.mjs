@@ -439,3 +439,56 @@ test('webOrders: الكاشير يستلم مرة وحدة، بعدها تتحد
   await assertSucceeds(updateDoc(doc(as('rest1'), 'webOrders/W2'), { status: 'rejected', reason: 'الشاورما خلصت' }));
   await assertFails(updateDoc(doc(as('cash1'), 'webOrders/W2'), { status: 'accepted' }), 'rejected stays rejected');
 });
+
+// ── الفروع ──
+async function seedBranches() {
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    // صاحب R1 يملك فرعين: R2 (نشط) و R3 (منتهي)
+    await setDoc(doc(db, 'users/multi'), { role: 'restaurant', restaurantId: 'R1', branches: ['R2', 'R3'] });
+    await setDoc(doc(db, 'restaurants/R1/menu/main'), { cats: [] });
+    await setDoc(doc(db, 'restaurants/R2/menu/main'), { cats: [] });
+    await setDoc(doc(db, 'restaurants/R4'), { name: 'R4', userId: 'x', active: true });
+    await setDoc(doc(db, 'orders/O4'), { restaurantId: 'R4', status: 'pending', value: 1 });
+  });
+}
+test('الفروع: صاحب المطعم يدير كل فروعه النشطة (طلبات، منيو، كاشيرية، كباتن، خطوط)', async () => {
+  await seedBranches();
+  const m = as('multi');
+  await assertSucceeds(getDoc(doc(m, 'restaurants/R2')));
+  await assertSucceeds(getDoc(doc(m, 'restaurants/R3')), 'can see an expired branch (to show its status)');
+  await assertSucceeds(getDocs(query(collection(m, 'orders'), where('restaurantId', '==', 'R2'))));
+  await assertSucceeds(getDoc(doc(m, 'orders/O2')));
+  await assertSucceeds(updateDoc(doc(m, 'orders/O2'), { status: 'cancelled' }));
+  await assertFails(updateDoc(doc(m, 'orders/O2'), { restaurantId: 'R4' }), 'cannot move an order to another restaurant');
+  await assertSucceeds(setDoc(doc(m, 'orders/N2'), { restaurantId: 'R2', value: 5000, orderType: 'salon' }));
+  await assertSucceeds(setDoc(doc(m, 'restaurants/R2/menu/main'), { cats: [{ cat: 'x' }] }));
+  await assertSucceeds(updateDoc(doc(m, 'restaurants/R2'), { name: 'فرع زيونة' }));
+  await assertFails(updateDoc(doc(m, 'restaurants/R2'), { expiryMs: Date.now() + 400 * DAY }), 'subscription stays with super admin');
+  await assertSucceeds(setDoc(doc(m, 'users/newCash'), { email: 'c@x.com', role: 'cashier', name: 'ك', restaurantId: 'R2', perms: {} }));
+  await assertSucceeds(getDocs(query(collection(m, 'users'), where('restaurantId', '==', 'R2'), where('role', '==', 'cashier'))));
+  await assertSucceeds(setDoc(doc(m, 'captains/CB'), { restaurantId: 'R2', name: 'كابتن الفرع' }));
+  await assertSucceeds(setDoc(doc(m, 'users/newCap'), { email: 'k@x.com', role: 'captain', name: 'ك', restaurantId: 'R2', captainId: 'CB' }));
+  await assertSucceeds(setDoc(doc(m, 'lineTokens/TOKEN_R2_LINE1_xxxxxxxxxxxxxxxx'), { restaurantId: 'R2', line: '1', label: '', active: true }));
+  await assertSucceeds(setDoc(doc(m, 'pushTokens/multi'), { tokens: ['t'], role: 'restaurant', captainId: '', restaurantId: 'R2', updatedAtMs: 1 }));
+  // ولا يزال يدير مطعمه الأساسي
+  await assertSucceeds(setDoc(doc(m, 'restaurants/R1/menu/main'), { cats: [] }));
+});
+test('الفروع: الفرع المنتهي مقفول، ومطعم مو من فروعه ممنوع، وما يگدر يضيف فروع لنفسه', async () => {
+  await seedBranches();
+  const m = as('multi');
+  await assertFails(setDoc(doc(m, 'orders/N3'), { restaurantId: 'R3', value: 1, orderType: 'salon' }), 'expired branch');
+  await assertFails(setDoc(doc(m, 'restaurants/R3/menu/main'), { cats: [] }), 'expired branch');
+  await assertFails(getDoc(doc(m, 'restaurants/R4')));
+  await assertFails(getDoc(doc(m, 'orders/O4')));
+  await assertFails(getDocs(query(collection(m, 'orders'), where('restaurantId', '==', 'R4'))));
+  await assertFails(setDoc(doc(m, 'orders/N4'), { restaurantId: 'R4', value: 1, orderType: 'salon' }));
+  await assertFails(setDoc(doc(m, 'users/c4'), { email: 'c@x.com', role: 'cashier', name: 'ك', restaurantId: 'R4', perms: {} }));
+  await assertFails(updateDoc(doc(m, 'users/multi'), { branches: ['R2', 'R3', 'R4'] }), 'only super admin links branches');
+  await assertFails(updateDoc(doc(m, 'users/multi'), { restaurantId: 'R4' }));
+  await assertSucceeds(updateDoc(doc(as('admin1'), 'users/multi'), { branches: ['R2', 'R3', 'R4'] }));
+  await assertSucceeds(getDoc(doc(m, 'orders/O4')), 'after super admin links it');
+  // صاحب الفرع الأصلي (rest2) يبقى يدير فرعه، وكاشير الفرع الأساسي ما يدخل للفروع
+  await assertSucceeds(getDocs(query(collection(as('rest2'), 'orders'), where('restaurantId', '==', 'R2'))));
+  await assertFails(getDocs(query(collection(as('cash1'), 'orders'), where('restaurantId', '==', 'R2'))));
+});

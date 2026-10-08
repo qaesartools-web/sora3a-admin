@@ -70,6 +70,20 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .hdr-role{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;}
 .role-admin{background:rgba(0,139,44,.2);color:var(--accent);}
 .role-rest{background:rgba(77,171,247,.2);color:var(--blue);}
+.br-sel{max-width:180px;background:var(--panel);color:inherit;border:1px solid var(--line);border-radius:8px;padding:5px 8px;font-family:inherit;font-size:12px;font-weight:700;}
+.br-line{font-size:12px;color:var(--muted);margin:6px 0 2px;}
+.br-line b{color:inherit;}
+.br-list{display:grid;gap:6px;max-height:50vh;overflow:auto;}
+.br-opt{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-size:13px;}
+.br-opt small{color:var(--muted);}
+.br-tbl{overflow-x:auto;}
+.br-tbl table{width:100%;border-collapse:collapse;font-size:13px;min-width:460px;}
+.br-tbl th,.br-tbl td{padding:9px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap;}
+.br-tbl th:first-child,.br-tbl td:first-child{text-align:start;}
+.br-tbl td small{display:block;color:var(--muted);font-size:11px;}
+.br-tbl tr.cur td{background:rgba(61,240,139,.08);}
+.br-tbl tr.tot td{font-weight:900;border-bottom:none;}
+.br-tbl .br-err{color:var(--red);}
 .logout-btn{background:transparent;border:1px solid var(--line);color:var(--red);padding:5px 12px;border-radius:8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:11px;}
 
 /* Desktop Nav */
@@ -346,6 +360,7 @@ body.staff-mode .staff-banner{display:block;}
         <div class="hdr-name" id="hdrName">—</div>
         <span class="hdr-role" id="hdrRole">—</span>
       </div>
+      <select class="br-sel" id="branchSel" hidden onchange="switchBranch(this.value)" title="تغيير الفرع"></select>
       <button class="logout-btn" onclick="doLogout()">خروج</button>
     </div>
   </div>
@@ -359,6 +374,10 @@ body.staff-mode .staff-banner{display:block;}
       <div class="rest-banner" id="restBanner">🍽️ أنت تشوف بيانات مطعمك فقط</div>
       <div class="staff-banner">👥 وضع الموظف — عرض فقط بدون صلاحية تعديل أو حذف</div>
       <div class="stats" id="dashStats"></div>
+      <div class="card" id="brSumCard" hidden>
+        <div class="card-title"><span class="dot"></span> 🏢 كل الفروع — اليوم <button class="btn-sm btn-edit" style="margin-inline-start:auto" onclick="renderBranchSum(true)">🔄 تحديث</button></div>
+        <div id="brSum"></div>
+      </div>
       <div class="card">
         <div class="card-title"><span class="dot"></span> آخر الطلبات</div>
         <div id="dashOrders"></div>
@@ -601,6 +620,9 @@ body.staff-mode .staff-banner{display:block;}
   <nav class="mnav" id="mNav"></nav>
 </div>
 
+<!-- Branches Modal -->
+<div class="modal-ov" id="brMo"><div class="modal" id="brMoBody"></div></div>
+
 <!-- Edit Restaurant Modal -->
 <div class="modal-ov" id="editRestMo">
   <div class="modal">
@@ -689,7 +711,7 @@ window.dispatchEvent(new Event('fbReady'));
 'use strict';
 
 let currentUser=null, restData=null;
-let allOrders=[], allCaptains=[], allRestaurants=[], allStaff=[];
+let allOrders=[], allCaptains=[], allRestaurants=[], allStaff=[], ownerUsers={};
 let unsubs=[], orderFilter='all', installPrompt=null, toastT;
 
 const fmt=n=>Number(n||0).toLocaleString('ar-IQ-u-nu-latn');
@@ -781,11 +803,24 @@ window.addEventListener('fbReady',()=>{
             try{const q=await fb.getDocs(fb.query(fb.collection(fb.db,'restaurants'),fb.where('userId','==',user.uid)));if(!q.empty)restId=q.docs[0].id;}catch(e){}
           }
           if(!restId){await fb.signOut(fb.auth);showErr('⚠️ الحساب غير مرتبط بمطعم — تواصل مع الإدارة');return;}
-          const rs=await fb.getDoc(fb.doc(fb.db,'restaurants',restId));
-          if(!rs.exists()||rs.data().userId!==user.uid){await fb.signOut(fb.auth);showErr('❌ هذا الحساب غير مرتبط بمطعم');return;}
+          // الفروع (يربطها المدير الأعلى): نفتح آخر فرع اختاره على هذا الجهاز، وإذا منتهي نروح لأول فرع شغّال
+          const branches=Array.isArray(ud.branches)?ud.branches.filter(b=>b&&b!==restId):[];
+          let saved=null;try{saved=localStorage.getItem('adm_branch_'+user.uid);}catch(e){}
+          const tryIds=branches.length?[...new Set([...(saved&&branches.includes(saved)?[saved]:[]),restId,...branches])]:[restId];
+          let rs=null;
+          for(const id of tryIds){
+            const s=await fb.getDoc(fb.doc(fb.db,'restaurants',id)).catch(()=>null);
+            if(!s||!s.exists())continue;
+            const d=s.data();
+            if(id===restId&&d.userId!==user.uid)continue;
+            if(!rs)rs=s;
+            if(d.active!==false&&!(d.expiryMs&&d.expiryMs<Date.now())){rs=s;break;}
+          }
+          if(!rs){await fb.signOut(fb.auth);showErr('❌ هذا الحساب غير مرتبط بمطعم');return;}
           restData={id:rs.id,...rs.data()};
           if(restData.active===false){await fb.signOut(fb.auth);showErr('⏸️ حساب المطعم موقوف — تواصل مع الإدارة');return;}
           if(restData.expiryMs&&restData.expiryMs<Date.now()){await fb.signOut(fb.auth);showErr('⛔ انتهى الاشتراك — تواصل مع الإدارة للتجديد');return;}
+          currentUser.branchIds=branches.length?[restId,...branches]:[];
           currentUser.restaurantId=restData.id;
           currentUser.restaurantName=restData.name;
         }
@@ -847,6 +882,7 @@ function enterApp(){
   document.body.classList.toggle('staff-mode',isStaff());
   buildNavs();
   startListeners();
+  initBranches();
   const au=window.auRestore&&window.auRestore();
   if(au&&au.screen&&document.querySelector(`.dnav-btn[data-screen="${au.screen}"]`))setTimeout(()=>goTab(au.screen),200);
 }
@@ -942,6 +978,11 @@ function startListeners(){
     },()=>{}));
   }
   if(isAdmin()){
+    // حسابات أصحاب المطاعم (للفروع)
+    unsubs.push(fb.onSnapshot(fb.query(fb.collection(fb.db,'users'),fb.where('role','==','restaurant')),snap=>{
+      ownerUsers=Object.fromEntries(snap.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+      renderRests();
+    },()=>{}));
     unsubs.push(fb.onSnapshot(fb.collection(fb.db,'restaurants'),snap=>{
       allRestaurants=snap.docs.map(d=>({id:d.id,...d.data()}));
       renderRests();
@@ -963,6 +1004,50 @@ function startListeners(){
 }
 
 // DASHBOARD
+// ══════════ الفروع ══════════
+// كل فرع مطعم مستقل (منيو، طلبات، كاشيرية، اشتراك)، وصاحبها يتنقل بينها ويشوف ملخصها سوا
+const bagDay=(ms)=>new Date((ms??Date.now())+3*3600000).toISOString().slice(0,10);
+let branchInfo=[];
+async function initBranches(){
+  const ids=isRest()&&currentUser.branchIds||[];
+  const sel=document.getElementById('branchSel'),card=document.getElementById('brSumCard');
+  sel.hidden=card.hidden=true;
+  if(!ids.length)return;
+  const fb=window._fb;
+  branchInfo=await Promise.all(ids.map(async id=>{
+    try{const s=await fb.getDoc(fb.doc(fb.db,'restaurants',id));const d=s.exists()?s.data():{};return{id,name:d.name||id,area:d.area||'',off:d.active===false||!!(d.expiryMs&&d.expiryMs<Date.now())};}
+    catch(e){return{id,name:id,area:'',off:true};}
+  }));
+  sel.innerHTML=branchInfo.map(b=>`<option value="${esc(b.id)}" ${b.id===currentUser.restaurantId?'selected':''} ${b.off&&b.id!==currentUser.restaurantId?'disabled':''}>🏢 ${esc(b.name)}${b.off?' (منتهي)':''}</option>`).join('');
+  sel.hidden=card.hidden=false;
+  renderBranchSum();
+}
+window.switchBranch=(id)=>{
+  if(!id||id===currentUser.restaurantId)return;
+  try{localStorage.setItem('adm_branch_'+currentUser.uid,id);}catch(e){}
+  unsubs.forEach(u=>u&&u());unsubs=[];
+  location.reload();
+};
+window.renderBranchSum=async()=>{
+  if(!branchInfo.length)return;
+  const fb=window._fb,day=bagDay();
+  const rows=await Promise.all(branchInfo.map(async b=>{
+    if(b.off)return{...b,err:'⛔ الاشتراك منتهي أو موقوف'};
+    try{
+      const s=await fb.getDocs(fb.query(fb.collection(fb.db,'orders'),fb.where('restaurantId','==',b.id),fb.where('day','==',day)));
+      const os=s.docs.map(d=>d.data()).filter(o=>o.status!=='cancelled');
+      return{...b,n:os.length,sales:os.reduce((t,o)=>t+(o.value||0),0),dl:os.filter(o=>(o.orderType||'delivery')==='delivery').length,
+        salon:os.filter(o=>o.orderType==='salon').length,ta:os.filter(o=>o.orderType==='takeaway').length};
+    }catch(e){return{...b,err:'⚠️ تعذّر التحميل'};}
+  }));
+  const ok=rows.filter(r=>!r.err),T=k=>ok.reduce((t,r)=>t+(r[k]||0),0);
+  document.getElementById('brSum').innerHTML=`<div class="br-tbl"><table><thead><tr><th>الفرع</th><th>الطلبات</th><th>المبيعات</th><th>🏍️ دلفري</th><th>🪑 صالة</th><th>🥡 سفري</th></tr></thead><tbody>
+    ${rows.map(r=>`<tr class="${r.id===currentUser.restaurantId?'cur':''}"><td><b>${esc(r.name)}</b>${r.id===currentUser.restaurantId?' <small>(المفتوح)</small>':''}${r.area?`<small>${esc(r.area)}</small>`:''}</td>
+      ${r.err?`<td colspan="5" class="br-err">${r.err}</td>`:`<td>${toA(r.n)}</td><td>${fmt(r.sales)}</td><td>${toA(r.dl)}</td><td>${toA(r.salon)}</td><td>${toA(r.ta)}</td>`}</tr>`).join('')}
+    <tr class="tot"><td>المجموع</td><td>${toA(T('n'))}</td><td>${fmt(T('sales'))} د.ع</td><td>${toA(T('dl'))}</td><td>${toA(T('salon'))}</td><td>${toA(T('ta'))}</td></tr></tbody></table></div>`;
+};
+setInterval(()=>{if(branchInfo.length&&document.getElementById('scDash').classList.contains('on')&&!document.hidden)renderBranchSum();},120000);
+
 function renderDash(){
   const orders=allOrders;
   const today=new Date();today.setHours(0,0,0,0);
@@ -1295,14 +1380,47 @@ function renderRests(){
         <div class="meta-item"><strong>${toA(delivered.length)}</strong>مسلّمة</div>
         <div class="meta-item"><strong>${fmt(r.subscription||0)}</strong>د.ع/شهر</div>
       </div>
+      ${branchLine(r)}
       <div class="svc-row"><span class="svc-l">الخدمات:</span>${SERVICES.map(([k,l])=>{const on=featOf(r,k);return `<button type="button" class="svc ${on?'on':'off'}" title="${on?'اضغط للإيقاف':'اضغط للتشغيل'}" onclick="toggleFeat('${esc(r.id)}','${k}',${on?'false':'true'})">${on?'✅':'⛔'} ${l}</button>`;}).join('')}</div>
       <div class="entity-actions">
         <button class="btn-sm btn-edit" onclick="openEditRest('${esc(r.id)}')">✏️ تعديل</button>
+        ${r.userId?`<button class="btn-sm btn-cap" onclick="openBranches('${esc(r.id)}')">🏢 الفروع</button>`:''}
         <button class="btn-sm btn-del" onclick="deleteRest('${esc(r.id)}')">🗑️ حذف</button>
       </div>
     </div>`;
   }).join('');
 }
+
+// ── الفروع: المدير الأعلى يربط مطاعم كفروع لحساب صاحب مطعم ──
+const restName=id=>(allRestaurants.find(x=>x.id===id)||{}).name||id;
+function branchesOf(r){const u=r&&r.userId&&ownerUsers[r.userId];return u&&u.restaurantId===r.id&&Array.isArray(u.branches)?u.branches:[];}
+function branchLine(r){
+  const mine=branchesOf(r);
+  const parent=Object.values(ownerUsers).find(u=>Array.isArray(u.branches)&&u.branches.includes(r.id)&&u.restaurantId!==r.id);
+  return (mine.length?`<div class="br-line">🏢 فروعه: ${mine.map(id=>`<b>${esc(restName(id))}</b>`).join('، ')}</div>`:'')
+    +(parent?`<div class="br-line">🔗 فرع تابع لـ <b>${esc(restName(parent.restaurantId))}</b></div>`:'');
+}
+window.openBranches=id=>{
+  const r=allRestaurants.find(x=>x.id===id);if(!r)return;
+  const u=ownerUsers[r.userId];
+  if(!u||u.restaurantId!==r.id){toast('⚠️ حساب صاحب هذا المطعم مو مربوط بيه — صلّحه من «الأمان» أولاً','error');return;}
+  const mine=new Set(branchesOf(r));
+  const others=allRestaurants.filter(x=>x.id!==id);
+  document.getElementById('brMoBody').innerHTML=`<div class="modal-title">🏢 فروع «${esc(r.name)}»</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.8;margin-bottom:10px">اختار المطاعم اللي تصير فروع لحساب ${esc(u.email||'')} — يتنقل بينها من الكاشير ولوحة المطعم ويشوف ملخصها سوا. كل فرع يبقى باشتراكه وكاشيريته وكباتنه.</div>
+    <div class="br-list">${others.length?others.map(x=>`<label class="br-opt"><input type="checkbox" value="${esc(x.id)}" ${mine.has(x.id)?'checked':''}> <b>${esc(x.name)}</b> <small>${esc(x.area||'')}</small></label>`).join(''):'<div style="color:var(--muted)">ماكو مطاعم ثانية — أضف الفرع كمطعم جديد أولاً</div>'}</div>
+    <div class="modal-btns"><button class="btn-save" onclick="saveBranches('${esc(id)}')">✅ حفظ</button><button class="btn-cancel" onclick="closeMo('brMo')">إلغاء</button></div>`;
+  document.getElementById('brMo').classList.add('open');
+};
+window.saveBranches=async id=>{
+  const r=allRestaurants.find(x=>x.id===id);if(!r)return;
+  const list=[...document.querySelectorAll('#brMoBody .br-opt input:checked')].map(i=>i.value).slice(0,30);
+  try{
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',r.userId),{branches:list});
+    audit('restaurant.branches',{restaurantId:id,branches:list});
+    toast(list.length?'✅ تم ربط '+toA(list.length)+' فرع':'✅ تم إلغاء الفروع');closeMo('brMo');
+  }catch(e){toast('❌ تعذّر الحفظ','error');}
+};
 
 function populateRestSelect(){
   const sel=document.getElementById('ncRest');
@@ -1351,7 +1469,7 @@ window.addRestaurant=async function(){
 // ═══ طلبات التجربة (من موقع سرعة) ═══
 let allLeads=[],ldFilter='all';
 const LD_ST={new:['🟡','جديد'],contacted:['📞','تم التواصل'],trial:['🎁','تجربة فعّالة'],won:['✅','مشترك'],lost:['❌','غير مهتم']};
-const LD_SVC={pos:'🧾 كاشير ومطبخ',captain:'🛵 كابتن ودلفري',calls:'📞 اتصال الشريحة',whatsapp:'💬 مكالمات واتساب',pager:'📟 بيجر',kitchen:'🖨️ أقسام وطابعات',inventory:'📦 مخزون وحسابات',analytics:'📊 تقارير وأرباح'};
+const LD_SVC={pos:'🧾 كاشير ومطبخ',captain:'🛵 كابتن ودلفري',calls:'📞 اتصال الشريحة',whatsapp:'💬 مكالمات واتساب',pager:'📟 بيجر',kitchen:'🖨️ أقسام وطابعات',inventory:'📦 مخزون وحسابات',analytics:'📊 تقارير وأرباح',online:'📱 منيو QR وأونلاين',branches:'🏢 أكثر من فرع'};
 const ldMs=l=>l.createdAt&&l.createdAt.toMillis?l.createdAt.toMillis():(l.createdAtMs||0);
 const ldWa=p=>{let d=String(p||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);if(d.startsWith('0'))d='964'+d.slice(1);else if(!d.startsWith('964'))d='964'+d;return d;};
 const ldEff=l=>{if(l.status==='trial'&&l.trialEndsMs&&l.trialEndsMs<Date.now())return 'ended';return l.status||'new';};
