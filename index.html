@@ -695,8 +695,10 @@ const isRest=()=>currentUser?.role==='restaurant';
 const isStaff=()=>currentUser?.role==='staff';
 const canManage=()=>isAdmin()||isRest();
 // خدمات المطعم: يفتحها ويغلقها المدير الأعلى فقط (الافتراضي مفعّلة)
-const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر']];
-const featOf=(r,k)=>!r||!r.features||r.features[k]!==false;
+// العنصر الثالث = مطفية افتراضياً (تشتغل بس إذا شغّلها المدير الأعلى)
+const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['printTest','🧪 تجربة الطابعات (محاكي)',1]];
+const OFF_DEFAULT=new Set(SERVICES.filter(x=>x[2]).map(x=>x[0]));
+const featOf=(r,k)=>OFF_DEFAULT.has(k)?!!(r&&r.features&&r.features[k]===true):(!r||!r.features||r.features[k]!==false);
 let myRestDoc=null;
 let prevPendingCount=null, notifReady=false;
 function playNotifSound(){
