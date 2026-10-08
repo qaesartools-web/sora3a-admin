@@ -37,16 +37,20 @@ test('features are grouped in 4 tabs (one group shown at a time), all 14 cards k
   await p.goto(SITE); await p.waitForSelector('.ftabs');
   const shown = () => p.evaluate(() => [...document.querySelectorAll('.fpanel')].filter((x) => !x.hidden).map((x) => x.id));
   assert.deepEqual(await shown(), ['fp-calls']);
-  assert.equal(await p.$$eval('.fpanel .tile', (t) => t.length), 14, 'all feature cards still on the page');
+  assert.equal(await p.$$eval('.fpanel .tile', (t) => t.length), 18, 'all feature cards still on the page');
   assert.match(await p.textContent('#fp-calls'), /المكالمة تتحول إلى طلب.*خط المطعم/s);
   await p.click('#fp-calls .fnext'); assert.deepEqual(await shown(), ['fp-pos']);
   assert.match(await p.textContent('#fp-pos'), /على كل جهاز، ويفتح وحده/);
+  await p.click('#fp-pos .fnext'); assert.deepEqual(await shown(), ['fp-online']);
+  assert.match(await p.textContent('#fp-online'), /منيو QR.*طلبك جاهز.*تطبيق الويتر.*كل فروعك بحساب واحد/s);
   await p.click('#ft-del'); assert.deepEqual(await shown(), ['fp-del']);
   assert.equal(await p.getAttribute('#ft-del', 'aria-selected'), 'true');
   assert.match(await p.textContent('#fp-del'), /يرن عند الكابتن/);
   await p.click('#fp-del .fnext'); assert.deepEqual(await shown(), ['fp-acc']);
   assert.equal(await p.$$eval('#apps .app', (a) => a.length), 4);
-  assert.match(await p.textContent('#apps'), /خط المطعم/);
+  assert.match(await p.textContent('#apps'), /خط المطعم.*شاشة «طلبك جاهز»/s);
+  assert.equal(await p.locator('#svcChips input[value="online"]').count(), 1);
+  assert.equal(await p.$$eval('#svcChips input', (i) => i.length) <= 10, true, 'leads rule allows at most 10 services');
   const over = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
   assert.ok(over <= 1, 'horizontal overflow ' + over);
   assert.deepEqual(p.errors, []);
@@ -143,7 +147,7 @@ test('trial form validates, saves the lead with requirements, shows the welcome'
   await p.context().close();
 });
 
-test('super admin sees the lead and activates a 2-day trial in one click', async () => {
+test('super admin sees the lead and activates a 15-day trial in one click', async () => {
   const p = await page(B, { w: 1280, h: 900 });
   await p.goto('http://localhost:5050/sora3a-admin/index.html');
   await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
@@ -153,7 +157,7 @@ test('super admin sees the lead and activates a 2-day trial in one click', async
   await p.waitForSelector('#ldList .ld-card');
   const card = await p.textContent('#ldList');
   assert.match(card, /مطعم الذوق/); assert.match(card, /كابتن ودلفري/); assert.match(card, /عندنا فرعين/);
-  await p.click('#ldList button:has-text("تفعيل تجربة يومين")');
+  await p.click('#ldList button:has-text("تفعيل تجربة 15 يوم")');
   await p.waitForSelector('#ldMo.open #ldGo');
   assert.match(await p.inputValue('#ldEmail'), /@sora3a\.app$/);
   await p.click('#ldGo');
@@ -164,7 +168,7 @@ test('super admin sees the lead and activates a 2-day trial in one click', async
   const r = await read('restaurants/' + lead.restaurantId);
   assert.equal(r.trial, true); assert.equal(r.subscription, 0);
   const days = (r.expiryMs - Date.now()) / 86400000;
-  assert.ok(days > 1.9 && days < 3.01, 'expiry ~2 days: ' + days);
+  assert.ok(days > 14.9 && days < 16.01, 'expiry ~15 days: ' + days);
   const users = await all('users');
   assert.ok(users.some((u) => u.role === 'restaurant' && u.restaurantId === lead.restaurantId));
   assert.deepEqual(p.errors.filter((e) => !/Failed to load resource|integrity/.test(e)), []);

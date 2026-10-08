@@ -358,3 +358,137 @@ test('config: any active account reads, only super admin writes', async () => {
   await assertFails(setDoc(doc(as('rest1'), 'config/push'), { url: 'https://evil' }));
   await assertFails(setDoc(doc(as('cash1'), 'config/push'), { url: 'https://evil' }));
 });
+
+// ── المنيو الأونلاين وطلبات QR والويتر ──
+const PM = { name: 'R1', on: true, modes: { table: true, pickup: true, delivery: true }, fee: 1000, tables: 10, cats: [{ cat: 'برغر', items: [{ name: 'زنكر', variants: [{ name: 'وحدة', price: 5000 }] }] }], updatedAtMs: 1 };
+const WEB = (o = {}) => ({ restaurantId: 'R1', source: 'qr', mode: 'pickup', items: [{ name: 'زنكر', variant: 'وحدة', qty: 2 }], customer: 'علي', phone: '07701234567', status: 'new', total: 10000, createdAtMs: Date.now(), day: '2026-10-08', ...o });
+async function seedPM(pm = PM, rid = 'R1') { await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'publicMenus/' + rid), pm)); }
+
+test('publicMenus: أي زائر يقرأ بالمعرّف، والمطعم وكاشيره يكتبون، وغيرهم لا', async () => {
+  await assertSucceeds(setDoc(doc(as('rest1'), 'publicMenus/R1'), PM));
+  await assertSucceeds(getDoc(doc(anon(), 'publicMenus/R1')));
+  await assertFails(getDocs(collection(anon(), 'publicMenus')));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'publicMenus/R1'), { ...PM, updatedAtMs: 2 }));
+  await assertFails(setDoc(doc(as('rest2'), 'publicMenus/R1'), PM));
+  await assertFails(setDoc(doc(anon(), 'publicMenus/R1'), PM));
+  await assertFails(setDoc(doc(as('rest1'), 'publicMenus/R1'), { ...PM, subscription: 1 }), 'no private fields');
+  await assertSucceeds(setDoc(doc(as('rest1'), 'publicMenus/R1/img/i1'), { data: 'data:image/png;base64,AAAA', updatedAtMs: 1 }));
+  await assertSucceeds(getDoc(doc(anon(), 'publicMenus/R1/img/i1')));
+  await assertFails(setDoc(doc(anon(), 'publicMenus/R1/img/i2'), { data: 'x' }));
+});
+
+test('webOrders: الزبون يطلب بدون تسجيل دخول إذا المنيو مفعّل ونوع الطلب مسموح', async () => {
+  await seedPM();
+  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB()));
+  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'table', table: '5', phone: '' })));
+  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'delivery', address: 'المنصور شارع 14' })));
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ status: 'accepted' })), 'must start new');
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ phone: '12' })), 'pickup needs a phone');
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'table', table: '' })), 'table needs a number');
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'delivery', address: '' })), 'delivery needs an address');
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ items: [] })));
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ source: 'waiter' })), 'waiter needs a staff login');
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ price: 1 })), 'no extra fields');
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ restaurantId: 'R2' })), 'no public menu');
+  await seedPM({ ...PM, modes: { table: true, pickup: false, delivery: false } });
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB()), 'pickup turned off');
+  await seedPM({ ...PM, on: false });
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'table', table: '1' })), 'menu off');
+  await seedPM();
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ day: 'x'.repeat(11) })), 'day too long');
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ extra: 1 })), 'unknown field');
+});
+
+test('webOrders: خدمة «online» أو «captain» مطفية، أو المطعم منتهي ← مرفوض', async () => {
+  await seedPM();
+  await seedPM(PM, 'R3');
+  await env.withSecurityRulesDisabled(async (c) => updateDoc(doc(c.firestore(), 'restaurants/R1'), { features: { captain: false } }));
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'delivery', address: 'المنصور' })));
+  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB()));
+  await env.withSecurityRulesDisabled(async (c) => updateDoc(doc(c.firestore(), 'restaurants/R1'), { features: { online: false } }));
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB()));
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ restaurantId: 'R3' })), 'expired restaurant');
+});
+
+test('webOrders: الويتر (موظف) يطلب لطاولة باسمه، والزبون يتابع بالمعرّف بس', async () => {
+  await seedPM({ ...PM, on: false });
+  await assertSucceeds(setDoc(doc(as('cash1'), 'webOrders/W1'), WEB({ source: 'waiter', mode: 'table', table: '3', phone: '', waiter: 'علي', waiterUid: 'cash1' })));
+  await assertFails(setDoc(doc(as('cash1'), 'webOrders/W2'), WEB({ source: 'waiter', mode: 'table', table: '3', phone: '', waiterUid: 'someone' })));
+  await assertFails(setDoc(doc(as('cash1'), 'webOrders/W3'), WEB({ source: 'waiter', mode: 'pickup', waiterUid: 'cash1' })));
+  await assertFails(setDoc(doc(as('rest2'), 'webOrders/W4'), WEB({ source: 'waiter', mode: 'table', table: '3', phone: '', waiterUid: 'rest2' })));
+  await assertSucceeds(getDoc(doc(anon(), 'webOrders/W1')));
+  await assertFails(getDocs(collection(anon(), 'webOrders')));
+  await assertSucceeds(getDocs(query(collection(as('cash1'), 'webOrders'), where('restaurantId', '==', 'R1'))));
+  await assertFails(getDocs(query(collection(as('rest2'), 'webOrders'), where('restaurantId', '==', 'R1'))));
+});
+
+test('webOrders: الكاشير يستلم مرة وحدة، بعدها تتحدث المرحلة بس؛ والزبون ما يغيّر شي', async () => {
+  await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'webOrders/W1'), WEB()));
+  await assertFails(updateDoc(doc(anon(), 'webOrders/W1'), { status: 'accepted' }));
+  await assertFails(updateDoc(doc(as('rest2'), 'webOrders/W1'), { status: 'accepted' }));
+  await assertFails(updateDoc(doc(as('cash1'), 'webOrders/W1'), { status: 'accepted', total: 1 }), 'cannot change the order');
+  await assertSucceeds(updateDoc(doc(as('cash1'), 'webOrders/W1'), { status: 'accepted', acceptedBy: 'dev1', acceptedAtMs: 1 }));
+  await assertFails(updateDoc(doc(as('cash2'), 'webOrders/W1'), { acceptedBy: 'dev2' }), 'second device cannot re-claim');
+  await assertFails(updateDoc(doc(as('cash2'), 'webOrders/W1'), { status: 'rejected' }));
+  await assertSucceeds(updateDoc(doc(as('cash2'), 'webOrders/W1'), { orderId: 'O9', stage: 'ready', stageAtMs: 2, ticket: '12' }));
+  await assertFails(deleteDoc(doc(as('cash1'), 'webOrders/W1')));
+  await assertSucceeds(deleteDoc(doc(as('rest1'), 'webOrders/W1')));
+  // الرفض مع السبب (مرة وحدة، ومن الجديد بس)
+  await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'webOrders/W2'), WEB()));
+  await assertFails(updateDoc(doc(as('rest2'), 'webOrders/W2'), { status: 'rejected', reason: 'x' }));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'webOrders/W2'), { status: 'rejected', reason: 'الشاورما خلصت' }));
+  await assertFails(updateDoc(doc(as('cash1'), 'webOrders/W2'), { status: 'accepted' }), 'rejected stays rejected');
+});
+
+// ── الفروع ──
+async function seedBranches() {
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    // صاحب R1 يملك فرعين: R2 (نشط) و R3 (منتهي)
+    await setDoc(doc(db, 'users/multi'), { role: 'restaurant', restaurantId: 'R1', branches: ['R2', 'R3'] });
+    await setDoc(doc(db, 'restaurants/R1/menu/main'), { cats: [] });
+    await setDoc(doc(db, 'restaurants/R2/menu/main'), { cats: [] });
+    await setDoc(doc(db, 'restaurants/R4'), { name: 'R4', userId: 'x', active: true });
+    await setDoc(doc(db, 'orders/O4'), { restaurantId: 'R4', status: 'pending', value: 1 });
+  });
+}
+test('الفروع: صاحب المطعم يدير كل فروعه النشطة (طلبات، منيو، كاشيرية، كباتن، خطوط)', async () => {
+  await seedBranches();
+  const m = as('multi');
+  await assertSucceeds(getDoc(doc(m, 'restaurants/R2')));
+  await assertSucceeds(getDoc(doc(m, 'restaurants/R3')), 'can see an expired branch (to show its status)');
+  await assertSucceeds(getDocs(query(collection(m, 'orders'), where('restaurantId', '==', 'R2'))));
+  await assertSucceeds(getDoc(doc(m, 'orders/O2')));
+  await assertSucceeds(updateDoc(doc(m, 'orders/O2'), { status: 'cancelled' }));
+  await assertFails(updateDoc(doc(m, 'orders/O2'), { restaurantId: 'R4' }), 'cannot move an order to another restaurant');
+  await assertSucceeds(setDoc(doc(m, 'orders/N2'), { restaurantId: 'R2', value: 5000, orderType: 'salon' }));
+  await assertSucceeds(setDoc(doc(m, 'restaurants/R2/menu/main'), { cats: [{ cat: 'x' }] }));
+  await assertSucceeds(updateDoc(doc(m, 'restaurants/R2'), { name: 'فرع زيونة' }));
+  await assertFails(updateDoc(doc(m, 'restaurants/R2'), { expiryMs: Date.now() + 400 * DAY }), 'subscription stays with super admin');
+  await assertSucceeds(setDoc(doc(m, 'users/newCash'), { email: 'c@x.com', role: 'cashier', name: 'ك', restaurantId: 'R2', perms: {} }));
+  await assertSucceeds(getDocs(query(collection(m, 'users'), where('restaurantId', '==', 'R2'), where('role', '==', 'cashier'))));
+  await assertSucceeds(setDoc(doc(m, 'captains/CB'), { restaurantId: 'R2', name: 'كابتن الفرع' }));
+  await assertSucceeds(setDoc(doc(m, 'users/newCap'), { email: 'k@x.com', role: 'captain', name: 'ك', restaurantId: 'R2', captainId: 'CB' }));
+  await assertSucceeds(setDoc(doc(m, 'lineTokens/TOKEN_R2_LINE1_xxxxxxxxxxxxxxxx'), { restaurantId: 'R2', line: '1', label: '', active: true }));
+  await assertSucceeds(setDoc(doc(m, 'pushTokens/multi'), { tokens: ['t'], role: 'restaurant', captainId: '', restaurantId: 'R2', updatedAtMs: 1 }));
+  // ولا يزال يدير مطعمه الأساسي
+  await assertSucceeds(setDoc(doc(m, 'restaurants/R1/menu/main'), { cats: [] }));
+});
+test('الفروع: الفرع المنتهي مقفول، ومطعم مو من فروعه ممنوع، وما يگدر يضيف فروع لنفسه', async () => {
+  await seedBranches();
+  const m = as('multi');
+  await assertFails(setDoc(doc(m, 'orders/N3'), { restaurantId: 'R3', value: 1, orderType: 'salon' }), 'expired branch');
+  await assertFails(setDoc(doc(m, 'restaurants/R3/menu/main'), { cats: [] }), 'expired branch');
+  await assertFails(getDoc(doc(m, 'restaurants/R4')));
+  await assertFails(getDoc(doc(m, 'orders/O4')));
+  await assertFails(getDocs(query(collection(m, 'orders'), where('restaurantId', '==', 'R4'))));
+  await assertFails(setDoc(doc(m, 'orders/N4'), { restaurantId: 'R4', value: 1, orderType: 'salon' }));
+  await assertFails(setDoc(doc(m, 'users/c4'), { email: 'c@x.com', role: 'cashier', name: 'ك', restaurantId: 'R4', perms: {} }));
+  await assertFails(updateDoc(doc(m, 'users/multi'), { branches: ['R2', 'R3', 'R4'] }), 'only super admin links branches');
+  await assertFails(updateDoc(doc(m, 'users/multi'), { restaurantId: 'R4' }));
+  await assertSucceeds(updateDoc(doc(as('admin1'), 'users/multi'), { branches: ['R2', 'R3', 'R4'] }));
+  await assertSucceeds(getDoc(doc(m, 'orders/O4')), 'after super admin links it');
+  // صاحب الفرع الأصلي (rest2) يبقى يدير فرعه، وكاشير الفرع الأساسي ما يدخل للفروع
+  await assertSucceeds(getDocs(query(collection(as('rest2'), 'orders'), where('restaurantId', '==', 'R2'))));
+  await assertFails(getDocs(query(collection(as('cash1'), 'orders'), where('restaurantId', '==', 'R2'))));
+});

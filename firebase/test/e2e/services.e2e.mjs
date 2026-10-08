@@ -39,7 +39,7 @@ test('super admin switches restaurant services; restaurant cannot', async () => 
   await adminLogin(p, 'boss@x.com');
   await p.click('.dnav-btn[data-screen="scRests"]');
   await p.waitForSelector('#restList .svc');
-  assert.equal(await p.locator('#restList .svc.on').count(), 4);
+  assert.equal(await p.locator('#restList .svc.on').count(), 5);   // الكابتن، الشريحة، واتساب، البيجر، المنيو الأونلاين (المحاكي مطفي افتراضياً)
   await p.click('#restList .svc >> text=البيجر');
   await until(async () => (await read('restaurants/RS')).features?.pager === false);
   await p.click('#restList .svc >> text=الكابتن');
