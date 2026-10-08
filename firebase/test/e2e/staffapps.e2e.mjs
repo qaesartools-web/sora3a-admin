@@ -154,3 +154,30 @@ test('waiter: a captain account cannot use it; a wrong password shows an Arabic 
   assert.equal(await w.locator('#app:not([hidden])').count(), 0);
   await w.context().close();
 });
+
+test('waiter: opening the link asks to install the app (prompt, close, manifest)', async () => {
+  const w = await page(B, { w: 390, h: 844 });
+  await w.goto(BASE + 'waiter.html');
+  await w.waitForSelector('#gEmail');
+  assert.equal(await w.isVisible('#inst'), false);
+  // المتصفح يعلن إن التطبيق قابل للتثبيت
+  await w.evaluate(() => { const e = new Event('beforeinstallprompt', { cancelable: true }); e.prompt = () => { window.__prompted = true; }; e.userChoice = Promise.resolve({ outcome: 'accepted' }); dispatchEvent(e); });
+  await w.waitForSelector('#inst:not([hidden]) #instGo');
+  assert.ok((await w.textContent('#inst')).includes('ثبّت تطبيق الويتر'));
+  await w.click('#instGo');
+  await w.waitForSelector('#inst', { state: 'hidden' });
+  assert.equal(await w.evaluate(() => window.__prompted), true);
+  // إغلاق البطاقة يخليها مسكّرة لنفس الجلسة
+  await w.evaluate(() => { const e = new Event('beforeinstallprompt'); e.prompt = () => {}; e.userChoice = Promise.resolve({ outcome: 'dismissed' }); dispatchEvent(e); });
+  await w.click('#instX');
+  await w.reload(); await w.waitForSelector('#gEmail');
+  await w.evaluate(() => { const e = new Event('beforeinstallprompt'); e.prompt = () => {}; e.userChoice = Promise.resolve({}); dispatchEvent(e); });
+  assert.equal(await w.isVisible('#inst'), false);
+  const m = await (await fetch(BASE + 'waiter.webmanifest')).json();
+  assert.equal(m.start_url, '/sora3a-rest2/waiter.html?app=1'); assert.equal(m.display, 'standalone');
+  assert.ok(m.start_url.startsWith(m.scope));
+  assert.deepEqual(m.icons.map((i) => i.sizes), ['192x192', '512x512', '512x512']);
+  assert.equal(await w.getAttribute('link[rel=manifest]', 'href'), 'waiter.webmanifest');
+  assert.deepEqual(clean(w), []);
+  await w.context().close();
+});
