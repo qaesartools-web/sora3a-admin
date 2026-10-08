@@ -1780,12 +1780,12 @@ window.accInit=function(){
   accRender();
 };
 const axAllExp=()=>{const ids=new Set(axExp.map(e=>e.id));return axExp.concat(((axDoc&&axDoc.expenses)||[]).filter(e=>!ids.has(e.id)).map(e=>({...e,_legacy:true})));};
-window.axSetTab=t=>{axTab=t;accRender();};
+window.axSetTab=t=>{axTab=t==='rec'?'items':t;accRender();};
 // live: ما نعيد رسم الشاشة إذا نافذة التفاصيل مفتوحة أو المستخدم يكتب
 window.accRender=function(live){
   const el=document.getElementById('axBody');if(!el)return;
   if(live&&(document.getElementById('axMo').classList.contains('open')||/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName||''))){if(axView)axView();return;}
-  const T=[['rep','🧾 تقرير المبيعات'],['fin','💰 قائمة الدخل'],['items','📋 الأصناف والأرباح'],['shifts','🧮 الورديات'],['exp','💸 المصروفات'],['mat','📦 المخزون'],['mov','🔄 حركات المخزون'],['rec','🧾 الوصفات']];
+  const T=[['rep','🧾 تقرير المبيعات'],['fin','💰 قائمة الدخل'],['items','📋 الأصناف والأرباح'],['shifts','🧮 الورديات'],['exp','💸 المصروفات'],['mat','📦 المخزون'],['mov','🔄 حركات المخزون']];
   document.getElementById('axTabs').innerHTML=T.map(([k,l])=>`<button class="${k===axTab?'on':''}" onclick="axSetTab('${k}')">${l}</button>`).join('');
   if(!axRid){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">اختر المطعم</div>';return;}
   if(axDoc===null){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">⏳ جاري التحميل…</div>';return;}
@@ -1816,7 +1816,7 @@ window.accRender=function(live){
       <tr><th>الصنف</th><th>سعر البيع</th><th>التكلفة</th><th>الربح للحبة</th><th>نسبة الربح</th><th>المباع</th><th>المبيعات</th><th>الربح</th></tr>
       ${(window.axKeys=rows.sort((a,b)=>b.rev-a.rev).map(x=>x.k),rows).map((x,ix)=>{const pr=x.price-x.cost,m=x.price?Math.round(pr*100/x.price):0;
         return `<tr class="ax-row" onclick="axItemView(axKeys[${ix}])"><td><b>${esc(x.name)}</b>${x.vn!=='وحدة'?' ('+esc(x.vn)+')':''}<small style="display:block;color:var(--muted)">${esc(x.cat)}</small></td><td>${fmt(x.price)}</td><td>${x.cost?fmt(Math.round(x.cost))+(x.rec?' 🧾':''):'<span class="ax-neg">—</span>'}</td><td class="${x.cost?(pr>=0?'ax-pos':'ax-neg'):''}">${x.cost?fmt(Math.round(pr)):'—'}</td><td>${x.cost?m+'%':'—'}</td><td>${toA(x.q)}</td><td>${fmt(Math.round(x.rev))}</td><td class="${x.prof>=0?'ax-pos':'ax-neg'}">${x.q?fmt(Math.round(x.prof)):'—'}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">لا توجد أصناف</td></tr>'}
-    </table></div><div style="font-size:11px;color:var(--muted);margin-top:6px">🧾 = التكلفة محسوبة من وصفة الصنف. الربح بالمبيعات محسوب بتكلفة يوم البيع.</div></div>`;
+    </table></div><div style="font-size:11px;color:var(--muted);margin-top:6px">🧾 = التكلفة محسوبة من وصفة الصنف (الوصفات تتعدّل من الكاشير ← المخزون ← «الوصفات والتكلفة»). الربح بالمبيعات محسوب بتكلفة يوم البيع.</div></div>`;
   }else if(axTab==='shifts'){
     const list=axShifts.filter(x=>inR(x.openedAtMs)).sort((a,b)=>(b.openedAtMs||0)-(a.openedAtMs||0));
     const diffT=list.filter(x=>x.status==='closed').reduce((s,x)=>s+(x.diff||0),0);
