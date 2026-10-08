@@ -53,6 +53,70 @@ test('features are grouped in 4 tabs (one group shown at a time), all 14 cards k
   await p.context().close();
 });
 
+test('Arabic by default; the 2-letter button switches to English (LTR) and back; ?lang=en opens English directly', async () => {
+  const p = await page(B, { w: 390, h: 900 });
+  await p.goto(SITE); await p.waitForSelector('#langBtn');
+  assert.deepEqual(await p.evaluate(() => [document.documentElement.lang, document.dir]), ['ar', 'rtl']);
+  assert.equal(await p.textContent('#langBtn'), 'EN');
+  assert.match(await p.textContent('.hero h1'), /من أول رنّة/);
+  await p.click('#langBtn');
+  assert.deepEqual(await p.evaluate(() => [document.documentElement.lang, document.dir]), ['en', 'ltr']);
+  assert.equal(await p.textContent('#langBtn'), 'AR');
+  assert.match(await p.textContent('.hero h1'), /From the first ring/);
+  assert.match(await p.textContent('#features'), /Calls turn into orders/);
+  assert.equal(await p.getAttribute('#fOwner', 'placeholder'), 'e.g. Ahmed Ali');
+  assert.match(await p.title(), /^Sora3a/);
+  assert.match(p.url(), /\?lang=en$/);
+  // ما ضاع ولا نص عربي بالواجهة الإنكليزية (غير الوصل التجريبي واسم المطعم)
+  const arabicLeft = await p.evaluate(() => [...document.querySelectorAll('[data-en]')].filter((e) => /[\u0600-\u06FF]/.test(e.textContent)).length);
+  assert.equal(arabicLeft, 0);
+  const over = await p.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+  assert.ok(over <= 1, 'horizontal overflow in English ' + over);
+  await p.click('#langBtn');
+  assert.deepEqual(await p.evaluate(() => [document.documentElement.lang, document.dir]), ['ar', 'rtl']);
+  assert.match(await p.textContent('.hero h1'), /من أول رنّة/);
+  assert.match(await p.textContent('#features'), /المكالمة تتحول إلى طلب/);
+  assert.doesNotMatch(p.url(), /lang=/);
+  await p.goto(SITE + '?lang=en'); await p.waitForSelector('#langBtn');
+  assert.equal(await p.evaluate(() => document.documentElement.lang), 'en');
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
+test('live demo plays the ring → kitchen → door story', async () => {
+  const p = await page(B, { w: 1280, h: 900 });
+  await p.goto(SITE);
+  await p.waitForFunction(() => document.getElementById('stage').classList.contains('s5'), null, { timeout: 15000 });
+  await p.click('#ringBtn');
+  assert.equal(await p.evaluate(() => document.getElementById('stage').classList.contains('s5')), false, 'replays from the start');
+  await p.waitForFunction(() => document.getElementById('stage').classList.contains('s3'), null, { timeout: 6000 });
+  await p.context().close();
+});
+
+test('English visitor can send the trial form; the lead keeps the Arabic values the admin expects', async () => {
+  await E.clearFirestore();
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'users', U.admin), { role: 'admin', email: 'boss@x.com', name: 'Boss' }); });
+  const p = await page(B, { w: 390, h: 900 });
+  await p.goto(SITE + '?lang=en');
+  await p.click('#bNext');
+  assert.match(await p.textContent('.fld.bad .err'), /Enter your name/);
+  await p.fill('#fOwner', 'Ali Hassan'); await p.fill('#fRest', 'Grill House'); await p.fill('#fPhone', '07701234567');
+  await p.click('#bNext');
+  await p.selectOption('#fKind', { label: 'Café' });
+  await p.click('label.chip:has(input[value="calls"])');
+  await p.click('#bNext');
+  assert.match(await p.textContent('#bNext'), /Send my trial request/);
+  await p.click('#bNext');
+  await p.waitForSelector('.done', { timeout: 15000 });
+  assert.match(await p.textContent('.done'), /Welcome to the Sora3a family, Ali Hassan/);
+  const l = await until(async () => (await all('leads'))[0]);
+  assert.equal(l.kind, 'كافيه'); assert.deepEqual(l.services, ['pos', 'calls']);
+  await E.clearFirestore();
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'users', U.admin), { role: 'admin', email: 'boss@x.com', name: 'Boss' }); });
+  assert.deepEqual(p.errors, []);
+  await p.context().close();
+});
+
 test('trial form validates, saves the lead with requirements, shows the welcome', async () => {
   const p = await page(B, { w: 390, h: 900 });
   await p.goto(SITE);
