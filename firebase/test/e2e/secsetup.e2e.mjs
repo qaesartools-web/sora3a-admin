@@ -122,3 +122,60 @@ test('cashier: no test mode without the service; when the admin turns it off, te
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
+
+async function login(p) {
+  await p.goto('http://localhost:5050/sora3a-rest2/index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#inEmail', 'mandi@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
+  await p.waitForSelector('#prods .prod', { timeout: 15000 });
+  await p.evaluate(() => { goTab('menu'); showMTab('settings'); });
+}
+
+test('Android cashier app: built-in/Bluetooth printers listed, add & remove a network printer, no auto-start option', async () => {
+  const p = await page(B, { w: 1280, h: 900 });
+  await p.addInitScript(() => {
+    window.__lan = []; window.__calls = [];
+    window.SoraDesktop = { version: '1.3', platform: 'android', canAutoStart: false, canAddNetwork: true,
+      printers: async () => [{ name: '🖨️ الطابعة المدمجة بالجهاز', displayName: '🖨️ الطابعة المدمجة بالجهاز', isDefault: true, ok: true, statusText: 'جاهزة', kind: 'bt' },
+        ...window.__lan.map((n) => ({ name: n, displayName: n, isDefault: false, ok: false, statusText: 'ما ترد على الشبكة', kind: 'lan' }))],
+      print: async (h, o) => { window.__calls.push(o); return { ok: true }; }, jobs: async () => [], reprint: async () => ({ ok: true }),
+      getTestMode: async () => false, setTestMode: async (v) => v, openSimulator: async () => true, getAutoStart: async () => false, setAutoStart: async () => false, onUpdate() {},
+      addNetworkPrinter: async (n, ip, port) => { const name = '🌐 ' + n + ' (' + ip + ')'; window.__lan.push(name); window.__calls.push({ add: [n, ip, port] }); return { ok: true, name }; },
+      removePrinter: async (n) => { window.__lan = window.__lan.filter((x) => x !== n); return { ok: true }; } };
+  });
+  await login(p);
+  await p.waitForSelector('#dpNetIp');
+  assert.equal(await p.$('#dpAutoChk'), null, 'no auto-start on Android');
+  assert.match(await p.textContent('#dpStatus'), /الطابعة المدمجة بالجهاز/);
+  // IP غلط → تنبيه، ما ينضاف
+  await p.fill('#dpNetIp', '192.168.1');
+  await p.click('button[onclick="dpAddNet()"]');
+  await p.waitForSelector('text=اكتب IP الطابعة صحيح');
+  await p.fill('#dpNetName', 'مطبخ الشاورما'); await p.fill('#dpNetIp', '192.168.1.50');
+  await p.click('button[onclick="dpAddNet()"]');
+  await p.waitForFunction(() => document.getElementById('dpStatus').textContent.includes('مطبخ الشاورما (192.168.1.50)'));
+  assert.deepEqual(await p.evaluate(() => window.__calls.find((c) => c.add).add), ['مطبخ الشاورما', '192.168.1.50', 9100]);
+  assert.match(await p.textContent('#dpStatus'), /ما ترد على الشبكة/);
+  assert.ok(await p.evaluate(() => [...document.querySelectorAll('#dpP_k1 option')].some((o) => o.value === '🌐 مطبخ الشاورما (192.168.1.50)')), 'new printer selectable for a section');
+  await p.click('#dpStatus .dp-x');
+  await p.waitForFunction(() => !document.getElementById('dpStatus').textContent.includes('192.168.1.50'));
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
+test('browser on each system offers the right app download', async () => {
+  const cases = [
+    ['Mozilla/5.0 (Linux; Android 11; T2s) AppleWebKit/537.36 Chrome/140 Safari/537.36', /download\/cashier-android\/sora3a-cashier\.apk$/, /للأندرويد/],
+    ['Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Version/18 Safari/605.1.15', /latest\/download\/sora3a-cashier-mac\.dmg$/, /للماك/],
+    ['Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/140 Safari/537.36', /latest\/download\/sora3a-cashier-linux\.AppImage$/, /للينكس/],
+  ];
+  for (const [ua, href, label] of cases) {
+    const p = await page(B, { w: 1280, h: 900 });
+    await p.addInitScript((u) => { Object.defineProperty(navigator, 'userAgent', { get: () => u }); }, ua);
+    await login(p);
+    await p.waitForSelector('.dp-promo a');
+    assert.match(await p.getAttribute('.dp-promo a', 'href'), href, ua);
+    assert.match(await p.textContent('.dp-promo'), label, ua);
+    await p.context().close();
+  }
+});
