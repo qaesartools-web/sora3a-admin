@@ -435,7 +435,7 @@ body.staff-mode .staff-banner{display:block;}
     <div class="screen admin-only" id="scLeads">
       <div class="card">
         <div class="card-title"><span class="dot"></span> 🎁 طلبات التجربة من الموقع</div>
-        <div class="entity-sub" style="margin-bottom:10px">كل زبون يملأ نموذج «جرّب مجاناً» بالموقع يظهر هنا مع طلباته. فعّل له تجربة يومين بضغطة، وابعث له بيانات الدخول على واتساب.</div>
+        <div class="entity-sub" style="margin-bottom:10px">كل زبون يملأ نموذج «جرّب مجاناً» بالموقع يظهر هنا مع طلباته. فعّل له تجربة 15 يوم بضغطة، وابعث له بيانات الدخول على واتساب.</div>
         <div class="ld-stats" id="ldStats"></div>
         <div class="ld-filters" id="ldFilters"></div>
       </div>
@@ -706,7 +706,7 @@ const isStaff=()=>currentUser?.role==='staff';
 const canManage=()=>isAdmin()||isRest();
 // خدمات المطعم: يفتحها ويغلقها المدير الأعلى فقط (الافتراضي مفعّلة)
 // العنصر الثالث = مطفية افتراضياً (تشتغل بس إذا شغّلها المدير الأعلى)
-const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['printTest','🧪 تجربة الطابعات (محاكي)',1]];
+const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 منيو QR وطلب أونلاين'],['printTest','🧪 تجربة الطابعات (محاكي)',1]];
 const OFF_DEFAULT=new Set(SERVICES.filter(x=>x[2]).map(x=>x[0]));
 const featOf=(r,k)=>OFF_DEFAULT.has(k)?!!(r&&r.features&&r.features[k]===true):(!r||!r.features||r.features[k]!==false);
 let myRestDoc=null;
@@ -1382,14 +1382,14 @@ function renderLeads(){
       <div class="entity-actions" style="flex-wrap:wrap">
         <a class="btn-sm btn-cap" style="text-decoration:none" href="https://wa.me/${ldWa(l.phone)}?text=${encodeURIComponent(ldWelcome(l))}" target="_blank" rel="noopener" onclick="ldTouch('${esc(l.id)}')">💬 واتساب</a>
         <a class="btn-sm btn-edit" style="text-decoration:none" href="tel:${esc(String(l.phone||'').replace(/[^0-9+]/g,''))}" onclick="ldTouch('${esc(l.id)}')">📞 اتصال</a>
-        ${l.restaurantId?(eff==='ended'||st==='trial'?`<button class="btn-sm btn-edit" onclick="ldExtend('${esc(l.id)}')">⏳ تمديد يومين</button><button class="btn-sm btn-cap" onclick="ldSetSt('${esc(l.id)}','won')">✅ اشترك</button>`:''):`<button class="btn-sm btn-cap" onclick="ldTrialOpen('${esc(l.id)}')">🎁 تفعيل تجربة يومين</button>`}
+        ${l.restaurantId?(eff==='ended'||st==='trial'?`<button class="btn-sm btn-edit" onclick="ldExtend('${esc(l.id)}')">⏳ تمديد أسبوع</button><button class="btn-sm btn-cap" onclick="ldSetSt('${esc(l.id)}','won')">✅ اشترك</button>`:''):`<button class="btn-sm btn-cap" onclick="ldTrialOpen('${esc(l.id)}')">🎁 تفعيل تجربة 15 يوم</button>`}
         <select class="form-sel" style="width:auto;padding:5px 8px;font-size:12px" onchange="ldSetSt('${esc(l.id)}',this.value)">${Object.entries(LD_ST).map(([k,v])=>`<option value="${k}" ${k===st?'selected':''}>${v[0]} ${v[1]}</option>`).join('')}</select>
         <button class="btn-sm btn-del" onclick="ldDel('${esc(l.id)}')">🗑️</button>
       </div></div>`;
   }).join('');
 }
 function ldWelcome(l){
-  return `أهلاً ${l.owner||''} 👋\nمعك فريق *سرعة* لإدارة المطاعم 🚀\n\nوصلنا طلبك لتجربة المنظومة لمطعم *${l.restaurant||''}*، وفرحانين بيك!\n\nخلال دقائق نجهزلك حساب تجريبي مجاني لمدة يومين، تجرب بيه:\n📞 المكالمات تتحول لطلبات تلقائياً\n🧾 كاشير يشتغل حتى بدون نت\n🖨️ كل قسم مطبخ على طابعته\n🛵 تطبيق الكابتن ورابط تتبع للزبون\n📊 أرباح كل صنف وتقارير دقيقة\n\nإذا عندك أي سؤال، احنا هنا 🌟`;
+  return `أهلاً ${l.owner||''} 👋\nمعك فريق *سرعة* لإدارة المطاعم 🚀\n\nوصلنا طلبك لتجربة المنظومة لمطعم *${l.restaurant||''}*، وفرحانين بيك!\n\nخلال دقائق نجهزلك حساب تجريبي مجاني لمدة 15 يوم، تجرب بيه:\n📞 المكالمات تتحول لطلبات تلقائياً\n🧾 كاشير يشتغل حتى بدون نت\n🖨️ كل قسم مطبخ على طابعته\n🛵 تطبيق الكابتن ورابط تتبع للزبون\n📊 أرباح كل صنف وتقارير دقيقة\n\nإذا عندك أي سؤال، احنا هنا 🌟`;
 }
 function ldCredMsg(l,email,pass,endMs){
   const end=new Date(endMs).toLocaleDateString('en-GB');
@@ -1399,13 +1399,14 @@ window.ldTouch=async id=>{const l=allLeads.find(x=>x.id===id);if(l&&(l.status||'
 window.ldSetSt=async(id,v)=>{try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'leads',id),{status:v});toast('✅ تم التحديث');}catch(e){toast('❌ تعذّر التحديث: '+(e.code||e.message),'error');}};
 window.ldDel=async id=>{if(!confirm('حذف هذا الطلب نهائياً؟'))return;try{await window._fb.deleteDoc(window._fb.doc(window._fb.db,'leads',id));toast('🗑️ تم الحذف');}catch(e){toast('❌ تعذّر الحذف: '+(e.code||e.message),'error');}};
 const ldPass=()=>{const a='abcdefghjkmnpqrstuvwxyz23456789';let s='';const r=crypto.getRandomValues(new Uint32Array(8));r.forEach(x=>s+=a[x%a.length]);return 'Sr-'+s;};
+const TRIAL_DAYS=15,TRIAL_EXTEND=7; // التجربة المجانية ١٥ يوم، والتمديد أسبوع
 const ymdPlus=d=>{const t=new Date(Date.now()+d*86400000);return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');};
 window.ldClose=()=>document.getElementById('ldMo').classList.remove('open');
 window.ldTrialOpen=function(id){
   const l=allLeads.find(x=>x.id===id);if(!l)return;
   const em=(l.email||'').trim().toLowerCase()||('trial'+String(l.phone||'').replace(/\D/g,'').slice(-8)+'@sora3a.app');
-  document.getElementById('ldMoBody').innerHTML=`<div class="modal-title">🎁 تفعيل تجربة يومين</div>
-    <div class="entity-sub" style="margin-bottom:10px">ينشأ مطعم «${esc(l.restaurant||'')}» مع حساب صاحب المطعم، وكل الخدمات مفتوحة. ينتهي تلقائياً بعد يومين.</div>
+  document.getElementById('ldMoBody').innerHTML=`<div class="modal-title">🎁 تفعيل تجربة 15 يوم</div>
+    <div class="entity-sub" style="margin-bottom:10px">ينشأ مطعم «${esc(l.restaurant||'')}» مع حساب صاحب المطعم، وكل الخدمات مفتوحة. ينتهي تلقائياً بعد 15 يوم.</div>
     <div class="form-group"><label>اسم المطعم</label><input class="form-inp" id="ldName" value="${esc(l.restaurant||'')}"></div>
     <div class="form-group"><label>المنطقة</label><input class="form-inp" id="ldArea" value="${esc(l.city||'')}"></div>
     <div class="form-group"><label>إيميل الدخول</label><input class="form-inp" id="ldEmail" type="email" value="${esc(em)}" style="direction:ltr"></div>
@@ -1425,7 +1426,7 @@ window.ldTrialGo=async function(id){
   try{
     const cred=await fb.createUserWithEmailAndPassword(fb.auth2,email,pass);
     const uid=cred.user.uid;await fb.signOut(fb.auth2);
-    const expiry=ymdPlus(2),endMs=dayEndMs(expiry);
+    const expiry=ymdPlus(TRIAL_DAYS),endMs=dayEndMs(expiry);
     const restRef=fb.doc(fb.collection(fb.db,'restaurants'));
     await fb.setDoc(restRef,{name,area,email,phone:l.phone||'',subscription:0,userId:uid,active:true,expiry,expiryMs:endMs,trial:true,leadId:id,createdAt:new Date().toISOString(),createdAtMs:Date.now()});
     await fb.setDoc(fb.doc(fb.db,'users',uid),{email,role:'restaurant',name,restaurantId:restRef.id,createdAtMs:Date.now()});
@@ -1448,7 +1449,7 @@ window.ldTrialGo=async function(id){
 };
 window.ldExtend=async function(id){
   const l=allLeads.find(x=>x.id===id);if(!l||!l.restaurantId)return;
-  const expiry=ymdPlus(2),endMs=dayEndMs(expiry);
+  const expiry=ymdPlus(TRIAL_EXTEND),endMs=dayEndMs(expiry);
   try{
     await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',l.restaurantId),{expiry,expiryMs:endMs,active:true});
     await window._fb.updateDoc(window._fb.doc(window._fb.db,'leads',id),{status:'trial',trialEndsMs:endMs});

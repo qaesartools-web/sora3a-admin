@@ -35,7 +35,7 @@ service cloud.firestore {
       return r.get('active', true) != false
         && (r.get('expiryMs', 0) == 0 || r.get('expiryMs', 0) > request.time.toMillis());
     }
-    // خدمات المطعم يفتحها ويغلقها المدير الأعلى فقط: captain / calls / whatsapp / pager (الافتراضي مفعّلة)
+    // خدمات المطعم يفتحها ويغلقها المدير الأعلى فقط: captain / calls / whatsapp / pager / online (الافتراضي مفعّلة)
     function feat(rid, k) { return restDoc(rid).get('features', {}).get(k, true) != false; }
     function isRestaurant() {
       return active() && role() == 'restaurant'
@@ -363,6 +363,65 @@ service cloud.firestore {
         && request.resource.data.get('wantsTrial', true) is bool
         && request.resource.data.status == 'new' && request.resource.data.get('source', 'site') == 'site'
         && request.resource.data.createdAt == request.time;
+    }
+
+    // ── publicMenus (المنيو الأونلاين: يقرأه أي زبون بالرابط أو QR، ويكتبه المطعم) ──
+    //  نسخة عامة من المنيو بدون أي بيانات خاصة (لا تكاليف ولا اشتراك ولا حسابات). الصور بمجموعة img.
+    match /publicMenus/{rid} {
+      allow get: if true;
+      allow list: if false;
+      allow create, update: if (isAdmin() || staffOf(rid))
+        && request.resource.data.keys().hasOnly(['name','area','phone','on','modes','fee','tables','note','cats','autoTable','updatedAtMs'])
+        && str(request.resource.data.get('name', ''), 80) && str(request.resource.data.get('area', ''), 120)
+        && str(request.resource.data.get('phone', ''), 30) && str(request.resource.data.get('note', ''), 300)
+        && request.resource.data.get('on', false) is bool
+        && request.resource.data.get('modes', {}) is map
+        && request.resource.data.get('cats', []) is list && request.resource.data.get('cats', []).size() <= 80;
+      allow delete: if isAdmin() || ownsRest(rid);
+      match /img/{imgId} {
+        allow get: if true;
+        allow list: if false;
+        allow create, update: if (isAdmin() || staffOf(rid))
+          && request.resource.data.keys().hasOnly(['data','updatedAtMs'])
+          && request.resource.data.data is string && request.resource.data.data.size() < 300000;
+        allow delete: if isAdmin() || staffOf(rid);
+      }
+    }
+
+    // ── webOrders (طلب الزبون من المنيو الأونلاين، أو طلب الويتر ← يستلمه الكاشير ويطبعه للمطبخ) ──
+    //  الزبون ينشئ فقط (بدون تسجيل دخول) إذا المنيو الأونلاين مفعّل ونوع الطلب مسموح.
+    //  يتابع حالة طلبه بالمعرّف (get فقط). الكاشير يعيد حساب الأسعار من منيوه، فما نثق بأسعار الزبون.
+    match /webOrders/{id} {
+      function pm(r) { return get(/databases/$(database)/documents/publicMenus/$(r)).data; }
+      function okNew(d) {
+        return d.keys().hasOnly(['restaurantId','source','mode','table','items','customer','phone','address','note','status','total','createdAtMs','waiter','waiterUid','day'])
+          && str(d.restaurantId, 64) && d.status == 'new'
+          && d.mode in ['table', 'pickup', 'delivery']
+          && d.items is list && d.items.size() >= 1 && d.items.size() <= 40
+          && optStr(d, 'table', 10) && optStr(d, 'customer', 60) && optStr(d, 'phone', 20)
+          && optStr(d, 'address', 300) && optStr(d, 'note', 500) && optNum(d, 'total')
+          && optStr(d, 'waiter', 60) && optStr(d, 'day', 10) && d.createdAtMs is int
+          && feat(d.restaurantId, 'online') && restaurantOpen(d.restaurantId)
+          && (d.mode != 'table' || d.get('table', '').size() >= 1)
+          && (d.mode == 'table' || d.get('phone', '').matches('^[0-9+ ]{7,20}$'))
+          && (d.mode != 'delivery' || (d.get('address', '').size() >= 3 && feat(d.restaurantId, 'captain')));
+      }
+      allow create: if okNew(request.resource.data) && (
+          (request.resource.data.source == 'qr'
+            && exists(/databases/$(database)/documents/publicMenus/$(request.resource.data.restaurantId))
+            && pm(request.resource.data.restaurantId).get('on', false) == true
+            && pm(request.resource.data.restaurantId).get('modes', {}).get(request.resource.data.mode, false) == true)
+          || (request.resource.data.source == 'waiter' && request.resource.data.mode == 'table'
+            && staffOf(request.resource.data.restaurantId)
+            && request.resource.data.get('waiterUid', '') == request.auth.uid));
+      allow get: if true;
+      allow list: if isOffice() || staffOf(resource.data.restaurantId);
+      // الاستلام مرة وحدة (new ← accepted/rejected)، وبعدها تتحدث المرحلة بس
+      allow update: if staffOf(resource.data.restaurantId) && (
+          (resource.data.status == 'new' && request.resource.data.status in ['accepted', 'rejected']
+            && onlyChanged(['status','orderId','acceptedBy','acceptedAtMs','reason','stage','stageAtMs','ticket','trackId']))
+          || (resource.data.status == 'accepted' && onlyChanged(['stage','stageAtMs','orderId','ticket','trackId'])));
+      allow delete: if isAdmin() || ownsRest(resource.data.restaurantId);
     }
 
     // ── config (إعدادات عامة يقرأها كل حساب فعّال، ويكتبها المدير الأعلى فقط — مثل رابط سيرفر الإشعارات) ──
