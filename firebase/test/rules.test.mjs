@@ -162,6 +162,8 @@ test('التتبع لا يقبل هاتف أو عنوان الزبون', async (
 // ── التوكنات ──
 test('المستخدم يسجل توكن إشعاراته فقط وبدوره الحقيقي', async () => {
   await assertSucceeds(setDoc(doc(as('cap1'), 'pushTokens/cap1'), { tokens: ['t'], role: 'captain', captainId: 'C1', restaurantId: 'R1' }));
+  await assertSucceeds(setDoc(doc(as('cap1'), 'pushTokens/cap1'), { tokens: ['n'], native: 'n', role: 'captain', captainId: 'C1', restaurantId: 'R1' }));
+  await assertFails(setDoc(doc(as('cap1'), 'pushTokens/cap1'), { tokens: ['n'], native: 5, role: 'captain', captainId: 'C1', restaurantId: 'R1' }));
   await assertFails(setDoc(doc(as('cap1'), 'pushTokens/cap1'), { tokens: ['t'], role: 'captain', captainId: 'C2', restaurantId: 'R1' }));
   await assertFails(setDoc(doc(as('cap1'), 'pushTokens/cap2'), { tokens: ['t'], role: 'captain', captainId: 'C2', restaurantId: 'R1' }));
 });
