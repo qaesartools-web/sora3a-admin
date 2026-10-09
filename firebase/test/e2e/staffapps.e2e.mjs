@@ -238,3 +238,30 @@ test('cashier settings: choose what the ready screen shows (dine-in without page
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
+
+test('ready screen menu with the remote: sound on/off, and log out needs a second press', async () => {
+  const p = await page(B, { w: 1280, h: 720 });
+  await login(p, BASE + 'screen.html', 'scr@x.com');
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
+  await p.waitForFunction(() => document.getElementById('mk').textContent === 'ب');
+  await p.keyboard.press('ArrowDown');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'menuBtn');
+  await p.keyboard.press('Enter');
+  await p.waitForSelector('#menu:not([hidden])');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'mSnd');
+  await p.screenshot({ path: 'shots/ready-screen-menu.png' });
+  await p.keyboard.press('Enter');
+  assert.ok((await p.textContent('#mSnd')).includes('مطفي'));
+  assert.equal(await p.textContent('#sndIco'), '🔇');
+  for (let i = 0; i < 3; i++) await p.keyboard.press('ArrowDown');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'mOut');
+  await p.keyboard.press('Enter');
+  assert.ok((await p.textContent('#mOut')).includes('متأكد'));
+  assert.equal(await p.isVisible('#scr'), true, 'first press only asks');
+  await p.keyboard.press('Enter');
+  await p.waitForSelector('#gEmail', { timeout: 10000 });
+  assert.equal(await p.isVisible('#scr'), false);
+  assert.equal(await p.isVisible('#menu'), false);
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
