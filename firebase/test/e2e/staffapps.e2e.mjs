@@ -60,7 +60,8 @@ test('ready screen: takeaway/pager orders in two columns, new ready number flash
   await login(p, BASE + 'screen.html', 'scr@x.com');
   await p.waitForSelector('#scr:not([hidden]) #prep .n');
   assert.equal(await p.textContent('#nm'), 'برغر الشاشة');
-  assert.deepEqual(await nums(p, '#prep'), ['#12', '#5', '#11📟 بيجر 4']);
+  // الافتراضي: الصالة تطلع حتى بدون بيجر (#8)، والدلفري (#7) لا
+  assert.deepEqual(await nums(p, '#prep'), ['#12', '#5', '#8', '#11📟 بيجر 4']);
   assert.deepEqual(await nums(p, '#ready'), ['#6📟 بيجر 3']);
   await p.screenshot({ path: 'shots/ready-screen.png' });
   // المطبخ يخلص ٥ ← يطلع بالأخضر ويومض
@@ -70,6 +71,12 @@ test('ready screen: takeaway/pager orders in two columns, new ready number flash
   // تحرير البيجر ← يختفي
   await write('orders/B', { pagerDone: true, servedAtMs: Date.now() });
   await p.waitForFunction(() => document.querySelectorAll('#ready .n').length === 1);
+  // المطعم يغيّر من الإعدادات ← الشاشة تتبع فوراً: الصالة بدون بيجر تختفي، والدلفري يطلع لحد ما يستلمه الكابتن
+  await write('restaurants/RW/settings/main', { screen: { salon: false, delivery: true } });
+  await p.waitForFunction(() => [...document.querySelectorAll('#prep .n')].map((e) => e.textContent).join(',') === '#12,#7,#11📟 بيجر 4');
+  await write('orders/C', { status: 'pickup' });
+  await p.waitForFunction(() => ![...document.querySelectorAll('#prep .n')].some((e) => e.textContent === '#7'));
+  await write('restaurants/RW/settings/main', { screen: { salon: true, delivery: false } });
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
@@ -213,5 +220,21 @@ test('ready screen updates itself when the page is updated (no one touches the T
   await p.waitForFunction(() => !window.__oldPage, null, { timeout: 15000 });
   await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });   // رجعت الشاشة وحدها بدون تسجيل دخول
   assert.equal(await p.locator('#gEmail').count(), 0);
+  await p.context().close();
+});
+
+test('cashier settings: choose what the ready screen shows (dine-in without pager, delivery)', async () => {
+  const p = await page(B, { w: 1280, h: 900 });
+  await posLogin(p);
+  await p.evaluate(() => { goTab('menu'); showMTab('settings'); });
+  await p.waitForSelector('#stScrSalon');
+  assert.equal(await p.isChecked('#stScrSalon'), true);
+  assert.equal(await p.isChecked('#stScrDel'), false);
+  await p.uncheck('#stScrSalon'); await p.check('#stScrDel');
+  await p.click('button >> text=حفظ الإعدادات');
+  const st = await until(async () => { const d = await read('restaurants/RW/settings/main'); return d && d.screen && d.screen.delivery ? d : null; });
+  assert.deepEqual(st.screen, { salon: false, delivery: true });
+  assert.equal(st.tables, 8, 'other settings kept');
+  assert.deepEqual(clean(p), []);
   await p.context().close();
 });
