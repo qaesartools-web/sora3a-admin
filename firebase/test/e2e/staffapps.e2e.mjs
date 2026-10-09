@@ -374,3 +374,37 @@ test('services: the super admin stops/starts the screen, the QR (barcode) and th
   await c.waitForFunction(() => document.getElementById('readyScrBtn').style.display === '', null, { timeout: 10000 });
   for (const x of [p, w, c]) { assert.deepEqual(clean(x), []); await x.context().close(); }
 });
+
+test('«تم التسليم» at the cashier takes the order off the ready screen right away (kitchen strip and orders list)', async () => {
+  const now = Date.now(), today = bagDay();
+  const base = { restaurantId: 'RW', status: 'delivered', value: 5000, day: today, createdAtMs: now - 5 * 60000, payment: { method: 'cash', cash: 5000, card: 0 } };
+  await put('orders/S1', { ...base, orderType: 'takeaway', kitchen: 'ready', kitchenReadyAt: now - 60000, ticketNo: 41 });
+  await put('orders/S2', { ...base, orderType: 'salon', kitchen: 'ready', kitchenReadyAt: now - 30000, ticketNo: 42, pager: 6 });
+  await write('restaurants/RW/settings/main', { screen: { salon: true, delivery: false, qr: true } });
+  const scr = await page(B, { w: 1280, h: 720 });
+  await login(scr, BASE + 'screen.html', 'scr@x.com');
+  const onScreen = (n) => scr.evaluate((n) => [...document.querySelectorAll('#ready .n, #prep .n')].some((e) => e.textContent.replace(/\D+/g, ' ').trim().split(' ')[0] === n), n);
+  await until(async () => (await onScreen('41')) && (await onScreen('42')), 15000);
+  assert.ok(await onScreen('41')); assert.ok(await onScreen('42'));
+  // شاشة المطبخ: شريط «جاهز — ينتظر الزبون» ← «تم التسليم»
+  const c = await page(B, { w: 1280, h: 860 });
+  await posLogin(c);
+  await c.evaluate(() => goTab('kitchen'));
+  await c.waitForSelector('#kdsReady:not([hidden]) .kr-b:has-text("#41")', { timeout: 15000 });
+  await c.screenshot({ path: 'shots/kitchen-ready-handover.png' });
+  await c.click('#kdsReady .kr-b:has-text("#41")');
+  await until(async () => !(await onScreen('41')), 10000);
+  assert.equal(await onScreen('41'), false, 'handed over → gone from the screen');
+  assert.ok((await read('orders/S1')).servedAtMs);
+  // قائمة الطلبات: الطلب المدفوع «جاهز — ينتظر الزبون» وبيه «تم التسليم» (ويتحرر البيجر)
+  await c.evaluate(() => goTab('orders'));
+  const card = c.locator('.ocard', { has: c.locator('.oid', { hasText: /^S2$/ }) });
+  await card.waitFor({ timeout: 10000 });
+  assert.ok((await card.textContent()).includes('ينتظر الزبون'));
+  await card.locator('button', { hasText: 'تم التسليم' }).click();
+  await until(async () => !(await onScreen('42')), 10000);
+  assert.equal(await onScreen('42'), false);
+  const s2 = await read('orders/S2');
+  assert.ok(s2.servedAtMs); assert.equal(s2.pagerDone, true);
+  for (const x of [scr, c]) { assert.deepEqual(clean(x), []); await x.context().close(); }
+});
