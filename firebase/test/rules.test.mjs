@@ -243,6 +243,35 @@ test('صاحب المطعم يحدد الدوام بقيم صحيحة فقط، �
   await assertSucceeds(setDoc(doc(as('rest1'), 'users/newc'), { role: 'cashier', restaurantId: 'R1', name: 'n', email: 'e', perms: {}, hours: { from: 480, to: 960 } }));
 });
 
+test('تمديد الدوام: الكاشير يمدد بنفسه قرب نهاية دوامه (ساعة/ساعتين/٣/لنهاية اليوم) ويشتغل خلاله', async () => {
+  const n = nowBag(), H = 3600000;
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'users/cEnd'), { role: 'cashier', restaurantId: 'R1', perms: {}, hours: { from: wrap(n - 240), to: wrap(n - 30) } });
+    await setDoc(doc(db, 'users/cFar'), { role: 'cashier', restaurantId: 'R1', perms: {}, hours: { from: wrap(n - 400), to: wrap(n - 180) } });
+    await setDoc(doc(db, 'users/cFree'), { role: 'cashier', restaurantId: 'R1', perms: {} });
+  });
+  const sh = (u) => setDoc(doc(as(u), 'restaurants/R1/shifts/x_' + u + Date.now()), { status: 'open' });
+  const ext = (u, ms, extra = {}) => updateDoc(doc(as(u), 'users/' + u), { hoursExt: { untilMs: Date.now() + ms, atMs: Date.now(), h: '2', ...extra } });
+  await assertFails(sh('cEnd'), 'after hours + grace');
+  await assertFails(ext('cEnd', 21 * H), 'more than 20 hours');
+  await assertFails(ext('cEnd', -60000), 'already in the past');
+  await assertFails(ext('cEnd', H, { x: 1 }), 'unknown field');
+  await assertFails(updateDoc(doc(as('cEnd'), 'users/cEnd'), { hoursExt: { untilMs: Date.now() + H }, hours: null }), 'cannot touch hours');
+  await assertSucceeds(ext('cEnd', 2 * H));
+  await assertSucceeds(sh('cEnd'));   // يشتغل خلال التمديد
+  await assertSucceeds(ext('cEnd', 3 * H), 'can extend again while extended');
+  await assertFails(ext('cFar', H), 'hours ended 3h ago: no self-extension');
+  await assertFails(ext('cFree', H), 'no hours set: nothing to extend');
+  await assertFails(ext('cash1', H), 'not his own doc');   // cash1 يمدد لنفسه بس
+  await assertFails(updateDoc(doc(as('cEnd'), 'users/cFar'), { hoursExt: { untilMs: Date.now() + H } }), 'someone else');
+  // صاحب المطعم يلغي التمديد (أو يمدد) من لوحة الإدارة
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'users/cEnd'), { hoursExt: { untilMs: 0, atMs: Date.now(), h: 'off' } }));
+  await assertFails(sh('cEnd'), 'extension cancelled');
+  await assertFails(ext('cEnd', H), 'owner cancelled: no self-extension again today');
+  await assertFails(updateDoc(doc(as('rest1'), 'users/cEnd'), { hoursExt: { untilMs: Date.now() + 30 * H } }), 'owner: 20h max too');
+});
+
 // ── خدمات المطعم (المدير الأعلى فقط) ──
 test('المدير فقط يفتح ويغلق خدمات المطعم', async () => {
   await assertFails(updateDoc(doc(as('rest1'), 'restaurants/R1'), { features: { captain: true, pager: true } }));

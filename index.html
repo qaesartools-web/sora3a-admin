@@ -2172,14 +2172,15 @@ function mcRender(list){
   if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--muted);padding:12px;font-size:12px">لا يوجد كاشيرية بعد</div>';return;}
   el.innerHTML=list.map(u=>{const p=u.perms||{};return `<div class="entity">
     <div class="entity-head"><div class="entity-icon">🧾</div>
-      <div style="flex:1"><div class="entity-name">${esc(u.name||u.email)} ${u.disabled?'<span class="sub-badge sub-expired">موقوف</span>':''}</div><div class="entity-sub">📧 ${esc(u.email||'')} • ⏰ ${u.hours?esc(hm12(u.hours.from)+' ← '+hm12(u.hours.to)):'بدون تحديد وقت'}</div></div>
+      <div style="flex:1"><div class="entity-name">${esc(u.name||u.email)} ${u.disabled?'<span class="sub-badge sub-expired">موقوف</span>':''}</div><div class="entity-sub">📧 ${esc(u.email||'')} • ⏰ ${u.hours?esc(hm12(u.hours.from)+' ← '+hm12(u.hours.to)):'بدون تحديد وقت'}${mcExtOn(u)?` • <b style="color:#4f6bed">⏳ ممدد لغاية ${esc(hm12((Math.floor(u.hoursExt.untilMs/60000)+180)%1440))}</b>`:''}</div></div>
       <button class="btn-sm ${u.disabled?'btn-cap':'btn-edit'}" onclick="mcToggle('${esc(u.id)}',${u.disabled?'false':'true'})">${u.disabled?'تفعيل':'⏸️ إيقاف'}</button>
       <button class="btn-sm btn-del" onclick="mcDel('${esc(u.id)}')">🗑️</button></div>
     <div class="perm-row">${PERMS.map(([k,l])=>`<label><input type="checkbox" ${p[k]?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>
     <div class="perm-row" style="align-items:center">⏰ الدوام من <input type="time" class="form-inp" style="width:auto;padding:6px" id="hf_${esc(u.id)}" value="${u.hours?fromMins(u.hours.from):''}">
       إلى <input type="time" class="form-inp" style="width:auto;padding:6px" id="ht_${esc(u.id)}" value="${u.hours?fromMins(u.hours.to):''}">
       <button class="btn-sm btn-edit" onclick="mcHours('${esc(u.id)}')">💾 حفظ الدوام</button>
-      ${u.hours?`<button class="btn-sm" onclick="mcHours('${esc(u.id)}',true)">بدون وقت</button>`:''}</div>
+      ${u.hours?`<button class="btn-sm" onclick="mcHours('${esc(u.id)}',true)">بدون وقت</button>`:''}
+      ${mcExtOn(u)?`<button class="btn-sm btn-del" onclick="mcExtCancel('${esc(u.id)}')">✖ إلغاء التمديد</button>`:''}</div>
   </div>`;}).join('');
 }
 window.mcAdd=async function(){
@@ -2205,6 +2206,12 @@ window.mcPerm=async function(uid,k,v){
   try{const fb=window._fb;const s=await fb.getDoc(fb.doc(fb.db,'users',uid));const perms={...(s.data().perms||{}),[k]:v};
     await fb.updateDoc(fb.doc(fb.db,'users',uid),{perms});audit('cashier.perms',{uid,perm:k,value:v});toast('✅ تم تحديث الصلاحية');}
   catch(e){toast('❌ تعذّر التحديث','error');}
+};
+// تمديد الدوام: الكاشير يمدد بنفسه لما يخلص وقته (ساعة، ساعتين، ٣، أو لنهاية اليوم) — هنا يبين، وصاحب المطعم يكدر يلغيه
+const mcExtOn=u=>!!(u&&u.hoursExt&&Number(u.hoursExt.untilMs)>Date.now());
+window.mcExtCancel=async function(uid){
+  try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',uid),{hoursExt:{untilMs:0,atMs:Date.now(),h:'off'}});audit('cashier.hoursExt.cancel',{uid});toast('✅ انلغى التمديد — الكاشير ينقفل خلال دقائق، وما يكدر يمدد لنفسه اليوم');}
+  catch(e){toast('❌ '+(e.code||e.message),'error');}
 };
 window.mcHours=async function(uid,clear){
   let hours=null;

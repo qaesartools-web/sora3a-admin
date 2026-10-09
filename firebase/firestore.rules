@@ -53,6 +53,7 @@ service cloud.firestore {
 
     // دوام الكاشير: hours = {from, to} بالدقائق من منتصف الليل بتوقيت بغداد (UTC+3)
     // بعد نهاية الدوام ١٥ دقيقة سماح لإغلاق الوردية وطباعة التقرير
+    // hoursExt.untilMs: تمديد الدوام (الكاشير يختاره لما يخلص وقته: ساعة، ساعتين، ٣، أو لنهاية اليوم) + نفس السماح
     function onDuty() {
       let h = me().get('hours', null);
       let now = (int(request.time.toMillis() / 60000) + 180) % 1440;
@@ -60,7 +61,25 @@ service cloud.firestore {
       let t = h == null ? 0 : h.to + 15;
       return h == null
         || (f < h.to && ((now >= f && now < t) || now < t - 1440))
-        || (f > h.to && (now >= f || now < t));
+        || (f > h.to && (now >= f || now < t))
+        || (me().get('hoursExt', {}) is map && me().get('hoursExt', {}).get('untilMs', 0) is int
+            && me().get('hoursExt', {}).get('untilMs', 0) + 900000 > request.time.toMillis());
+    }
+    // تمديد صالح: لحد ٢٠ ساعة قدام بالكثير
+    function validExt(e) {
+      return e is map && e.keys().hasOnly(['untilMs','atMs','h'])
+        && e.untilMs is int && e.untilMs <= request.time.toMillis() + 20 * 3600000
+        && (!('atMs' in e) || e.atMs is int) && (!('h' in e) || (e.h is string && e.h.size() <= 8));
+    }
+    // الكاشير يكدر يمدد بس قرب نهاية دوامه: من نص ساعة قبلها لحد ساعة بعدها (أو خلال تمديد شغّال/خلص قبل أقل من ساعة)
+    // وإذا صاحب المطعم لغى التمديد (h = off) ما يرجع يمدد لنفسه نفس اليوم (١٢ ساعة)
+    function extWindow(d) {
+      let now = (int(request.time.toMillis() / 60000) + 180) % 1440;
+      let gap = (now - d.hours.to + 1440) % 1440;
+      let e = d.get('hoursExt', {});
+      let cancelled = e is map && e.get('h', '') == 'off' && e.get('atMs', 0) is int && e.get('atMs', 0) > request.time.toMillis() - 43200000;
+      return !cancelled && (gap < 60 || gap >= 1410
+        || (e is map && e.get('untilMs', 0) is int && e.get('untilMs', 0) > request.time.toMillis() - 3600000));
     }
     function validHours(d) {
       return !('hours' in d) || d.hours == null
@@ -124,7 +143,18 @@ service cloud.firestore {
         && resource.data.role == 'cashier'
         && request.resource.data.get('perms', {}) is map
         && validHours(request.resource.data)
-        && onlyChanged(['name','perms','disabled','hours']);
+        && onlyChanged(['name','perms','disabled','hours','hoursExt'])
+        && (!('hoursExt' in request.resource.data) || request.resource.data.hoursExt == null
+            || request.resource.data.hoursExt == resource.data.get('hoursExt', null) || validExt(request.resource.data.hoursExt));
+
+      // الكاشير يمدد دوامه بنفسه لما يخلص وقته (ساعة، ساعتين، ٣ ساعات، أو لنهاية اليوم) — وصاحب المطعم يشوفه ويكدر يلغيه
+      allow update: if signedIn() && request.auth.uid == uid
+        && resource.data.role == 'cashier' && resource.data.get('disabled', false) != true
+        && resource.data.get('hours', null) != null
+        && onlyChanged(['hoursExt'])
+        && validExt(request.resource.data.hoursExt)
+        && request.resource.data.hoursExt.untilMs > request.time.toMillis()
+        && extWindow(resource.data);
       allow delete: if ownsRest(resource.data.restaurantId)
         && resource.data.role == 'cashier';
     }
