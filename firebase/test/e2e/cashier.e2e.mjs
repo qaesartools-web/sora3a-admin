@@ -169,8 +169,12 @@ test('working hours: shift auto-closes with printed total at end, cashier locked
       payment: { method: 'cash', cash: 7000, card: 0, shiftId: sh.id, atMs: Date.now() } });
   });
   await p.waitForFunction(() => orders.some((o) => o.id === 'OH1'));
-  // صاحب المطعم يجعل الدوام منتهياً قبل دقيقتين → إغلاق تلقائي + طباعة + قفل
+  // صاحب المطعم يجعل الدوام منتهياً قبل دقيقتين → يطلع «تمديد»؛ الكاشير يختار إنهاء الدوام → إغلاق تلقائي + طباعة + قفل
   await write('users/' + U.cash, { hours: { from: wrap(n - 120), to: wrap(n - 2) } });
+  await p.waitForSelector('#extAsk.on', { timeout: 10000 });
+  assert.match(await p.textContent('#extAsk'), /تمدد الدوام/);
+  assert.ok(await p.isVisible('#extAsk .ext-b.eod'), 'until end of day is always offered');
+  await p.click('#extAsk button >> text=إنهاء الدوام');
   await p.waitForSelector('#dutyLock.on', { timeout: 10000 });
   const closed = await until(async () => { const d = await read('restaurants/RC/shifts/' + sh.id); return d.status === 'closed' ? d : null; });
   assert.equal(closed.autoClosed, true); assert.equal(closed.report.sales, 7000); assert.equal(closed.expectedCash, 17000);
@@ -196,6 +200,42 @@ test('working hours: shift auto-closes with printed total at end, cashier locked
   await q.screenshot({ path: 'shots/pos-duty-mobile.png' });
   await q.context().close();
   await write('users/' + U.cash, { hours: null });
+});
+
+test('hours end → the cashier extends and keeps working; the owner sees it and cancels, then no more self-extension today', async () => {
+  const bag = () => (Math.floor(Date.now() / 60000) + 180) % 1440;
+  const wrap = (n) => ((n % 1440) + 1440) % 1440;
+  const n = bag();
+  await write('users/' + U.cash, { hours: { from: wrap(n - 120), to: wrap(n + 60) }, hoursExt: { untilMs: 0, atMs: 0, h: '0' } });
+  const p = await page(B, { w: 1280, h: 800 });
+  await posLogin(p, 'cash@x.com', 'cashpass1');
+  await p.waitForSelector('#prods .prod');
+  // خلص الوقت ← يطلع «تمديد» (ساعة، ساعتين، ٣ ساعات، لنهاية اليوم)
+  await write('users/' + U.cash, { hours: { from: wrap(n - 120), to: wrap(n - 2) } });
+  await p.waitForSelector('#extAsk.on', { timeout: 10000 });
+  await p.screenshot({ path: 'shots/pos-hours-extend.png' });
+  const first = p.locator('#extAsk .ext-b').first();   // ساعة (أو لنهاية اليوم إذا باقي أقل من ساعة)
+  await first.click();
+  const u = await until(async () => { const d = await read('users/' + U.cash); return d.hoursExt && d.hoursExt.untilMs > Date.now() ? d : null; });
+  assert.ok(u.hoursExt.untilMs <= Date.now() + 3600000 + 5000, 'one hour at most');
+  await p.waitForSelector('#extAsk', { state: 'hidden' });
+  assert.equal(await p.evaluate(() => !!document.querySelector('#dutyLock.on')), false);
+  // السيرفر يسمح يشتغل خلال التمديد
+  const ok = await p.evaluate(async () => { try { await window._fb.setDoc(window._fb.doc(window._fb.db, 'restaurants/RC/shifts/extok'), { status: 'open', uid: window.posUser.uid }); return true; } catch (e) { return e.code; } });
+  assert.equal(ok, true);
+  // صاحب المطعم يشوف التمديد ويلغيه
+  const a = await page(B, { w: 1280, h: 800 });
+  await adminLogin(a, 'owner@x.com');
+  await a.click('.dnav-btn[data-screen="scMyRest"]');
+  await a.waitForFunction(() => document.getElementById('mcList').textContent.includes('ممدد لغاية'), null, { timeout: 15000 });
+  await a.click('#mcList button >> text=إلغاء التمديد');
+  await until(async () => (await read('users/' + U.cash)).hoursExt.untilMs === 0);
+  // الكاشير ينقفل، وما يطلعله تمديد ثاني اليوم
+  await p.waitForSelector('#dutyLock.on', { timeout: 15000 });
+  assert.equal(await p.locator('#dutyLock .ext-b').count(), 0);
+  assert.deepEqual(clean(a), []);
+  await a.context().close(); await p.context().close();
+  await write('users/' + U.cash, { hours: null, hoursExt: { untilMs: 0, atMs: 0, h: '0' } });
 });
 
 test('owner sets and clears cashier working hours from the admin app', async () => {
