@@ -198,3 +198,20 @@ test('ready screen inside the TV app: page reports it works, no fullscreen butto
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
+
+test('ready screen updates itself when the page is updated (no one touches the TV)', async () => {
+  const { utimes } = await import('node:fs/promises');
+  const p = await page(B, { w: 1280, h: 720 });
+  await p.addInitScript(() => { window.__auMs = 400; });
+  await login(p, BASE + 'screen.html', 'scr@x.com');
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
+  await p.evaluate(() => { window.__oldPage = true; });
+  await p.waitForTimeout(1200);                       // أخذ البصمة الأولى
+  assert.equal(await p.evaluate(() => window.__oldPage), true, 'no reload without an update');
+  const f = new URL('../../../../sora3a-rest2/staff.js', import.meta.url).pathname, t = new Date(Date.now() + 60000);
+  await utimes(f, t, t);                              // «نشرنا تحديث»
+  await p.waitForFunction(() => !window.__oldPage, null, { timeout: 15000 });
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });   // رجعت الشاشة وحدها بدون تسجيل دخول
+  assert.equal(await p.locator('#gEmail').count(), 0);
+  await p.context().close();
+});
