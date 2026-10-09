@@ -49,3 +49,37 @@ test('standby keeps the app awake, rings a looping sound on a new order, and blo
   assert.equal(await p.evaluate(() => window.auIdle()), true);
   await p.context().close();
 });
+
+test('a quick touch before the ring sound starts does not leave a second beep ringing forever', async () => {
+  // مثل تطبيق الأندرويد: تشغيل الصوت ياخذ شوية وقت، والإيقاف قبلها يرفض التشغيل (AbortError)
+  const p = await page(B, { notif: true });
+  await p.addInitScript(() => {
+    const play = HTMLMediaElement.prototype.play, pause = HTMLMediaElement.prototype.pause;
+    HTMLMediaElement.prototype.play = function () {
+      const el = this; el.__pend = true;
+      return new Promise((res, rej) => { el.__rej = rej; setTimeout(() => { if (!el.__pend) return; el.__pend = false; play.call(el).then(res, rej); }, 900); });
+    };
+    HTMLMediaElement.prototype.pause = function () {
+      if (this.__pend) { this.__pend = false; const e = new Error('The play() request was interrupted by a call to pause()'); e.name = 'AbortError'; this.__rej(e); }
+      return pause.call(this);
+    };
+  });
+  // الاختبار السابق خلّاه «غير متاح» — نرجّعه متاح قبل الدخول
+  await E.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'captains/CS'), { available: true }, { merge: true }));
+  await p.goto('http://localhost:5050/sora3a-captain/captain.html');
+  await p.fill('#email', 'stby@x.com'); await p.fill('#password', 'secret123'); await p.click('#loginBtn');
+  await p.waitForSelector('#stbyChip:not([hidden])', { timeout: 15000 });
+  if (await p.isVisible('#notifSheet.show').catch(() => false)) await p.click('#notifLater');
+  await E.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'orders/OSTBY00000002'), { restaurantId: 'RS', restaurantName: 'مطعم', status: 'pending', captainId: 'CS', rejectedBy: [], value: 9000, fee: 2000, address: 'المنصور', createdAtMs: Date.now(), timeline: [] });
+  });
+  await p.waitForSelector('#incoming.show', { timeout: 10000 });
+  // لمسة سريعة قبل ما يشتغل الصوت
+  await p.click('#inAddr');
+  await p.waitForTimeout(3000);
+  const st = await p.evaluate(() => window.__stby());
+  assert.equal(st.beeping, false, 'no fallback beep left running');
+  assert.equal(st.ring, false);
+  await p.click('#rejectBtn');
+  await p.context().close();
+});
