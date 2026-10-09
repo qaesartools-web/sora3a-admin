@@ -181,3 +181,20 @@ test('waiter: opening the link asks to install the app (prompt, close, manifest)
   assert.deepEqual(clean(w), []);
   await w.context().close();
 });
+
+test('ready screen inside the TV app: page reports it works, no fullscreen button, remote arrows move between login fields', async () => {
+  const p = await page(B, { w: 1280, h: 720 });
+  await p.addInitScript(() => { Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 9; X96) Chrome/120 Mobile Safari/537.36 SoraScreenApp/1.5' }); });
+  await p.goto(BASE + 'screen.html');
+  await p.waitForSelector('#gEmail');
+  assert.equal(await p.evaluate(() => window.__scrOk), true);
+  await p.waitForFunction(() => document.activeElement && document.activeElement.id === 'gEmail');
+  await p.keyboard.press('ArrowDown'); assert.equal(await p.evaluate(() => document.activeElement.id), 'gPass');
+  await p.keyboard.press('ArrowDown'); assert.equal(await p.evaluate(() => document.activeElement.id), 'gGo');
+  await p.keyboard.press('ArrowUp'); assert.equal(await p.evaluate(() => document.activeElement.id), 'gPass');
+  await p.focus('#gEmail'); await p.keyboard.type('scr@x.com'); await p.keyboard.press('ArrowDown'); await p.keyboard.type('secret123'); await p.keyboard.press('Enter');
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
+  assert.equal(await p.isVisible('#fsBtn'), false);
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
