@@ -198,8 +198,9 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .modal-btns .btn-cancel{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:13px;cursor:pointer;}
 
 /* Toast */
-.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;z-index:9999;transition:transform .3s;white-space:nowrap;}
-.toast.on{transform:translateX(-50%) translateY(0);}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;z-index:9999;transition:transform .3s,opacity .3s,visibility .3s;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;}
+/* مخفي بالكامل لما يروح (قبل كان طرفه يبين أسفل الشاشة) */
+.toast.on{transform:translateX(-50%) translateY(0);opacity:1;visibility:visible;}
 
 /* Restaurant mode banner */
 .rest-banner{background:linear-gradient(135deg,rgba(77,171,247,.1),rgba(77,171,247,.05));border:1px solid rgba(77,171,247,.3);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-weight:700;color:var(--blue);text-align:center;display:none;}
