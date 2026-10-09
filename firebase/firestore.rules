@@ -395,7 +395,8 @@ service cloud.firestore {
     }
 
     // ── webOrders (طلب الزبون من المنيو الأونلاين، أو طلب الويتر ← يستلمه الكاشير ويطبعه للمطبخ) ──
-    //  الزبون ينشئ فقط (بدون تسجيل دخول) إذا المنيو الأونلاين مفعّل ونوع الطلب مسموح.
+    //  الزبون ينشئ فقط (بدون تسجيل دخول) إذا خدمة «الباركود والمنيو» (online) مفعّلة ونوع الطلب مسموح،
+    //  والويتر إذا خدمة «تطبيق الويتر» (waiter) مفعّلة — كل خدمة يشغّلها أو يوقفها المدير الأعلى لوحدها.
     //  يتابع حالة طلبه بالمعرّف (get فقط). الكاشير يعيد حساب الأسعار من منيوه، فما نثق بأسعار الزبون.
     match /webOrders/{id} {
       function pm(r) { return get(/databases/$(database)/documents/publicMenus/$(r)).data; }
@@ -407,18 +408,18 @@ service cloud.firestore {
           && optStr(d, 'table', 10) && optStr(d, 'customer', 60) && optStr(d, 'phone', 20)
           && optStr(d, 'address', 300) && optStr(d, 'note', 500) && optNum(d, 'total')
           && optStr(d, 'waiter', 60) && optStr(d, 'day', 10) && d.createdAtMs is int
-          && feat(d.restaurantId, 'online') && restaurantOpen(d.restaurantId)
+          && restaurantOpen(d.restaurantId)
           && (d.mode != 'table' || d.get('table', '').size() >= 1)
           && (d.mode == 'table' || d.get('phone', '').matches('^[0-9+ ]{7,20}$'))
           && (d.mode != 'delivery' || (d.get('address', '').size() >= 3 && feat(d.restaurantId, 'captain')));
       }
       allow create: if okNew(request.resource.data) && (
-          (request.resource.data.source == 'qr'
+          (request.resource.data.source == 'qr' && feat(request.resource.data.restaurantId, 'online')
             && exists(/databases/$(database)/documents/publicMenus/$(request.resource.data.restaurantId))
             && pm(request.resource.data.restaurantId).get('on', false) == true
             && pm(request.resource.data.restaurantId).get('modes', {}).get(request.resource.data.mode, false) == true)
           || (request.resource.data.source == 'waiter' && request.resource.data.mode == 'table'
-            && staffOf(request.resource.data.restaurantId)
+            && feat(request.resource.data.restaurantId, 'waiter') && staffOf(request.resource.data.restaurantId)
             && request.resource.data.get('waiterUid', '') == request.auth.uid));
       allow get: if true;
       allow list: if isOffice() || staffOf(resource.data.restaurantId);

@@ -408,6 +408,12 @@ test('webOrders: خدمة «online» أو «captain» مطفية، أو المط
   await env.withSecurityRulesDisabled(async (c) => updateDoc(doc(c.firestore(), 'restaurants/R1'), { features: { online: false } }));
   await assertFails(addDoc(collection(anon(), 'webOrders'), WEB()));
   await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ restaurantId: 'R3' })), 'expired restaurant');
+  // كل خدمة لوحدها: الباركود مطفي والويتر شغّال ← الويتر يطلب عادي؛ الويتر مطفي ← مرفوض
+  const W = (id) => setDoc(doc(as('cash1'), 'webOrders/' + id), WEB({ source: 'waiter', mode: 'table', table: '2', phone: '', waiterUid: 'cash1' }));
+  await assertSucceeds(W('SV1'));
+  await env.withSecurityRulesDisabled(async (c) => updateDoc(doc(c.firestore(), 'restaurants/R1'), { features: { online: true, waiter: false } }));
+  await assertFails(W('SV2'), 'waiter service off');
+  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB()));
 });
 
 test('webOrders: الويتر (موظف) يطلب لطاولة باسمه، والزبون يتابع بالمعرّف بس', async () => {

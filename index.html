@@ -728,7 +728,7 @@ const isStaff=()=>currentUser?.role==='staff';
 const canManage=()=>isAdmin()||isRest();
 // خدمات المطعم: يفتحها ويغلقها المدير الأعلى فقط (الافتراضي مفعّلة)
 // العنصر الثالث = مطفية افتراضياً (تشتغل بس إذا شغّلها المدير الأعلى)
-const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 منيو QR وطلب أونلاين'],['printTest','🧪 تجربة الطابعات (محاكي)',1]];
+const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 الباركود والمنيو الأونلاين'],['screen','📺 شاشة طلبك جاهز'],['waiter','🧑‍🍳 تطبيق الويتر'],['printTest','🧪 تجربة الطابعات (محاكي)',1]];
 const OFF_DEFAULT=new Set(SERVICES.filter(x=>x[2]).map(x=>x[0]));
 const featOf=(r,k)=>OFF_DEFAULT.has(k)?!!(r&&r.features&&r.features[k]===true):(!r||!r.features||r.features[k]!==false);
 let myRestDoc=null;
@@ -1469,7 +1469,7 @@ window.addRestaurant=async function(){
 // ═══ طلبات التجربة (من موقع سرعة) ═══
 let allLeads=[],ldFilter='all';
 const LD_ST={new:['🟡','جديد'],contacted:['📞','تم التواصل'],trial:['🎁','تجربة فعّالة'],won:['✅','مشترك'],lost:['❌','غير مهتم']};
-const LD_SVC={pos:'🧾 كاشير ومطبخ',captain:'🛵 كابتن ودلفري',calls:'📞 اتصال الشريحة',whatsapp:'💬 مكالمات واتساب',pager:'📟 بيجر',kitchen:'🖨️ أقسام وطابعات',inventory:'📦 مخزون وحسابات',analytics:'📊 تقارير وأرباح',online:'📱 منيو QR وأونلاين',branches:'🏢 أكثر من فرع'};
+const LD_SVC={pos:'🧾 كاشير ومطبخ',captain:'🛵 كابتن ودلفري',calls:'📞 اتصال الشريحة',whatsapp:'💬 مكالمات واتساب',pager:'📟 بيجر',kitchen:'🖨️ أقسام وطابعات',inventory:'📦 مخزون وحسابات',analytics:'📊 تقارير وأرباح',online:'📱 الباركود والمنيو الأونلاين',screen:'📺 شاشة طلبك جاهز',waiter:'🧑‍🍳 تطبيق الويتر',branches:'🏢 أكثر من فرع'};
 const ldMs=l=>l.createdAt&&l.createdAt.toMillis?l.createdAt.toMillis():(l.createdAtMs||0);
 const ldWa=p=>{let d=String(p||'').replace(/\D/g,'');if(d.startsWith('00'))d=d.slice(2);if(d.startsWith('0'))d='964'+d.slice(1);else if(!d.startsWith('964'))d='964'+d;return d;};
 const ldEff=l=>{if(l.status==='trial'&&l.trialEndsMs&&l.trialEndsMs<Date.now())return 'ended';return l.status||'new';};
@@ -1511,7 +1511,7 @@ function ldWelcome(l){
 }
 function ldCredMsg(l,email,pass,endMs){
   const end=new Date(endMs).toLocaleDateString('en-GB');
-  return `🎉 مبروك ${l.owner||''}! حسابك التجريبي بـ *سرعة* جاهز\n\n🍽️ المطعم: ${l.restaurant||''}\n📧 الإيميل: ${email}\n🔑 كلمة المرور: ${pass}\n⏳ التجربة مجانية لغاية: ${end}\n\n👇 روابط التطبيقات:\n🧾 الكاشير والمطبخ:\nhttps://qaesartools-web.github.io/sora3a-rest2/\n🛡️ لوحة الإدارة (المنيو، الموظفين، التقارير):\nhttps://qaesartools-web.github.io/sora3a-admin/\n🛵 تطبيق الكابتن:\nhttps://qaesartools-web.github.io/sora3a-captain/captain.html\n\n💡 نصيحة: ابدأ بإضافة 3 أصناف من المنيو، وسوّي أول طلب من الكاشير، وشوف شلون يوصل للمطبخ بثواني.\n\nأي مساعدة تحتاجها، راسلنا هنا مباشرة. نتمنالك تجربة ممتعة 🚀`;
+  return `🎉 مبروك ${l.owner||''}! حسابك التجريبي بـ *سرعة* جاهز\n\n🍽️ المطعم: ${l.restaurant||''}\n📧 الإيميل: ${email}\n🔑 كلمة المرور: ${pass}\n⏳ التجربة مجانية لغاية: ${end}\n\n👇 روابط التطبيقات:\n🧾 الكاشير والمطبخ:\nhttps://qaesartools-web.github.io/sora3a-rest2/\n🛡️ لوحة الإدارة (المنيو، الموظفين، التقارير):\nhttps://qaesartools-web.github.io/sora3a-admin/\n🛵 تطبيق الكابتن:\nhttps://qaesartools-web.github.io/sora3a-captain/captain.html\n🧑‍🍳 تطبيق الويتر:\nhttps://qaesartools-web.github.io/sora3a-rest2/waiter.html\n📺 شاشة «طلبك جاهز» (تلفزيون أو تابلت):\nhttps://qaesartools-web.github.io/sora3a-rest2/screen.html\n📲 تطبيق الشاشة للتيفي بوكس:\nhttps://github.com/qaesartools-web/sora3a-rest2/releases/download/screen-android/sora3a-screen.apk\n\n💡 نصيحة: ابدأ بإضافة 3 أصناف من المنيو، وسوّي أول طلب من الكاشير، وشوف شلون يوصل للمطبخ بثواني.\n\nأي مساعدة تحتاجها، راسلنا هنا مباشرة. نتمنالك تجربة ممتعة 🚀`;
 }
 window.ldTouch=async id=>{const l=allLeads.find(x=>x.id===id);if(l&&(l.status||'new')==='new')try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'leads',id),{status:'contacted'});}catch(e){}};
 window.ldSetSt=async(id,v)=>{try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'leads',id),{status:v});toast('✅ تم التحديث');}catch(e){toast('❌ تعذّر التحديث: '+(e.code||e.message),'error');}};

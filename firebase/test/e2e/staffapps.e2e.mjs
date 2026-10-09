@@ -339,3 +339,38 @@ test('TV app: «برتقالي مشمس» theme with the app colours, and the au
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
+
+test('services: the super admin stops/starts the screen, the QR (barcode) and the waiter app — each on its own, live', async () => {
+  // الشاشة موقوفة ← رسالة بدل الطلبات، وترجع وحدها أول ما تتفعّل
+  await write('restaurants/RW', { features: { screen: false } });
+  const p = await page(B, { w: 1280, h: 720 });
+  await login(p, BASE + 'screen.html', 'scr@x.com');
+  await p.waitForSelector('#off:not([hidden])', { timeout: 15000 });
+  assert.equal(await p.isVisible('#scr'), false);
+  assert.ok((await p.textContent('#off')).includes('موقوفة'));
+  await p.screenshot({ path: 'shots/ready-screen-off.png' });
+  await write('restaurants/RW', { features: { screen: true, online: false } });
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 10000 });
+  assert.equal(await p.isVisible('#off'), false);
+  // الباركود مطفي ← ما يطلع كود المنيو بالزاوية، ويرجع ويا الخدمة
+  assert.equal(await p.isVisible('#qrBox'), false);
+  await write('restaurants/RW', { features: { online: true } });
+  await p.waitForSelector('#qrBox:not([hidden]) #qrCode svg', { timeout: 10000 });
+  // الويتر موقوف ← رسالة؛ يتفعّل ← يرجع التطبيق بدون تحديث
+  await write('restaurants/RW', { features: { waiter: false } });
+  const w = await page(B);
+  await login(w, BASE + 'waiter.html', 'waiter@x.com');
+  await w.waitForSelector('#off:not([hidden])', { timeout: 15000 });
+  assert.equal(await w.isVisible('#app'), false);
+  await write('restaurants/RW', { features: {} });
+  await w.waitForSelector('#app:not([hidden])', { timeout: 10000 });
+  assert.equal(await w.isVisible('#off'), false);
+  // الكاشير: أزرار الشاشة تختفي إذا الخدمة موقوفة
+  const c = await page(B, { w: 1280, h: 860 });
+  await write('restaurants/RW', { features: { screen: false } });
+  await posLogin(c);
+  await c.waitForFunction(() => document.getElementById('readyScrBtn').style.display === 'none');
+  await write('restaurants/RW', { features: {} });
+  await c.waitForFunction(() => document.getElementById('readyScrBtn').style.display === '', null, { timeout: 10000 });
+  for (const x of [p, w, c]) { assert.deepEqual(clean(x), []); await x.context().close(); }
+});
