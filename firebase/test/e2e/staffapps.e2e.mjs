@@ -265,6 +265,7 @@ test('ready screen menu with the remote: sound on/off, and log out needs a secon
   // الإيميل محفوظ على الجهاز: بالريموت يكتب الرمز بس
   assert.equal(await p.inputValue('#gEmail'), 'scr@x.com');
   await p.waitForFunction(() => document.activeElement && document.activeElement.id === 'gPass');
+  await p.screenshot({ path: 'shots/ready-screen-login.png' });
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
@@ -293,7 +294,7 @@ test('ready screen shows the menu QR in the corner when the online menu is on (o
   await p.context().close();
 });
 
-test('TV app: one theme with all four app colours, and the auto-start switch in the menu talks to the app', async () => {
+test('TV app: «برتقالي مشمس» theme with the app colours, and the auto-start switch in the menu talks to the app', async () => {
   const now = Date.now(), today = bagDay();
   const base = { restaurantId: 'RW', status: 'delivered', value: 5000, day: today, createdAtMs: now - 5 * 60000 };
   await put('orders/K1', { ...base, orderType: 'takeaway', kitchen: 'new', ticketNo: 31 });
@@ -310,16 +311,19 @@ test('TV app: one theme with all four app colours, and the auto-start switch in 
   const st = await p.evaluate(() => {
     const cs = (sel, pseudo) => getComputedStyle(document.querySelector(sel), pseudo || null);
     return {
-      band: cs('#scr', '::before').backgroundImage,
-      ready: cs('.ready .hd h2').color, prep: cs('.prep .hd h2').color, live: cs('.live i').backgroundColor,
-      qr: cs('#qrT span + span').color,
+      band: cs('#scr', '::before').backgroundImage, bg: cs('body').backgroundImage, card: cs('.ready').backgroundColor,
+      ready: cs('.ready .hd h2').color, tile: cs('#ready .n').backgroundImage, prep: cs('.prep .hd h2').color, qrBox: cs('#qrBox').backgroundImage,
       take: cs('#prep .n[data-t="سفري"]', '::after').backgroundColor, salon: cs('#prep .n[data-t="صالة"]', '::after').backgroundColor,
       deliv: cs('#prep .n[data-t="دلفري"]', '::after').backgroundColor,
     };
   });
   const G = 'rgb(61, 240, 139)', O = 'rgb(255, 181, 71)', Bl = 'rgb(147, 166, 255)', T = 'rgb(62, 230, 207)';
   for (const c of [G, O, Bl, T]) assert.ok(st.band.includes(c), 'top band has ' + c);
-  assert.equal(st.ready, G); assert.equal(st.prep, O); assert.equal(st.qr, Bl); assert.equal(st.live, T);
+  // خلفية برتقالية زاهية، بطاقات بيضاء، الجاهز أخضر، التحضير برتقالي غامق، وكود المنيو أزرق
+  assert.ok(st.bg.includes('rgb(255, 193, 77)') && st.bg.includes('rgb(217, 72, 15)'), st.bg);
+  assert.equal(st.card, 'rgb(255, 255, 255)');
+  assert.equal(st.ready, 'rgb(15, 122, 61)'); assert.ok(st.tile.includes('rgb(43, 196, 106)'), st.tile);
+  assert.equal(st.prep, 'rgb(217, 72, 15)'); assert.ok(st.qrBox.includes('rgb(107, 134, 255)'), st.qrBox);
   assert.deepEqual([st.take, st.salon, st.deliv], [O, Bl, T], 'order type tags: takeaway orange, dine-in blue, delivery turquoise');
   await p.screenshot({ path: 'shots/ready-screen-colors.png' });
   // «يفتح وحده مع التلفزيون»: التطبيق بلّغ إنه شغّال ← الزر يطلع بالقائمة، والضغط يطلب من التطبيق يطفيه
