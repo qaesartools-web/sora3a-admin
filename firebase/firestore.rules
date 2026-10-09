@@ -343,8 +343,10 @@ service cloud.firestore {
     match /pushTokens/{uid} {
       allow read: if signedIn() && request.auth.uid == uid;
       allow write: if hasProfile() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['tokens','role','captainId','restaurantId','updatedAtMs'])
+        && request.resource.data.keys().hasOnly(['tokens','role','captainId','restaurantId','updatedAtMs','native'])
         && request.resource.data.tokens is list && request.resource.data.tokens.size() <= 10
+        // native: توكن تطبيق الأندرويد (لما يكون شغّال، المتصفح ما يسجّل — حتى ما يجي إشعارين)
+        && (!('native' in request.resource.data) || (request.resource.data.native is string && request.resource.data.native.size() <= 400))
         && request.resource.data.get('role', '') == role()
         && request.resource.data.get('captainId', '') == me().get('captainId', '')
         && (request.resource.data.get('restaurantId', '') == me().get('restaurantId', '')
