@@ -233,7 +233,7 @@ test('cashier settings: choose what the ready screen shows (dine-in without page
   await p.uncheck('#stScrSalon'); await p.check('#stScrDel');
   await p.click('button >> text=حفظ الإعدادات');
   const st = await until(async () => { const d = await read('restaurants/RW/settings/main'); return d && d.screen && d.screen.delivery ? d : null; });
-  assert.deepEqual(st.screen, { salon: false, delivery: true });
+  assert.deepEqual(st.screen, { salon: false, delivery: true, qr: true });
   assert.equal(st.tables, 8, 'other settings kept');
   assert.deepEqual(clean(p), []);
   await p.context().close();
@@ -262,6 +262,30 @@ test('ready screen menu with the remote: sound on/off, and log out needs a secon
   await p.waitForSelector('#gEmail', { timeout: 10000 });
   assert.equal(await p.isVisible('#scr'), false);
   assert.equal(await p.isVisible('#menu'), false);
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
+test('ready screen shows the menu QR in the corner when the online menu is on (order or view-only), and it can be hidden', async () => {
+  await put('publicMenus/RW', { name: 'برغر الشاشة', on: true, modes: { table: true, pickup: true, delivery: false }, cats: [], updatedAtMs: 1 });
+  await write('restaurants/RW/settings/main', { screen: { salon: true, delivery: false, qr: true } });
+  const p = await page(B, { w: 1280, h: 720 });
+  await login(p, BASE + 'screen.html', 'scr@x.com');
+  await p.waitForSelector('#qrBox:not([hidden]) #qrCode svg', { timeout: 15000 });
+  assert.ok((await p.getAttribute('#qrCode', 'data-url')).endsWith('/sora3a-rest2/menu.html?r=RW'));
+  assert.ok((await p.textContent('#qrT')).includes('واطلب'));
+  await p.screenshot({ path: 'shots/ready-screen-qr.png' });
+  // عرض المنيو بس
+  await write('publicMenus/RW', { modes: { table: false, pickup: false, delivery: false } });
+  await p.waitForFunction(() => document.getElementById('qrT').textContent.includes('وشوف المنيو'));
+  // المطعم يطفيه من إعدادات الشاشة
+  await write('restaurants/RW/settings/main', { screen: { salon: true, delivery: false, qr: false } });
+  await p.waitForSelector('#qrBox', { state: 'hidden' });
+  // المنيو الأونلاين مطفي ← ما يطلع
+  await write('restaurants/RW/settings/main', { screen: { salon: true, delivery: false, qr: true } });
+  await p.waitForSelector('#qrBox:not([hidden])');
+  await write('publicMenus/RW', { on: false });
+  await p.waitForSelector('#qrBox', { state: 'hidden' });
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });

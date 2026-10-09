@@ -251,6 +251,29 @@ test('auto mode: table orders go straight to the kitchen on the cashier device (
   await c.context().close();
 });
 
+test('view-only menu: customers browse what is available, no ordering, clear message', async () => {
+  await openOnlineSettings(cashier);
+  await cashier.check('#stOnView');
+  await cashier.click('button >> text=حفظ الإعدادات');
+  const pm = await until(async () => { const d = await read('publicMenus/RQ'); return d && d.on && !d.modes.table && !d.modes.pickup ? d : null; });
+  assert.deepEqual(pm.modes, { table: false, pickup: false, delivery: false });
+  assert.equal((await read('restaurants/RQ/settings/main')).online.viewOnly, true);
+  const c = await page(B, { w: 390, h: 844 });
+  await c.goto(MENU + '&t=3');
+  await c.waitForSelector('.it');
+  assert.ok((await c.textContent('#banners')).includes('📖 هذا منيو المطعم'));
+  assert.equal((await c.textContent('#banners')).includes('مو مستقبل'), false);
+  assert.equal(await c.locator('.add').count(), 0);
+  assert.equal(await c.locator('.it.out').count(), 1, 'sold-out item still marked');
+  await c.screenshot({ path: 'shots/online-menu-viewonly.png' });
+  assert.deepEqual(clean(c), []);
+  await c.context().close();
+  await openOnlineSettings(cashier);
+  await cashier.uncheck('#stOnView');
+  await cashier.click('button >> text=حفظ الإعدادات');
+  await until(async () => (await read('publicMenus/RQ')).modes.table === true);
+});
+
 test('owner pauses online orders / super admin turns the service off → customers can only browse', async () => {
   await openOnlineSettings(cashier);
   await cashier.uncheck('#stOnOn');
