@@ -262,6 +262,9 @@ test('ready screen menu with the remote: sound on/off, and log out needs a secon
   await p.waitForSelector('#gEmail', { timeout: 10000 });
   assert.equal(await p.isVisible('#scr'), false);
   assert.equal(await p.isVisible('#menu'), false);
+  // الإيميل محفوظ على الجهاز: بالريموت يكتب الرمز بس
+  assert.equal(await p.inputValue('#gEmail'), 'scr@x.com');
+  await p.waitForFunction(() => document.activeElement && document.activeElement.id === 'gPass');
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
@@ -286,6 +289,49 @@ test('ready screen shows the menu QR in the corner when the online menu is on (o
   await p.waitForSelector('#qrBox:not([hidden])');
   await write('publicMenus/RW', { on: false });
   await p.waitForSelector('#qrBox', { state: 'hidden' });
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
+test('TV app: one theme with all four app colours, and the auto-start switch in the menu talks to the app', async () => {
+  const now = Date.now(), today = bagDay();
+  const base = { restaurantId: 'RW', status: 'delivered', value: 5000, day: today, createdAtMs: now - 5 * 60000 };
+  await put('orders/K1', { ...base, orderType: 'takeaway', kitchen: 'new', ticketNo: 31 });
+  await put('orders/K2', { ...base, orderType: 'salon', kitchen: 'new', ticketNo: 32 });
+  await put('orders/K3', { ...base, orderType: 'delivery', status: 'pending', kitchen: 'new', ticketNo: 33 });
+  await put('orders/K4', { ...base, orderType: 'takeaway', kitchen: 'ready', kitchenReadyAt: now - 30000, ticketNo: 34 });
+  await write('restaurants/RW/settings/main', { screen: { salon: true, delivery: true, qr: true } });
+  await write('publicMenus/RW', { on: true, modes: { table: true, pickup: true, delivery: false } });
+  const p = await page(B, { w: 1280, h: 720 });
+  await p.addInitScript(() => { Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 9; X96) Chrome/120 Mobile Safari/537.36 SoraScreenApp/1.6' }); window.__autoState = true; window.__goApp = (u) => { (window.__asked = window.__asked || []).push(u); }; });
+  await login(p, BASE + 'screen.html', 'scr@x.com');
+  await p.waitForSelector('#prep .n[data-t="دلفري"]', { timeout: 15000 });
+  await p.waitForSelector('#qrBox:not([hidden]) #qrCode svg');
+  const st = await p.evaluate(() => {
+    const cs = (sel, pseudo) => getComputedStyle(document.querySelector(sel), pseudo || null);
+    return {
+      band: cs('#scr', '::before').backgroundImage,
+      ready: cs('.ready .hd h2').color, prep: cs('.prep .hd h2').color, live: cs('.live i').backgroundColor,
+      qr: cs('#qrT span + span').color,
+      take: cs('#prep .n[data-t="سفري"]', '::after').backgroundColor, salon: cs('#prep .n[data-t="صالة"]', '::after').backgroundColor,
+      deliv: cs('#prep .n[data-t="دلفري"]', '::after').backgroundColor,
+    };
+  });
+  const G = 'rgb(61, 240, 139)', O = 'rgb(255, 181, 71)', Bl = 'rgb(147, 166, 255)', T = 'rgb(62, 230, 207)';
+  for (const c of [G, O, Bl, T]) assert.ok(st.band.includes(c), 'top band has ' + c);
+  assert.equal(st.ready, G); assert.equal(st.prep, O); assert.equal(st.qr, Bl); assert.equal(st.live, T);
+  assert.deepEqual([st.take, st.salon, st.deliv], [O, Bl, T], 'order type tags: takeaway orange, dine-in blue, delivery turquoise');
+  await p.screenshot({ path: 'shots/ready-screen-colors.png' });
+  // «يفتح وحده مع التلفزيون»: التطبيق بلّغ إنه شغّال ← الزر يطلع بالقائمة، والضغط يطلب من التطبيق يطفيه
+  await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter');
+  await p.waitForSelector('#menu:not([hidden])');
+  assert.ok((await p.textContent('#mAuto')).includes('يشتغل'));
+  await p.keyboard.press('ArrowDown');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'mAuto');
+  await p.keyboard.press('Enter');
+  assert.deepEqual(await p.evaluate(() => window.__asked), ['sora3a://autostart?on=0']);
+  await p.evaluate(() => window.__setAuto(false));
+  assert.ok((await p.textContent('#mAuto')).includes('مطفي'));
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
