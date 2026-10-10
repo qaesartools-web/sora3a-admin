@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { test, before, after, beforeEach } from 'node:test';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, runTransaction, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, runTransaction, addDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 
 let env;
 const DAY = 86400000;
@@ -593,4 +593,147 @@ test('الفروع: الفرع المنتهي مقفول، ومطعم مو من 
   // صاحب الفرع الأصلي (rest2) يبقى يدير فرعه، وكاشير الفرع الأساسي ما يدخل للفروع
   await assertSucceeds(getDocs(query(collection(as('rest2'), 'orders'), where('restaurantId', '==', 'R2'))));
   await assertFails(getDocs(query(collection(as('cash1'), 'orders'), where('restaurantId', '==', 'R2'))));
+});
+
+// ══ برنامج المالك: أجهزة معتمدة + جلسة لكل جهاز + صلاحيات الفريق لكل قسم ══
+const AT = 1700000000;   // auth_time (وقت تسجيل الدخول) بالتوكن
+const hqAs = (uid, at = AT) => env.authenticatedContext(uid, { auth_time: at }).firestore();
+const K_OWN = 'OWNERKEY_aaaaaaaaaaaaaaaaaaaaaaaa', K_HQ1 = 'HQ1KEY_bbbbbbbbbbbbbbbbbbbbbbbbbb', K_NEW = 'NEWKEY_cccccccccccccccccccccccccc';
+async function seedHq({ ownerDev = true, ownerSess = true, hq1Dev = true, hq1Sess = true } = {}) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'users/hq1'), { role: 'hq', email: 'h1@x.com', name: 'سجاد' });
+    await setDoc(doc(db, 'hqTeam/hq1'), { name: 'سجاد', perms: { overview: 'view', rests: 'view', money: 'edit', trials: 'hide' } });
+    await setDoc(doc(db, 'users/hq2'), { role: 'hq', email: 'h2@x.com', name: 'زينب' });
+    await setDoc(doc(db, 'hqTeam/hq2'), { name: 'زينب', perms: { rests: 'edit', trials: 'edit', devices: 'edit' } });
+    await setDoc(doc(db, 'leads/L1'), { owner: 'x', restaurant: 'y', phone: '0770', status: 'new' });
+    if (ownerDev) { await setDoc(doc(db, 'hqDevices/' + K_OWN), { uid: 'admin1', name: 'لابتوب' }); await setDoc(doc(db, 'hqMeta/boot'), { uid: 'admin1', key: K_OWN, atMs: 1 }); }
+    if (ownerSess) await setDoc(doc(db, `hqSessions/admin1/t/${AT}`), { key: K_OWN, atMs: 1 });
+    if (hq1Dev) { await setDoc(doc(db, 'hqDevices/' + K_HQ1), { uid: 'hq1' }); await setDoc(doc(db, 'hqDevices/HQ2KEY_dddddddddddddddddddddddddd'), { uid: 'hq2' }); }
+    if (hq1Sess) { await setDoc(doc(db, `hqSessions/hq1/t/${AT}`), { key: K_HQ1, atMs: 1 }); await setDoc(doc(db, `hqSessions/hq2/t/${AT}`), { key: 'HQ2KEY_dddddddddddddddddddddddddd', atMs: 1 }); }
+  });
+}
+
+test('برنامج المالك: أول جهاز للمالك يعتمد نفسه مرة وحدة بس', async () => {
+  await seedHq({ ownerDev: false, ownerSess: false, hq1Dev: false, hq1Sess: false });
+  const a = hqAs('admin1');
+  const boot = (key) => { const b = writeBatch(a); b.set(doc(a, 'hqDevices/' + key), { uid: 'admin1', name: 'لابتوب', platform: 'windows', code: 'ABC123', approvedAtMs: 1, by: 'boot' }); b.set(doc(a, 'hqMeta/boot'), { uid: 'admin1', key, atMs: 1 }); return b.commit(); };
+  await assertFails(setDoc(doc(a, 'hqDevices/' + K_OWN), { uid: 'admin1' }), 'without boot doc');
+  await assertSucceeds(boot(K_OWN));
+  await assertFails(boot(K_NEW), 'boot only once');
+  // الفريق ما يكدرون يسوون boot
+  await env.withSecurityRulesDisabled(async (ctx) => { await deleteDoc(doc(ctx.firestore(), 'hqMeta/boot')); });
+  const h = hqAs('hq1');
+  const b = writeBatch(h); b.set(doc(h, 'hqDevices/' + K_HQ1), { uid: 'hq1' }); b.set(doc(h, 'hqMeta/boot'), { uid: 'hq1', key: K_HQ1, atMs: 1 });
+  await assertFails(b.commit());
+});
+
+test('برنامج المالك: الجلسة بس بمفتاح معتمد لنفس الحساب ولنفس تسجيل الدخول', async () => {
+  await seedHq({ ownerSess: false, hq1Sess: false });
+  const a = hqAs('admin1');
+  await assertSucceeds(setDoc(doc(a, `hqSessions/admin1/t/${AT}`), { key: K_OWN, atMs: 1, platform: 'windows' }));
+  await assertFails(setDoc(doc(a, `hqSessions/admin1/t/${AT + 5}`), { key: K_OWN, atMs: 1 }), 'wrong auth_time');
+  await assertFails(setDoc(doc(a, `hqSessions/admin1/t/${AT}`), { key: K_NEW, atMs: 1 }), 'unapproved key');
+  await assertFails(setDoc(doc(hqAs('hq1'), `hqSessions/hq1/t/${AT}`), { key: K_OWN, atMs: 1 }), "someone else's key");
+  await assertFails(setDoc(doc(hqAs('hq1'), `hqSessions/admin1/t/${AT}`), { key: K_HQ1, atMs: 1 }));
+  // مفتاح الجهاز ما يقراه أحد بدون ما يعرفه، والجهاز يقرا مستنده
+  await assertSucceeds(getDoc(doc(hqAs('hq1'), 'hqDevices/' + K_HQ1)));
+  await assertFails(getDoc(doc(hqAs('hq1'), 'hqDevices/' + K_OWN)));
+  await assertFails(getDocs(collection(hqAs('hq1'), 'hqDevices')));
+});
+
+test('برنامج المالك: المالك بدون جهاز معتمد ما يعدّل الفريق — ومن جهازه يعدّل', async () => {
+  await seedHq({ ownerSess: false });
+  const team = { name: 'حسين', email: 'h3@x.com', job: 'دعم', perms: { rests: 'view', money: 'hide' }, createdAtMs: 1 };
+  await assertFails(setDoc(doc(hqAs('admin1'), 'hqTeam/hq3'), team), 'no session');
+  await assertFails(setDoc(doc(hqAs('admin1', AT + 9), 'hqTeam/hq3'), team), 'other login');
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `hqSessions/admin1/t/${AT}`), { key: K_OWN, atMs: 1 }); });
+  await assertSucceeds(setDoc(doc(hqAs('admin1'), 'hqTeam/hq3'), team));
+  await assertFails(setDoc(doc(hqAs('admin1'), 'hqTeam/hq4'), { ...team, perms: { rests: 'owner' } }), 'bad level');
+  await assertFails(setDoc(doc(hqAs('admin1'), 'hqTeam/hq4'), { ...team, perms: { team: 'edit' } }), 'team section is owner-only');
+  await assertFails(setDoc(doc(hqAs('hq2'), 'hqTeam/hq2'), { ...team, perms: { money: 'edit' } }), 'member cannot grant himself');
+});
+
+test('برنامج المالك: صلاحيات الفريق لكل قسم (مشاهدة / تعديل / مخفي)', async () => {
+  await seedHq();
+  const h1 = hqAs('hq1'), h2 = hqAs('hq2');
+  const pay = { restaurantId: 'R1', restaurantName: 'R1', amount: 50000, months: 1, method: 'كاش', by: 'سجاد', byUid: 'hq1', atMs: 1, day: '2026-10-10' };
+  // سجاد: الفلوس تعديل، المطاعم مشاهدة، التجارب مخفية
+  await assertSucceeds(getDocs(collection(h1, 'hqPayments')));
+  await assertSucceeds(setDoc(doc(h1, 'hqPayments/P1'), pay));
+  await assertFails(setDoc(doc(h1, 'hqPayments/P2'), { ...pay, byUid: 'admin1' }), 'byUid must be him');
+  await assertSucceeds(getDoc(doc(h1, 'restaurants/R1')));
+  await assertSucceeds(updateDoc(doc(h1, 'restaurants/R1'), { expiryMs: Date.now() + 60 * DAY, expiry: '2026-12-10' }), 'money extends subscription');
+  await assertFails(updateDoc(doc(h1, 'restaurants/R1'), { name: 'غيره' }), 'rests view only');
+  await assertFails(updateDoc(doc(h1, 'restaurants/R1'), { features: { captain: false } }));
+  await assertSucceeds(getDocs(query(collection(h1, 'users'), where('restaurantId', '==', 'R1'), where('role', '==', 'cashier'))));
+  await assertFails(setDoc(doc(h1, 'users/newc'), { role: 'cashier', restaurantId: 'R1', email: 'c@x.com' }), 'rests view only');
+  await assertFails(getDocs(collection(h1, 'leads')), 'trials hidden');
+  await assertSucceeds(getDocs(query(collection(h1, 'orders'), where('restaurantId', '==', 'R1'))), 'overview view');
+  // زينب: المطاعم والتجارب والأجهزة تعديل، الفلوس مخفية
+  await assertFails(getDocs(collection(h2, 'hqPayments')));
+  await assertSucceeds(updateDoc(doc(h2, 'restaurants/R1'), { features: { captain: false } }));
+  await assertSucceeds(setDoc(doc(h2, 'users/newc'), { role: 'cashier', restaurantId: 'R1', email: 'c@x.com', name: 'ك', perms: {} }));
+  await assertFails(setDoc(doc(h2, 'users/newa'), { role: 'admin' }), 'cannot create admins');
+  await assertFails(setDoc(doc(h2, 'users/newh'), { role: 'hq' }), 'cannot create team accounts');
+  await assertFails(updateDoc(doc(h2, 'users/admin1'), { disabled: true }), 'cannot touch the owner');
+  await assertFails(updateDoc(doc(h2, 'users/cash1'), { role: 'admin' }), 'cannot promote');
+  await assertSucceeds(updateDoc(doc(h2, 'users/cash1'), { disabled: true }));
+  await assertSucceeds(updateDoc(doc(h2, 'leads/L1'), { status: 'contacted' }));
+  await assertSucceeds(setDoc(doc(h2, 'hqNotes/N1'), { restaurantId: 'R1', text: 'اتصلت وياه', by: 'زينب', byUid: 'hq2', atMs: 1 }));
+  await assertFails(getDocs(collection(h1, 'auditLog')), 'log hidden for سجاد');
+});
+
+test('برنامج المالك: بدون جهاز معتمد أو بعد إلغاء الجهاز = ماكو صلاحية', async () => {
+  await seedHq({ hq1Sess: false });
+  await assertFails(getDocs(collection(hqAs('hq1'), 'hqPayments')), 'no session');
+  await assertFails(getDoc(doc(hqAs('hq1'), 'restaurants/R1')), 'no session');
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `hqSessions/hq1/t/${AT}`), { key: K_HQ1, atMs: 1 }); });
+  await assertSucceeds(getDocs(collection(hqAs('hq1'), 'hqPayments')));
+  await assertFails(getDocs(collection(hqAs('hq1', AT + 1), 'hqPayments')), 'another login on another device');
+  // المالك يلغي جهاز سجاد ← ينقفل فوراً
+  await assertSucceeds(deleteDoc(doc(hqAs('admin1'), 'hqDevices/' + K_HQ1)));
+  await assertFails(getDocs(collection(hqAs('hq1'), 'hqPayments')), 'device revoked');
+  // حساب hq انشال من الفريق، أو انوقف ← ينقفل حتى لو جهازه معتمد
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `hqSessions/hq2/t/${AT}`), { key: 'HQ2KEY_dddddddddddddddddddddddddd', atMs: 1 }); });
+  await assertSucceeds(getDoc(doc(hqAs('hq2'), 'restaurants/R1')));
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'users/hq2'), { disabled: true }); });
+  await assertFails(getDoc(doc(hqAs('hq2'), 'restaurants/R1')), 'disabled');
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'users/hq2'), { disabled: false }); await deleteDoc(doc(ctx.firestore(), 'hqTeam/hq2')); });
+  await assertFails(getDoc(doc(hqAs('hq2'), 'restaurants/R1')), 'removed from team');
+});
+
+test('برنامج المالك: طلب اعتماد جهاز — الفريق يطلب، والمالك بس يعتمد', async () => {
+  await seedHq();
+  const req = { uid: 'hq1', name: 'سجاد', email: 'h1@x.com', platform: 'android', code: 'Q7K2MX', createdAtMs: 1, lastAtMs: 1 };
+  await assertSucceeds(setDoc(doc(hqAs('hq1'), 'hqDeviceReqs/' + K_NEW), req));
+  await assertFails(setDoc(doc(hqAs('hq2'), 'hqDeviceReqs/' + K_NEW), { ...req, uid: 'hq2' }), "cannot take over another's request");
+  await assertFails(setDoc(doc(as('cash1'), 'hqDeviceReqs/CASHKEY_eeeeeeeeeeeeeeeeeeeeeeee'), { ...req, uid: 'cash1' }), 'cashiers cannot ask');
+  await assertFails(getDocs(collection(hqAs('hq1'), 'hqDeviceReqs')), 'members cannot list');
+  await assertFails(setDoc(doc(hqAs('hq2'), 'hqDevices/' + K_NEW), { uid: 'hq1' }), 'members cannot approve devices');
+  await assertSucceeds(getDocs(collection(hqAs('admin1'), 'hqDeviceReqs')));
+  const a = hqAs('admin1'), b = writeBatch(a);
+  b.set(doc(a, 'hqDevices/' + K_NEW), { uid: 'hq1', name: 'تلفون سجاد', platform: 'android', code: 'Q7K2MX', approvedAtMs: 1, by: 'a@x.com' });
+  b.delete(doc(a, 'hqDeviceReqs/' + K_NEW));
+  await assertSucceeds(b.commit());
+  await assertSucceeds(setDoc(doc(hqAs('hq1', AT + 7), `hqSessions/hq1/t/${AT + 7}`), { key: K_NEW, atMs: 2, platform: 'android' }), 'second device, own session');
+});
+
+test('برنامج المالك: المطاعم والكاشيرية والكباتن ما يشوفون بيانات البرنامج', async () => {
+  await seedHq();
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'hqPayments/P1'), { restaurantId: 'R1', amount: 1 }); await setDoc(doc(ctx.firestore(), 'hqNotes/N1'), { restaurantId: 'R1', text: 'x' }); });
+  for (const u of ['rest1', 'cash1', 'cap1', 'staff1']) {
+    await assertFails(getDoc(doc(as(u), 'hqPayments/P1')), u);
+    await assertFails(getDocs(query(collection(as(u), 'hqNotes'), where('restaurantId', '==', 'R1'))), u);
+    await assertFails(getDoc(doc(as(u), 'hqTeam/hq1')), u);
+    await assertFails(getDoc(doc(as(u), 'hqMeta/backup')), u);
+  }
+  // فريق التجارب: يفتح تجربة لمطعم جديد (trial = true) بس، وما يحذف مطاعم
+  const h2 = hqAs('hq2');
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'hqTeam/hq2'), { name: 'زينب', perms: { trials: 'edit' } }); });
+  await assertSucceeds(setDoc(doc(h2, 'restaurants/T1'), { name: 'تجربة', trial: true, active: true }));
+  await assertFails(setDoc(doc(h2, 'restaurants/T2'), { name: 'مو تجربة', active: true }));
+  await assertSucceeds(updateDoc(doc(h2, 'restaurants/T1'), { expiryMs: 5, expiry: '2026-12-01' }));
+  await assertFails(deleteDoc(doc(h2, 'restaurants/T1')));
+  await assertSucceeds(setDoc(doc(h2, 'users/trialOwner'), { role: 'restaurant', restaurantId: 'T1', email: 't@x.com' }));
 });
