@@ -174,6 +174,120 @@ test('line app: cashier account refused (owner only); services off → clear mes
   await w.context().close();
 });
 
+// التطبيق الجديد: أكثر من رقم على نفس التلفون (كل مصدر سطر، مثل LineStore.put بالجافا)
+async function multiPage(opts = {}) {
+  const p = await page(B, { w: 412, h: 900 });
+  await p.addInitScript((o) => {
+    window.__entries = o.entries || []; window.__last = o.last || {}; window.__opened = [];
+    window.__perms = { phone: true, notif: true, battery: true, overlay: false, sim: true };
+    const sims = o.sims || [{ slot: 0, subId: 11, name: 'Zain IQ' }, { slot: 1, subId: 12, name: 'Asiacell' }];
+    const same = (a, b) => (a.sim && b.sim && (a.slot < 0 || b.slot < 0 || a.slot === b.slot)) || (a.wa && b.wa && (!a.pkg || !b.pkg || a.pkg === b.pkg));
+    const status = () => ({ linked: window.__entries.length > 0, perms: { ...window.__perms }, android: 34, maker: 'samsung', sims,
+      waApps: { 'com.whatsapp': true, 'com.whatsapp.w4b': true },
+      entries: window.__entries.map((e) => ({ ...e, kind: e.sim ? 'sim' : 'wa', lastAt: 0, ...(window.__last[e.token] || {}) })) });
+    window.SoraDesktop = { version: '1.9', platform: 'android', canCallLine: true, canMultiLine: true,
+      getCallLine: async () => status(),
+      addCallLine: async (c) => {
+        const src = c.sources.map((x) => ({ token: c.token, restaurantId: c.restaurantId, line: c.line, label: c.label, sim: x.kind === 'sim', wa: x.kind === 'wa',
+          slot: x.kind === 'sim' ? x.slot : -1, subId: x.kind === 'sim' ? x.subId : -1, pkg: x.kind === 'wa' ? x.pkg : '' }));
+        window.__entries = window.__entries.filter((e) => e.token !== c.token && !src.some((x) => same(x, e))).concat(src);
+        return status();
+      },
+      removeCallLine: async (t) => { window.__entries = window.__entries.filter((e) => e.token !== t); return status(); },
+      clearCallLine: async () => { window.__entries = []; return status(); },
+      openPerm: async (k) => { window.__opened.push(k); return true; },
+      testCall: async (t) => {
+        const e = window.__entries.find((x) => x.token === t) || window.__entries[0];
+        const r = await fetch('http://127.0.0.1:8080/v1/projects/sora3a-system/databases/(default)/documents/incomingCalls?key=fake', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ fields: { token: { stringValue: e.token }, restaurantId: { stringValue: e.restaurantId }, line: { stringValue: e.sim ? e.line : 'واتساب ' + e.line }, number: { stringValue: '07700000000' }, status: { stringValue: 'ringing' } } }) });
+        window.__last[e.token] = { lastAt: Date.now(), lastNumber: '07700000000', lastErr: r.ok ? '' : 'خطأ ' + r.status, lastKind: e.sim ? 'sim' : 'wa', lastSlot: e.slot };
+        return r.ok ? { ok: true } : { ok: false, error: 'خطأ ' + r.status };
+      } };
+  }, opts);
+  return p;
+}
+const srcOf = (p) => p.evaluate(() => window.__entries.map((e) => [e.line, e.label, e.sim ? 'sim' + e.slot : 'wa:' + e.pkg]).sort((a, b) => (a[0] + a[2]).localeCompare(b[0] + b[2])));
+
+test('line app (new): one phone, several numbers — SIM 1, SIM 2, WhatsApp, WhatsApp Business — each to its own line', async () => {
+  await E.withSecurityRulesDisabled(async (c) => { const s = await getDocs(query(collection(c.firestore(), 'lineTokens'), where('restaurantId', '==', 'RL'))); for (const d of s.docs) await (await import('firebase/firestore')).deleteDoc(d.ref); });
+  const cash = await page(B, { w: 1280, h: 800 });
+  await cashierLogin(cash);
+  await cash.waitForTimeout(1500);
+  const p = await multiPage();
+  await lineLogin(p, 'line@x.com');
+  await p.waitForSelector('#lnNum');
+  // أول رقم: الشريحة الأولى + الواتساب مختارة افتراضياً
+  const boxes = async () => p.$$eval('.lnSrc', (b) => b.map((x) => [x.parentElement.textContent.replace(/\s+/g, ' ').trim(), x.checked]));
+  assert.deepEqual((await boxes()).map((b) => b[1]), [true, false, true, false]);
+  assert.match((await boxes())[1][0], /شريحة 2 — Asiacell/);
+  assert.equal(await p.locator('.upd').count(), 0, 'no update banner in the new app');
+  await p.fill('#lnNum', '0780 111 2222');
+  await p.click('#lnLinkBtn');
+  await p.waitForSelector('.num');
+  // رقم ثاني: الشريحة الثانية (أول مصدر فاضي) + واتساب أعمال
+  await p.click('#lnAddBtn');
+  await p.waitForSelector('#lnNum');
+  assert.deepEqual((await boxes()).map((b) => b[1]), [false, true, false, false]);
+  assert.match((await boxes())[0][0], /هسه على خط 1/);
+  await p.fill('#lnNum', '0770 333 4444');
+  await p.check('.lnSrc[data-i="3"]');
+  await p.click('#lnLinkBtn');
+  await p.waitForFunction(() => document.querySelectorAll('.num').length === 2);
+  const ls = (await lines()).sort((a, b) => a.line - b.line);
+  assert.deepEqual(ls.map((l) => [l.line, l.label]), [['1', '07801112222'], ['2', '07703334444']]);
+  assert.deepEqual(await srcOf(p), [['1', '07801112222', 'sim0'], ['1', '07801112222', 'wa:com.whatsapp'], ['2', '07703334444', 'sim1'], ['2', '07703334444', 'wa:com.whatsapp.w4b']]);
+  const card2 = await p.textContent('.num[data-token="' + ls[1].id + '"]');
+  assert.ok(card2.includes('خط 2') && card2.includes('شريحة 2 — Asiacell') && card2.includes('واتساب أعمال'), card2);
+  await p.screenshot({ path: 'shots/line-multi.png', fullPage: true });
+  // تجربة الرقم الثاني ← تطلع بالكاشير على خط 2
+  await p.click(`.num[data-token="${ls[1].id}"] button >> text=تجربة`);
+  await cash.waitForSelector('.call-card >> text=07700000000');
+  assert.match(await cash.textContent('.call-card'), /خط 2/);
+  await p.waitForFunction((t) => document.querySelector(`.num[data-token="${t}"]`).textContent.includes('آخر مكالمة'), ls[1].id);
+  // تعديل الرقم الأول: الشريحة بس (بدون واتساب)
+  await p.click(`.num[data-token="${ls[0].id}"] button >> text=تعديل`);
+  await p.waitForSelector('#lnNum[readonly]');
+  assert.equal(await p.inputValue('#lnNum'), '07801112222');
+  await p.uncheck('.lnSrc[data-i="2"]');
+  await p.click('#lnLinkBtn');
+  await p.waitForFunction(() => window.__entries.length === 3);
+  assert.deepEqual(await srcOf(p), [['1', '07801112222', 'sim0'], ['2', '07703334444', 'sim1'], ['2', '07703334444', 'wa:com.whatsapp.w4b']]);
+  assert.equal((await lines()).length, 2, 'editing does not add lines');
+  // جهاز ما يكول أي شريحة رنّت ← تنبيه
+  await p.evaluate((t) => { window.__last[t] = { lastAt: Date.now(), lastNumber: '0771', lastErr: '', lastKind: 'sim', lastSlot: -1 }; window.dispatchEvent(new Event('sora:resume')); }, ls[0].id);
+  await p.waitForSelector('text=هذا الجهاز ما يكول أي شريحة رنّت');
+  // إلغاء الرقم الثاني ← ينحذف خطه من المطعم ويبقى الأول
+  await p.click(`.num[data-token="${ls[1].id}"] button >> text=إلغاء`);
+  await p.waitForFunction(() => document.querySelectorAll('.num').length === 1);
+  await until(async () => (await lines()).length === 1);
+  assert.deepEqual((await lines()).map((l) => l.line), ['1']);
+  assert.deepEqual(await srcOf(p), [['1', '07801112222', 'sim0']]);
+  assert.deepEqual(clean(p), []); assert.deepEqual(clean(cash), []);
+  await p.context().close(); await cash.context().close();
+});
+
+test('line app (new): a number from the old app shows as SIM + WhatsApp; WhatsApp service off → its boxes disabled', async () => {
+  const T = 'M'.repeat(30) + 'legacy';
+  await E.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'lineTokens', T), { restaurantId: 'RL', line: '5', label: '07809990000', active: true, createdAtMs: 1 }));
+  const p = await multiPage({ entries: [{ token: T, restaurantId: 'RL', line: '5', label: '07809990000', sim: true, wa: true, slot: -1, subId: -1, pkg: '' }], sims: [] });
+  await p.goto(LINE_URL);
+  await p.waitForSelector('.num');
+  const card = await p.textContent('.num');
+  assert.ok(card.includes('خط 5') && card.includes('📱 الشريحة') && card.includes('🟢 الواتساب'), card);
+  assert.equal(await p.locator('.perm').count(), 3, 'phone + notifications + battery');
+  // إضافة رقم وهو مو مسجّل دخول ← يطلب الدخول
+  await p.click('#lnAddBtn');
+  await p.waitForSelector('#lnEmail');
+  await write('restaurants/RL', { features: { whatsapp: false } });
+  await p.fill('#lnEmail', 'line@x.com'); await p.fill('#lnPass', 'secret123'); await p.click('#lnLoginBtn');
+  await p.waitForSelector('#lnNum');
+  const st = await p.$$eval('.lnSrc', (b) => b.map((x) => [x.disabled, x.parentElement.textContent.includes('مطفية من الإدارة')]));
+  assert.deepEqual(st, [[false, false], [true, true], [true, true]]);   // الشريحة + واتساب + أعمال
+  await write('restaurants/RL', { features: {} });
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
 test('Android cashier app: no line card (it lives in the line app); auto-start asks for overlay then turns on', async () => {
   const p = await page(B, { w: 1280, h: 900 });
   await p.addInitScript(() => {
