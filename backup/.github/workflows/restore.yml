@@ -1,0 +1,40 @@
+name: استرجاع من نسخة احتياطية
+
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: 'مسار ملف النسخة (مثال: data/daily/2026-10-09.json.gz) — أكثر من ملف: افصل بمسافة'
+        required: true
+      only:
+        description: 'بس هذني المجموعات (مثال: orders أو restaurants/R1/menu) — فارغ = كلها'
+        required: false
+      mode:
+        description: 'dry = تجربة بس | missing = يرجّع المحذوف بس (الأسلم) | overwrite = فوق الموجود'
+        type: choice
+        options: [dry, missing, overwrite]
+        default: dry
+
+permissions:
+  contents: read
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: استرجاع
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FILES: ${{ inputs.file }}
+          ONLY: ${{ inputs.only }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -f
+          ARGS="--mode=$MODE"
+          if [ -n "$ONLY" ]; then ARGS="$ARGS --only=$ONLY"; fi
+          node scripts/restore.mjs $FILES $ARGS

@@ -100,7 +100,8 @@ test('admin app reads every number and detail; owner edits and deletes expenses'
   await p.click('#axTabs button >> text=حركات المخزون');
   assert.ok((await p.textContent('#axBody')).includes('من مورد الكرادة'));
   await p.click('#axTabs button >> text=قائمة الدخل');
-  assert.ok((await p.textContent('#axBody')).includes('صافي الربح'));
+  // طلبات آخر ٣٠ يوم تنجاب من السيرفر وقت الحاجة — ننتظرها
+  await p.waitForFunction(() => document.getElementById('axBody').textContent.includes('صافي الربح'), null, { timeout: 10000 });
   // تحديث مباشر: الكاشير يضيف مصروف والشاشة تتحدث بدون إعادة تحميل
   await p.click('#axTabs button >> text=المصروفات');
   await p.evaluate(() => { window.__mark = 1; });
