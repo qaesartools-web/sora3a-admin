@@ -620,7 +620,7 @@ body.staff-mode .staff-banner{display:block;}
         <div class="ml-app">📲 <b>إضافة خط:</b> على تلفون الخط نزّل تطبيق <b>«سرعة — خط المطعم»</b> ← سجّل دخول بحساب صاحب المطعم ← اكتب الرقم ← «اربط». الخط يطلع هنا وحده.
           <a class="btn-primary" href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/line-android/sora3a-line.apk" target="_blank" rel="noopener">⬇️ تنزيل تطبيق خط المطعم</a></div>
         <div id="mlList"></div>
-        <details class="ml-adv"><summary>⚙️ متقدم: خط يدوي (سنترال / هاتف IP / MacroDroid)</summary>
+        <details class="ml-adv admin-only"><summary>⚙️ متقدم (الإدارة العليا): خط يدوي (سنترال / هاتف IP / MacroDroid)</summary>
           <div class="form-row">
             <div class="form-group"><label>اسم الخط</label><input class="form-inp" id="mlLabel" maxlength="40" placeholder="مثال: سنترال الصالة"></div>
             <div class="form-group" style="display:flex;align-items:flex-end"><button class="btn-primary" onclick="mlAdd()">➕ إضافة خط يدوي</button></div>
@@ -2714,11 +2714,12 @@ function mlRender(list){
     <div class="entity-actions">
       <button class="btn-sm btn-edit" onclick="mlSetup('${esc(l.id)}')">📋 طريقة الربط</button>
       <button class="btn-sm btn-cap" onclick="mlTest('${esc(l.id)}')">🧪 مكالمة تجريبية</button>
-      <button class="btn-sm btn-edit" onclick="mlRotate('${esc(l.id)}')">🔄 توكن جديد</button>
+      ${isAdmin()?`<button class="btn-sm btn-edit" onclick="mlRotate('${esc(l.id)}')">🔄 توكن جديد</button>`:''}
       <button class="btn-sm btn-del" onclick="mlDel('${esc(l.id)}')">🗑️</button>
     </div><div id="setup_${esc(l.id)}"></div></div>`).join('');
 }
 window.mlAdd=async function(){
+  if(!isAdmin())return;
   const rid=mrRestId();if(!rid){toast('⚠️ اختر المطعم','warn');return;}
   if(mlLines.length>=MAX_LINES){toast('⚠️ الحد الأقصى 10 خطوط','warn');return;}
   const used=new Set(mlLines.map(l=>String(l.line)));let n=1;while(used.has(String(n)))n++;
@@ -2736,6 +2737,7 @@ window.mlDel=async function(id){
   try{await window._fb.deleteDoc(window._fb.doc(window._fb.db,'lineTokens',id));audit('line.delete',{restaurantId:mrRid});toast('🗑️ تم حذف الخط');}catch(e){toast('❌ تعذّر الحذف','error');}
 };
 window.mlRotate=async function(id){
+  if(!isAdmin())return;
   const l=mlLines.find(x=>x.id===id);if(!l)return;
   if(!confirm('إنشاء توكن جديد لهذا الخط؟ التوكن القديم يتوقف فوراً ويجب تحديثه على الجهاز.'))return;
   const fb=window._fb;
@@ -2749,10 +2751,11 @@ window.mlSetup=function(id){
   if(box.innerHTML){box.innerHTML='';return;}
   const body=lineBody(l,'[call_number]');
   box.innerHTML=`<div class="setup">
-    <div class="easy">⭐ <b>الطريقة الأسهل — بدون MacroDroid:</b><br>
+    <div class="easy">⭐ <b>${isAdmin()?'الطريقة الأسهل — بدون MacroDroid:':'طريقة الربط:'}</b><br>
     1) على تلفون المطعم (اللي بيه الشريحة أو الواتساب) نزّل <a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/line-android/sora3a-line.apk" target="_blank" rel="noopener"><b>تطبيق «سرعة — خط المطعم»</b></a> وثبّته.<br>
     2) سجّل دخول بحساب <b>صاحب المطعم</b> ← اكتب الرقم واضغط «اربط»، واسمح بالأذونات اللي يطلبها.<br>
     <small>إذا وصف هذا الخط هو نفس الرقم، التطبيق يستخدم هذا الخط؛ وإلا ينضاف خط جديد وحده.</small></div>
+    ${isAdmin()?`<details class="ml-adv"><summary>⚙️ متقدم (الإدارة العليا بس): التوكن السري وسنترال / هاتف IP / MacroDroid</summary>
     <b>🔑 توكن جوكر (سرّي — لا تشاركه):</b><div class="tok">${esc(l.id)}</div>
     <b>📱 أو: تطبيق MacroDroid المجاني — مرة واحدة لكل جهاز:</b><br>
     1) ثبّت <b>MacroDroid</b> من Google Play وافتحه ← <b>Add Macro</b><br>
@@ -2768,9 +2771,10 @@ window.mlSetup=function(id){
       <button class="btn-sm btn-edit" onclick="mlCopy('${esc(l.id)}','url')">📋 نسخ الرابط</button>
       <button class="btn-sm btn-edit" onclick="mlCopy('${esc(l.id)}','body')">📋 نسخ الـ Body</button>
       <button class="btn-sm btn-edit" onclick="mlCopy('${esc(l.id)}','token')">📋 نسخ التوكن</button>
-    </div></div>`;
+    </div></details>`:''}</div>`;
 };
 window.mlCopy=async function(id,what){
+  if(!isAdmin())return;
   const l=mlLines.find(x=>x.id===id);if(!l)return;
   const txt=what==='url'?FS_URL:what==='token'?l.id:lineBody(l,'[call_number]');
   try{await navigator.clipboard.writeText(txt);toast('📋 تم النسخ');}catch(e){prompt('انسخ النص:',txt);}

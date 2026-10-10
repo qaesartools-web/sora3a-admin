@@ -78,23 +78,36 @@ test('only the super admin adds and stops cashiers; the owner manages permission
   await until(async () => (await read('users/' + U.cash)).disabled === true);
   await p.click('#mcList button >> text=تفعيل');
   await until(async () => (await read('users/' + U.cash)).disabled === false);
+  // خط يدوي (سنترال/MacroDroid) والتوكن السري: الإدارة العليا بس، تحت «متقدم»
+  assert.match(await p.getAttribute('.ml-app a', 'href'), /download\/line-android\/sora3a-line\.apk$/);
+  await p.click('#mlCard .ml-adv summary');
+  await p.fill('#mlLabel', 'خط زين');
+  await p.click('button >> text=إضافة خط يدوي');
+  LINE = await until(async () => (await all('lineTokens', 'restaurantId', 'RC'))[0]);
+  assert.ok(LINE.id.length >= 24); assert.equal(LINE.line, '1'); assert.equal(LINE.active, true);
+  await p.waitForSelector('#mlList .entity');
+  await p.click('button >> text=طريقة الربط');
+  assert.equal(await p.isVisible('#mlList .tok'), false, 'token collapsed under «advanced»');
+  await p.click('#mlList .setup .ml-adv summary');
+  const setup = await p.textContent('#mlList');
+  assert.ok(setup.includes(LINE.id) && setup.includes('incomingCalls?key=') && setup.includes('[call_number]'));
+  assert.ok(await p.isVisible('#mlList button >> text=توكن جديد'));
   assert.deepEqual(clean(p), []);
   await p.context().close();
   // صاحب المطعم يشوف الكاشير بدون أزرار إيقاف/حذف
   await o.waitForSelector('#mcList .entity');
   assert.equal(await o.locator('#mcList .btn-del').count(), 0);
   assert.equal(await o.locator('#mcList button >> text=إيقاف').count(), 0);
-  // الطريقة الأساسية هي تطبيق «خط المطعم»؛ الإضافة اليدوية (سنترال/MacroDroid) تحت «متقدم»
+  // وصاحب المطعم: الربط بتطبيق «خط المطعم» بس — ما يشوف التوكن ولا MacroDroid ولا إضافة خط يدوي ولا «توكن جديد»
   assert.match(await o.getAttribute('.ml-app a', 'href'), /download\/line-android\/sora3a-line\.apk$/);
-  await o.click('.ml-adv summary');
-  await o.fill('#mlLabel', 'خط زين');
-  await o.click('button >> text=إضافة خط يدوي');
-  LINE = await until(async () => (await all('lineTokens', 'restaurantId', 'RC'))[0]);
-  assert.ok(LINE.id.length >= 24); assert.equal(LINE.line, '1'); assert.equal(LINE.active, true);
+  assert.equal(await o.isVisible('#mlCard > .ml-adv'), false);
   await o.waitForSelector('#mlList .entity');
+  assert.equal(await o.locator('#mlList button >> text=توكن جديد').count(), 0);
+  await o.waitForTimeout(800);   // آخر تحديث للقائمة يوصل قبل ما نفتح «طريقة الربط»
   await o.click('button >> text=طريقة الربط');
-  const setup = await o.textContent('#mlList');
-  assert.ok(setup.includes(LINE.id) && setup.includes('incomingCalls?key=') && setup.includes('[call_number]'));
+  await o.waitForSelector('#mlList .setup');
+  const own = await o.textContent('#mlList');
+  assert.ok(own.includes('تطبيق') && !own.includes(LINE.id) && !own.includes('MacroDroid') && !own.includes('incomingCalls'), own);
   assert.deepEqual(clean(o).filter((e) => !/permission/i.test(e)), []);
   await o.screenshot({ path: 'shots/admin-lines.png', fullPage: true });
   await o.context().close();
