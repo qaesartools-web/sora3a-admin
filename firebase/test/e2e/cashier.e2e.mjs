@@ -14,8 +14,10 @@ before(async () => {
   srv = await serve(); E = await env(); B = await browser();
   await E.clearFirestore(); await clearAuth();
   U.owner = await signUp('owner@x.com', 'secret123');
+  U.boss = await signUp('boss@x.com', 'secret123');
   await E.withSecurityRulesDisabled(async (c) => {
     const db = c.firestore();
+    await setDoc(doc(db, 'users', U.boss), { role: 'admin', email: 'boss@x.com', name: 'المدير' });
     await setDoc(doc(db, 'users', U.owner), { role: 'restaurant', restaurantId: 'RC', email: 'owner@x.com', name: 'صاحب المطعم' });
     await setDoc(doc(db, 'restaurants/RC'), { name: 'مطعم الاتصال', userId: U.owner, active: true });
     await setDoc(doc(db, 'captains/CC'), { restaurantId: 'RC', userId: 'z', name: 'سجاد', available: true });
@@ -41,10 +43,21 @@ async function posLogin(p, email, pass = 'secret123') {
 }
 let LINE;
 
-test('owner creates a cashier with default permissions and a phone line', async () => {
+test('only the super admin adds and stops cashiers; the owner manages permissions and phone lines', async () => {
+  // صاحب المطعم: ما عنده إضافة كاشير (ملاحظة «من إدارة سرعة») ولا إيقاف/حذف، والسيرفر يرفض لو حاول
+  const o = await page(B, { w: 1280, h: 800 });
+  await adminLogin(o, 'owner@x.com');
+  await o.click('.dnav-btn[data-screen="scMyRest"]');
+  await o.waitForSelector('#mcOwnerNote', { state: 'visible' });
+  assert.equal(await o.isVisible('#mcAddBox'), false);
+  assert.equal(await o.isVisible('#devCard'), false);
+  const denied = await o.evaluate(async () => { try { await window._fb.setDoc(window._fb.doc(window._fb.db, 'users', 'fakeCashier'), { role: 'cashier', restaurantId: 'RC', email: 'f@x.com', name: 'x' }); return false; } catch (e) { return e.code; } });
+  assert.equal(denied, 'permission-denied');
+  // المدير الأعلى يختار المطعم ويضيف الكاشير
   const p = await page(B, { w: 1280, h: 800 });
-  await adminLogin(p, 'owner@x.com');
+  await adminLogin(p, 'boss@x.com');
   await p.click('.dnav-btn[data-screen="scMyRest"]');
+  await p.selectOption('#mrRest', 'RC');
   await p.fill('#mcName', 'علي الكاشير'); await p.fill('#mcEmail', 'cash@x.com'); await p.fill('#mcPass', 'cashpass1');
   await p.click('#mcAddBtn');
   const cu = await until(async () => (await all('users', 'role', 'cashier'))[0]);
@@ -52,20 +65,31 @@ test('owner creates a cashier with default permissions and a phone line', async 
   assert.deepEqual(cu.perms, { discount: true, cancel: false, inventory: false, menu: false, settings: false });
   U.cash = cu.id;
   await p.waitForSelector('#mcList .entity');
+  // إيقاف وتفعيل من المدير الأعلى
+  await p.click('#mcList button >> text=إيقاف');
+  await until(async () => (await read('users/' + U.cash)).disabled === true);
+  await p.click('#mcList button >> text=تفعيل');
+  await until(async () => (await read('users/' + U.cash)).disabled === false);
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+  // صاحب المطعم يشوف الكاشير بدون أزرار إيقاف/حذف
+  await o.waitForSelector('#mcList .entity');
+  assert.equal(await o.locator('#mcList .btn-del').count(), 0);
+  assert.equal(await o.locator('#mcList button >> text=إيقاف').count(), 0);
   // الطريقة الأساسية هي تطبيق «خط المطعم»؛ الإضافة اليدوية (سنترال/MacroDroid) تحت «متقدم»
-  assert.match(await p.getAttribute('.ml-app a', 'href'), /download\/line-android\/sora3a-line\.apk$/);
-  await p.click('.ml-adv summary');
-  await p.fill('#mlLabel', 'خط زين');
-  await p.click('button >> text=إضافة خط يدوي');
+  assert.match(await o.getAttribute('.ml-app a', 'href'), /download\/line-android\/sora3a-line\.apk$/);
+  await o.click('.ml-adv summary');
+  await o.fill('#mlLabel', 'خط زين');
+  await o.click('button >> text=إضافة خط يدوي');
   LINE = await until(async () => (await all('lineTokens', 'restaurantId', 'RC'))[0]);
   assert.ok(LINE.id.length >= 24); assert.equal(LINE.line, '1'); assert.equal(LINE.active, true);
-  await p.waitForSelector('#mlList .entity');
-  await p.click('button >> text=طريقة الربط');
-  const setup = await p.textContent('#mlList');
+  await o.waitForSelector('#mlList .entity');
+  await o.click('button >> text=طريقة الربط');
+  const setup = await o.textContent('#mlList');
   assert.ok(setup.includes(LINE.id) && setup.includes('incomingCalls?key=') && setup.includes('[call_number]'));
-  assert.deepEqual(clean(p), []);
-  await p.screenshot({ path: 'shots/admin-lines.png', fullPage: true });
-  await p.context().close();
+  assert.deepEqual(clean(o).filter((e) => !/permission/i.test(e)), []);
+  await o.screenshot({ path: 'shots/admin-lines.png', fullPage: true });
+  await o.context().close();
 });
 
 test('cashier sees only allowed sections; permissions update live', async () => {
@@ -253,4 +277,89 @@ test('owner sets and clears cashier working hours from the admin app', async () 
   await until(async () => (await read('users/' + U.cash)).hours === null);
   assert.deepEqual(clean(p), []);
   await p.context().close();
+});
+
+test('approved devices: a new device locks with a code, the super admin approves it and it opens by itself; one device per account; revoke locks it', async () => {
+  await write('users/' + U.cash, { perms: { discount: true }, hours: null });
+  const probe = (p) => p.evaluate(async () => { try { await window._fb.getDocFromServer(window._fb.doc(window._fb.db, 'restaurants/RC/probe/t' + Math.random())); return true; } catch (e) { return e.code; } });
+  const cashierOn = async () => {
+    const c = await page(B, { w: 1280, h: 800 });
+    await c.goto('http://localhost:5050/sora3a-rest2/index.html');
+    await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+    await c.fill('#inEmail', 'cash@x.com'); await c.fill('#inPass', 'cashpass1'); await c.click('#loginBtn');
+    await c.waitForSelector('#devLock.on', { timeout: 15000 });
+    const code = (await c.textContent('#devLock .dev-code')).trim(), key = await c.evaluate(() => localStorage.getItem('sora3a_dev_key'));
+    assert.match(code, /^[A-Z2-9]{6}$/);
+    return { c, code, key };
+  };
+  // وضع التعلّم: الخدمة مطفية، والأجهزة اللي دخل منها الكاشير تسجّلت تنتظر الاعتماد
+  const learned = await all('deviceReqs', 'restaurantId', 'RC');
+  assert.ok(learned.length >= 1 && learned.every((r) => r.status === 'pending' && r.lastUid === U.cash && /^[A-Z2-9]{6}$/.test(r.code)));
+  // المدير الأعلى يشغّل الخدمة للمطعم
+  const a = await page(B, { w: 1280, h: 800 });
+  await adminLogin(a, 'boss@x.com');
+  await a.click('.dnav-btn[data-screen="scMyRest"]');
+  await a.selectOption('#mrRest', 'RC');
+  await a.waitForFunction(() => document.getElementById('devPend').textContent.includes('أجهزة دخلوا منها'));
+  await a.click('#devTgl');
+  await until(async () => (await read('restaurants/RC')).features?.devices === true);
+  await a.waitForFunction(() => document.getElementById('devStatus').textContent.includes('شغّالة'));
+  // الكاشير على جهاز جديد: ينقفل ويطلع رمز الجهاز، والسيرفر يرفضه
+  const one = await cashierOn();
+  await one.c.screenshot({ path: 'shots/pos-device-locked.png' });
+  assert.equal(await probe(one.c), 'permission-denied');
+  // المدير يشوفه بالرئيسية، ويلكاه بالرمز، يسميه ويعتمده
+  await a.click('.dnav-btn[data-screen="scDash"]');
+  await a.waitForSelector('#devDashCard:not([hidden])');
+  assert.ok((await a.textContent('#devDash')).includes(one.code));
+  await a.click('.dnav-btn[data-screen="scMyRest"]');
+  await a.fill('#devFind', one.code.toLowerCase());
+  const row = a.locator('#devPend .dev-row.hit');
+  await row.locator('.dev-name').fill('كاشير ١');
+  await a.screenshot({ path: 'shots/admin-devices.png', fullPage: true });
+  await row.locator('button >> text=اعتماد').click();
+  const dev = await until(() => read('restaurants/RC/devices/' + one.key));
+  assert.equal(dev.name, 'كاشير ١'); assert.equal(dev.code, one.code);
+  assert.equal((await read('deviceReqs/' + one.key)).status, 'approved');
+  // الجهاز يفتح وحده ويشتغل
+  await one.c.waitForSelector('#appPage.show', { timeout: 15000 });
+  await one.c.waitForSelector('#prods .prod');
+  assert.equal(await probe(one.c), true);
+  // نفس الحساب على جهاز ثاني (معتمد) → الجهاز الأول ينقفل أول ما يحاول يسوي شي
+  const two = await cashierOn();
+  await a.fill('#devFind', two.code);
+  await a.locator('#devPend .dev-row.hit button >> text=اعتماد').click();
+  await two.c.waitForSelector('#appPage.show', { timeout: 15000 });
+  assert.equal(await probe(two.c), true);
+  assert.equal(await probe(one.c), 'permission-denied');
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'orders/OD2'), { restaurantId: 'RC', status: 'pending', orderType: 'takeaway', value: 5000, createdAtMs: Date.now() }); });
+  await two.c.waitForFunction(() => orders.some((o) => o.id === 'OD2'), null, { timeout: 10000 });
+  // الجهاز القديم ما توصله الطلبات الجديدة (السيرفر يقطع المستمع) ويطلع «ما تكدر تشتغل على هذا الجهاز»
+  await one.c.waitForSelector('#devLost', { timeout: 15000 });
+  assert.equal(await one.c.evaluate(() => orders.some((o) => o.id === 'OD2')), false);
+  assert.match(await one.c.textContent('#devLost'), /جهاز ثاني/);
+  await one.c.screenshot({ path: 'shots/pos-device-lost.png' });
+  // الكاشير ما يشوف مفاتيح الأجهزة المعتمدة ولا يكدر يعتمد جهاز لنفسه
+  const self = await two.c.evaluate(async (k) => {
+    const fb = window._fb; const r = {};
+    try { await fb.getDocs(fb.collection(fb.db, 'restaurants/RC/devices')); r.list = true; } catch (e) { r.list = e.code; }
+    try { await fb.rawSetDoc(fb.doc(fb.db, 'restaurants/RC/devices/' + 'H'.repeat(32)), { name: 'x' }); r.add = true; } catch (e) { r.add = e.code; }
+    try { await fb.rawUpdateDoc(fb.doc(fb.db, 'deviceReqs/' + k), { status: 'approved' }); r.approve = true; } catch (e) { r.approve = e.code; }
+    return r;
+  }, one.key);
+  assert.deepEqual(self, { list: 'permission-denied', add: 'permission-denied', approve: 'permission-denied' });
+  // المدير يلغي اعتماد الجهاز الثاني → ينقفل، ولو دخل من جديد يطلع «انرفض»
+  await a.fill('#devFind', '');
+  await a.locator('#devList .dev-row', { hasText: two.code }).locator('button >> text=إلغاء الاعتماد').click();
+  await until(async () => !(await read('restaurants/RC/devices/' + two.key)));
+  assert.equal(await probe(two.c), 'permission-denied');
+  // أول كتابة منه تنرفض → يتأكد من السيرفر وينقفل
+  await two.c.evaluate(() => window._fb.setDoc(window._fb.doc(window._fb.db, 'restaurants/RC/shifts/probe2'), { status: 'open', uid: window.posUser.uid }).catch(() => {}));
+  await two.c.waitForSelector('#devLost', { timeout: 15000 });
+  await two.c.reload();
+  await two.c.waitForSelector('#devLock.on', { timeout: 15000 });
+  await two.c.waitForFunction(() => document.getElementById('devSt').textContent.includes('انرفض'));
+  assert.deepEqual(clean(a), []);
+  await a.context().close(); await one.c.context().close(); await two.c.context().close();
+  await write('restaurants/RC', { 'features.devices': false });
 });

@@ -110,3 +110,59 @@ test('admin app reads every number and detail; owner edits and deletes expenses'
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
+
+test('item sales report: each item with price, count and total; unsold items; today / yesterday / from–to; printable with a grand total', async () => {
+  const own = await signUp('salesown@x.com', 'secret123');
+  const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+  const today = Math.max(Date.now() - 60000, d0.getTime() + 1000), yest = d0.getTime() - 7200000;
+  await E.withSecurityRulesDisabled(async (c) => { const db = c.firestore();
+    await setDoc(doc(db, 'users', own), { role: 'restaurant', restaurantId: 'RZ', email: 'salesown@x.com', name: 'صاحب مطعم المبيعات' });
+    await setDoc(doc(db, 'restaurants/RZ'), { name: 'مطعم المبيعات', userId: own, active: true });
+    await setDoc(doc(db, 'restaurants/RZ/menu/main'), { updatedAtMs: 1, device: 's', cats: [
+      { cat: 'برغر', items: [{ name: 'كلاسك', variants: [{ name: 'وحدة', price: 5500 }] }, { name: 'زنكر', variants: [{ name: 'وحدة', price: 6000 }, { name: 'دبل', price: 7000 }] }] },
+      { cat: 'مقبلات', items: [{ name: 'بطاطا', variants: [{ name: 'وحدة', price: 2000 }] }, { name: 'شوربة', variants: [{ name: 'وحدة', price: 3000 }] }] }] });
+    const o = (id, status, at, items) => setDoc(doc(db, 'orders', id), { restaurantId: 'RZ', status, orderType: 'takeaway', createdAtMs: at, value: items.reduce((s, i) => s + i.price * i.qty, 0), items });
+    await o('S1', 'delivered', today, [{ name: 'كلاسك', variant: 'وحدة', price: 5500, qty: 2 }, { name: 'زنكر', variant: 'دبل', price: 7000, qty: 1 }]);
+    await o('S2', 'pending', today, [{ name: 'كلاسك', variant: 'وحدة', price: 5500, qty: 3 }]);
+    await o('S3', 'cancelled', today, [{ name: 'بطاطا', variant: 'وحدة', price: 2000, qty: 5 }]);
+    await o('S4', 'delivered', yest, [{ name: 'بطاطا', variant: 'وحدة', price: 2000, qty: 4 }]);
+  });
+  const p = await page(B, { w: 1280, h: 900 });
+  await p.goto('http://localhost:5050/sora3a-admin/index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#lEmail', 'salesown@x.com'); await p.fill('#lPass', 'secret123'); await p.click('#lBtn');
+  await p.waitForSelector('#appPage', { state: 'visible' });
+  await p.click('.dnav-btn[data-screen="scAcc"]');
+  await p.click('#axTabs button >> text=مبيعات الأصناف');
+  const rows = (sel) => p.$$eval(sel + ' tr', (trs) => trs.slice(1).map((tr) => Array.from(tr.cells, (td) => td.innerText.replace(/\s+/g, ' ').trim())));
+  // اليوم: الكلاسك ٥ × ٥٥٠٠ = ٢٧٥٠٠، الزنكر دبل ١ × ٧٠٠٠، والملغي ما ينحسب
+  await p.waitForFunction(() => (document.getElementById('axSalesTbl') || {}).textContent?.includes('34,500'), null, { timeout: 10000 });
+  let r = await rows('#axSalesTbl');
+  assert.deepEqual(r[0].slice(1), ['كلاسك برغر', '5,500', '5', '27,500']);
+  assert.deepEqual(r[1].slice(1), ['زنكر (دبل) برغر', '7,000', '1', '7,000']);
+  assert.deepEqual(r.at(-1).slice(1), ['المجموع الكلي', '', '6', '34,500 د.ع']);
+  const unsold = (await rows('#axUnsoldTbl')).map((x) => x[0]);
+  assert.deepEqual(unsold, ['زنكر برغر', 'بطاطا مقبلات', 'شوربة مقبلات']);
+  await p.screenshot({ path: 'shots/admin-item-sales.png', fullPage: true });
+  // الطباعة: قائمة بكل صنف والمجموع الكلي
+  await p.click('button >> text=طباعة القائمة');
+  const printed = await p.evaluate(() => document.getElementById('axPrt').srcdoc);
+  assert.ok(printed.includes('مبيعات الأصناف') && printed.includes('كلاسك') && printed.includes('27,500') && printed.includes('المجموع الكلي (6 صنف)') && printed.includes('34,500') && printed.includes('شوربة'));
+  // أمس
+  await p.selectOption('#axRange', 'yesterday');
+  await p.waitForFunction(() => document.getElementById('axSalesTbl').textContent.includes('8,000'));
+  r = await rows('#axSalesTbl');
+  assert.deepEqual(r[0].slice(1), ['بطاطا مقبلات', '2,000', '4', '8,000']);
+  assert.equal((await rows('#axUnsoldTbl')).length, 4);
+  // من تاريخ إلى تاريخ (أمس ← اليوم)
+  const ymd = (ms) => { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  await p.selectOption('#axRange', 'custom');
+  await p.fill('#axFrom', ymd(yest)); await p.dispatchEvent('#axFrom', 'change');
+  await p.fill('#axTo', ymd(today)); await p.dispatchEvent('#axTo', 'change');
+  await p.waitForFunction(() => document.getElementById('axSalesTbl').textContent.includes('42,500'));
+  r = await rows('#axSalesTbl');
+  assert.deepEqual(r.at(-1).slice(1), ['المجموع الكلي', '', '10', '42,500 د.ع']);
+  assert.deepEqual((await rows('#axUnsoldTbl')).map((x) => x[0]), ['زنكر برغر', 'شوربة مقبلات']);
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});

@@ -202,8 +202,8 @@ test('الإعدادات حسب الصلاحية، والورديات والمن
 test('كاشير مطعم منتهي الاشتراك ممنوع', async () => {
   await assertFails(setDoc(doc(as('cashExp'), 'orders/NX'), { restaurantId: 'R3', status: 'delivered', value: 1 }));
 });
-test('صاحب المطعم يدير كاشيريته فقط', async () => {
-  await assertSucceeds(setDoc(doc(as('rest1'), 'users/newcash'), { role: 'cashier', restaurantId: 'R1', name: 'n', email: 'e', perms: { menu: false } }));
+test('صاحب المطعم يدير صلاحيات كاشيريته فقط (الإضافة من المدير الأعلى)', async () => {
+  await assertFails(setDoc(doc(as('rest1'), 'users/newcash'), { role: 'cashier', restaurantId: 'R1', name: 'n', email: 'e', perms: { menu: false } }));
   await assertFails(setDoc(doc(as('rest1'), 'users/newcash2'), { role: 'cashier', restaurantId: 'R2', perms: {} }));
   await assertFails(setDoc(doc(as('rest1'), 'users/newcash3'), { role: 'admin', restaurantId: 'R1', perms: {} }));
   await assertSucceeds(updateDoc(doc(as('rest1'), 'users/cash1'), { perms: { reports: true } }));
@@ -240,7 +240,14 @@ test('صاحب المطعم يحدد الدوام بقيم صحيحة فقط، �
   await assertFails(updateDoc(doc(as('rest1'), 'users/cash1'), { hours: { from: 540, to: 2000 } }));
   await assertFails(updateDoc(doc(as('rest1'), 'users/cash1'), { hours: { from: '9', to: 1020 } }));
   await assertFails(updateDoc(doc(as('cash1'), 'users/cash1'), { hours: null }));
-  await assertSucceeds(setDoc(doc(as('rest1'), 'users/newc'), { role: 'cashier', restaurantId: 'R1', name: 'n', email: 'e', perms: {}, hours: { from: 480, to: 960 } }));
+  // إضافة الكاشيرية وإيقافهم وحذفهم: المدير الأعلى فقط
+  await assertFails(setDoc(doc(as('rest1'), 'users/newc'), { role: 'cashier', restaurantId: 'R1', name: 'n', email: 'e', perms: {}, hours: { from: 480, to: 960 } }));
+  await assertSucceeds(setDoc(doc(as('admin1'), 'users/newc'), { role: 'cashier', restaurantId: 'R1', name: 'n', email: 'e', perms: {}, hours: { from: 480, to: 960 } }));
+  await assertFails(updateDoc(doc(as('rest1'), 'users/newc'), { disabled: true }), 'owner cannot stop a cashier');
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'users/newc'), { perms: { discount: true } }), 'owner still sets permissions');
+  await assertFails(deleteDoc(doc(as('rest1'), 'users/newc')), 'owner cannot delete a cashier');
+  await assertSucceeds(updateDoc(doc(as('admin1'), 'users/newc'), { disabled: true }));
+  await assertSucceeds(deleteDoc(doc(as('admin1'), 'users/newc')));
 });
 
 test('تمديد الدوام: الكاشير يمدد بنفسه قرب نهاية دوامه (ساعة/ساعتين/٣/لنهاية اليوم) ويشتغل خلاله', async () => {
@@ -270,6 +277,64 @@ test('تمديد الدوام: الكاشير يمدد بنفسه قرب نها�
   await assertFails(sh('cEnd'), 'extension cancelled');
   await assertFails(ext('cEnd', H), 'owner cancelled: no self-extension again today');
   await assertFails(updateDoc(doc(as('rest1'), 'users/cEnd'), { hoursExt: { untilMs: Date.now() + 30 * H } }), 'owner: 20h max too');
+});
+
+test('الأجهزة المعتمدة: الكاشير يشتغل بس من جهاز معتمد لمطعمه وبنفس تسجيل الدخول (جهاز واحد بنفس الوقت)', async () => {
+  const OK = 'KEY_OK_aaaaaaaaaaaaaaaaaaaaaa', NEW = 'KEY_NEW_bbbbbbbbbbbbbbbbbbbbb', OTHER = 'KEY_R1_cccccccccccccccccccccc';
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'restaurants/RD'), { name: 'RD', userId: 'restD', active: true, expiryMs: Date.now() + 30 * DAY, features: { devices: true } });
+    await setDoc(doc(db, 'users/restD'), { role: 'restaurant', restaurantId: 'RD' });
+    await setDoc(doc(db, 'users/cdA'), { role: 'cashier', restaurantId: 'RD', perms: {} });
+    await setDoc(doc(db, 'users/cdB'), { role: 'cashier', restaurantId: 'RD', perms: {} });
+    await setDoc(doc(db, 'restaurants/RD/devices/' + OK), { name: 'كاشير 1', approvedAtMs: 1 });
+    await setDoc(doc(db, 'restaurants/R1/devices/' + OTHER), { name: 'جهاز R1', approvedAtMs: 1 });
+  });
+  const ctx = (uid, t) => env.authenticatedContext(uid, { auth_time: t }).firestore();
+  const sess = (db, uid, device, authTime) => setDoc(doc(db, 'sessions/' + uid), { device, authTime, restaurantId: 'RD', atMs: Date.now(), name: 'Windows' });
+  const order = (db, id) => setDoc(doc(db, 'orders/' + id), { restaurantId: 'RD', status: 'delivered', value: 5 });
+  const A1 = ctx('cdA', 1000), A2 = ctx('cdA', 2000);
+  await assertFails(order(A1, 'D0'), 'no session yet');
+  await assertFails(sess(A1, 'cdA', NEW, 1000), 'device not approved');
+  await assertFails(sess(A1, 'cdA', OTHER, 1000), 'approved for another restaurant only');
+  await assertFails(sess(A1, 'cdA', OK, 999), 'session must be this sign-in');
+  await assertSucceeds(sess(A1, 'cdA', OK, 1000));
+  await assertSucceeds(order(A1, 'D1'));
+  await assertSucceeds(getDocs(query(collection(A1, 'orders'), where('restaurantId', '==', 'RD'))));
+  await assertFails(order(A2, 'D2'), 'same account signed in elsewhere (home laptop) is refused');
+  // الكاشير ما يكدر يقرا مفاتيح الأجهزة ولا جلسته
+  await assertFails(getDocs(collection(A1, 'restaurants/RD/devices')));
+  await assertFails(getDoc(doc(A1, 'restaurants/RD/devices/' + OK)));
+  await assertFails(getDoc(doc(A1, 'sessions/cdA')));
+  await assertFails(setDoc(doc(A1, 'restaurants/RD/devices/' + NEW), { name: 'x' }), 'cashier cannot approve a device');
+  // الدخول من الجهاز الثاني (المعتمد) يطلّع الأول
+  await assertSucceeds(sess(A2, 'cdA', OK, 2000));
+  await assertSucceeds(order(A2, 'D3'));
+  await assertFails(order(A1, 'D4'), 'the older sign-in is out');
+  // طلب اعتماد جهاز جديد: الكاشير يسجّله، يقراه بالمعرّف، وما يكدر يعتمده
+  const B = ctx('cdB', 3000);
+  const req = { restaurantId: 'RD', code: 'K7Q2M9', platform: 'Windows • برنامج الكاشير', status: 'pending', createdAtMs: Date.now(), lastAtMs: Date.now(), lastUid: 'cdB', lastName: 'علي' };
+  await assertSucceeds(setDoc(doc(B, 'deviceReqs/' + NEW), req));
+  await assertSucceeds(getDoc(doc(B, 'deviceReqs/' + NEW)));
+  await assertFails(getDocs(collection(B, 'deviceReqs')), 'no listing');
+  await assertFails(updateDoc(doc(B, 'deviceReqs/' + NEW), { status: 'approved' }));
+  await assertFails(setDoc(doc(B, 'deviceReqs/SHORT'), req), 'key too short');
+  await assertFails(setDoc(doc(B, 'deviceReqs/' + 'X'.repeat(24)), { ...req, restaurantId: 'R1' }), 'only for his own restaurant');
+  // صاحب المطعم يشوف الأجهزة والجلسات، بس الاعتماد للمدير الأعلى
+  await assertSucceeds(getDocs(collection(as('restD'), 'restaurants/RD/devices')));
+  await assertSucceeds(getDoc(doc(as('restD'), 'sessions/cdA')));
+  await assertFails(setDoc(doc(as('restD'), 'restaurants/RD/devices/' + NEW), { name: 'x' }), 'owner cannot approve');
+  await assertSucceeds(getDocs(collection(as('admin1'), 'deviceReqs')));
+  await assertSucceeds(setDoc(doc(as('admin1'), 'restaurants/RD/devices/' + NEW), { name: 'كاشير 2', approvedAtMs: Date.now() }));
+  await assertSucceeds(updateDoc(doc(as('admin1'), 'deviceReqs/' + NEW), { status: 'approved' }));
+  await assertSucceeds(sess(B, 'cdB', NEW, 3000));
+  await assertSucceeds(order(B, 'D5'));
+  // المدير الأعلى يلغي الجهاز ← يطلع فوراً
+  await assertSucceeds(deleteDoc(doc(as('admin1'), 'restaurants/RD/devices/' + NEW)));
+  await assertFails(order(B, 'D6'), 'device revoked');
+  // مطعم الخدمة مطفية عنده: الكاشير يشتغل عادي (والجلسة تتسجل بأي جهاز)
+  await assertSucceeds(setDoc(doc(env.authenticatedContext('cash1', { auth_time: 5 }).firestore(), 'sessions/cash1'), { device: NEW, authTime: 5, restaurantId: 'R1', atMs: 1 }));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'orders/D7'), { restaurantId: 'R1', status: 'delivered', value: 5 }));
 });
 
 // ── خدمات المطعم (المدير الأعلى فقط) ──
@@ -502,7 +567,7 @@ test('الفروع: صاحب المطعم يدير كل فروعه النشطة 
   await assertSucceeds(setDoc(doc(m, 'restaurants/R2/menu/main'), { cats: [{ cat: 'x' }] }));
   await assertSucceeds(updateDoc(doc(m, 'restaurants/R2'), { name: 'فرع زيونة' }));
   await assertFails(updateDoc(doc(m, 'restaurants/R2'), { expiryMs: Date.now() + 400 * DAY }), 'subscription stays with super admin');
-  await assertSucceeds(setDoc(doc(m, 'users/newCash'), { email: 'c@x.com', role: 'cashier', name: 'ك', restaurantId: 'R2', perms: {} }));
+  await assertFails(setDoc(doc(m, 'users/newCash'), { email: 'c@x.com', role: 'cashier', name: 'ك', restaurantId: 'R2', perms: {} }), 'cashiers are added by the super admin only');
   await assertSucceeds(getDocs(query(collection(m, 'users'), where('restaurantId', '==', 'R2'), where('role', '==', 'cashier'))));
   await assertSucceeds(setDoc(doc(m, 'captains/CB'), { restaurantId: 'R2', name: 'كابتن الفرع' }));
   await assertSucceeds(setDoc(doc(m, 'users/newCap'), { email: 'k@x.com', role: 'captain', name: 'ك', restaurantId: 'R2', captainId: 'CB' }));

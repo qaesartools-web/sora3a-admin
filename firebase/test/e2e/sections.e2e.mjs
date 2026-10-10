@@ -25,7 +25,9 @@ before(async () => {
       { cat: 'بيتزا', emoji: '🍕', items: [it('بيتزا خضار', 9000)] },
       { cat: 'مشروبات', emoji: '🥤', items: [it('بيبسي', 1000)] }] });
     // طلبات قديمة بتوقيتات كاملة لشاشة التحليلات
-    const t0 = Date.now() - 3 * 3600000, m = 60000;
+    // طلبات اليوم: قبل ٣ ساعات، بس مو قبل منتصف الليل (تسلسل أرقام التذاكر يبدأ من جديد كل يوم)
+    const d0 = new Date(); d0.setHours(0, 0, 0, 0);
+    const t0 = Math.max(Date.now() - 3 * 3600000, d0.getTime() + 60000), m = 60000;
     await setDoc(doc(db, 'orders/T1'), { restaurantId: 'RK', orderType: 'delivery', status: 'delivered', value: 9000, ticketNo: 7, captainName: 'كرار',
       createdAtMs: t0, kitchenReadyAt: t0 + 12 * m, acceptedAtMs: t0 + 3 * m, pickupAtMs: t0 + 13 * m, deliveringAtMs: t0 + 14 * m, deliveredAtMs: t0 + 32 * m,
       kSec: { k1: { n: 1, readyAt: t0 + 8 * m }, k4: { n: 1, readyAt: t0 + 12 * m } } });
