@@ -92,7 +92,21 @@ service cloud.firestore {
       return active() && role() == 'cashier'
         && me().get('restaurantId', '') != ''
         && restaurantOpen(me().restaurantId)
-        && onDuty();
+        && onDuty()
+        && deviceOk();
+    }
+    // ── الأجهزة المعتمدة (خدمة devices يشغّلها المدير الأعلى لكل مطعم) ──
+    //  كل جهاز كاشير إله مفتاح سري (يتولد بالجهاز). المدير الأعلى يعتمده ← restaurants/{rid}/devices/{مفتاح}.
+    //  الكاشير لما يدخل يسجّل جلسته: sessions/{uid} = {device, authTime}. السيرفر يقبل طلباته بس إذا:
+    //  الجهاز معتمد لمطعمه + الجلسة هي نفس تسجيل الدخول الحالي (auth_time) — فالدخول من جهاز ثاني أو من البيت ينرفض،
+    //  ونفس الحساب ما يشتغل بجهازين بنفس الوقت (آخر دخول يفوز).
+    function devicesOn(rid) { return restDoc(rid).get('features', {}).get('devices', false) == true; }
+    function devApproved(rid, key) { return exists(/databases/$(database)/documents/restaurants/$(rid)/devices/$(key)); }
+    function deviceOk() {
+      let sp = /databases/$(database)/documents/sessions/$(request.auth.uid);
+      return !devicesOn(myRest())
+        || (exists(sp) && get(sp).data.get('authTime', 0) == request.auth.token.auth_time
+            && devApproved(myRest(), get(sp).data.get('device', '-')));
     }
     function perm(p) { return me().get('perms', {}).get(p, false) == true; }
     // صاحب المطعم أو كاشير تابع له
@@ -132,18 +146,14 @@ service cloud.firestore {
       allow delete: if ownsRest(resource.data.restaurantId)
         && resource.data.role == 'captain';
 
-      // صاحب المطعم يدير حسابات الكاشيرية وصلاحياتهم
+      // حسابات الكاشيرية: الإضافة والإيقاف والحذف للمدير الأعلى فقط (isAdmin فوق)
+      // صاحب المطعم يشوفهم ويحدد صلاحياتهم ودوامهم بس
       allow read: if ownsRest(resource.data.restaurantId) && resource.data.role == 'cashier';
-      allow create: if ownsRest(request.resource.data.restaurantId)
-        && request.resource.data.role == 'cashier'
-        && request.resource.data.get('perms', {}) is map
-        && validHours(request.resource.data)
-        && request.resource.data.keys().hasOnly(['email','role','name','restaurantId','perms','hours','createdAtMs']);
       allow update: if ownsRest(resource.data.restaurantId)
         && resource.data.role == 'cashier'
         && request.resource.data.get('perms', {}) is map
         && validHours(request.resource.data)
-        && onlyChanged(['name','perms','disabled','hours','hoursExt'])
+        && onlyChanged(['name','perms','hours','hoursExt'])
         && (!('hoursExt' in request.resource.data) || request.resource.data.hoursExt == null
             || request.resource.data.hoursExt == resource.data.get('hoursExt', null) || validExt(request.resource.data.hoursExt));
 
@@ -155,8 +165,6 @@ service cloud.firestore {
         && validExt(request.resource.data.hoursExt)
         && request.resource.data.hoursExt.untilMs > request.time.toMillis()
         && extWindow(resource.data);
-      allow delete: if ownsRest(resource.data.restaurantId)
-        && resource.data.role == 'cashier';
     }
 
     // ── staff (قائمة موظفي الإدارة) ──────────────────────────
@@ -178,14 +186,51 @@ service cloud.firestore {
 
       // المنيو والإعدادات المتزامنة بين أجهزة المطعم
       //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
+      //  devices (الأجهزة المعتمدة): يعتمدها المدير الأعلى بس، ويشوفها صاحب المطعم — الكاشيرية ما يشوفون مفاتيحها
       match /{coll}/{d=**} {
-        allow read: if isOffice() || staffOf(rid) || (isCaptain() && me().restaurantId == rid);
-        allow write: if isAdmin() || ownsRest(rid)
+        allow read: if isOffice()
+          || (coll == 'devices' && ownsRest(rid))
+          || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid)));
+        allow write: if isAdmin()
+          || (coll != 'devices' && (ownsRest(rid)
           // الكاشير: البيع يحدّث المخزون الجاهز بالمنيو + الورديات + سجل الزبائن
           || (cashierOf(rid) && (coll in ['menu', 'shifts', 'customers']
               || (coll == 'settings' && perm('settings'))
-              || (coll == 'menuImages' && perm('menu'))));
+              || (coll == 'menuImages' && perm('menu'))))));
       }
+    }
+
+    // ── sessions/{uid}: جلسة الكاشير الحالية (أي جهاز + أي تسجيل دخول) ──
+    //  الكاشير يكتبها بس (ما يقراها، حتى ما ينكشف مفتاح الجهاز)، والمدير الأعلى وصاحب المطعم يشوفون مين داخل على أي جهاز
+    match /sessions/{uid} {
+      allow read: if isOffice() || ownsRest(resource.data.restaurantId);
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && active() && role() == 'cashier' && me().get('restaurantId', '') != ''
+        && request.resource.data.keys().hasOnly(['device','authTime','restaurantId','atMs','name'])
+        && request.resource.data.restaurantId == me().restaurantId
+        && str(request.resource.data.device, 64) && request.resource.data.device.size() >= 20
+        && request.resource.data.authTime == request.auth.token.auth_time
+        && optStr(request.resource.data, 'name', 80)
+        && (!devicesOn(me().restaurantId) || devApproved(me().restaurantId, request.resource.data.device));
+      allow delete: if isAdmin();
+    }
+
+    // ── deviceReqs/{مفتاح}: طلب اعتماد جهاز (كل جهاز كاشير يسجّل نفسه؛ المدير الأعلى يعتمد أو يرفض) ──
+    //  المعرّف هو مفتاح الجهاز السري: الجهاز نفسه بس يعرفه، فيكدر يقرا طلبه بالمعرّف (بدون قائمة)
+    match /deviceReqs/{key} {
+      function reqOk(d) {
+        return d.keys().hasOnly(['restaurantId','code','platform','status','createdAtMs','lastAtMs','lastUid','lastName'])
+          && d.restaurantId == me().get('restaurantId', '') && str(d.code, 12) && optStr(d, 'platform', 80)
+          && optStr(d, 'lastName', 80) && d.get('lastUid', '') == request.auth.uid && d.status == 'pending';
+      }
+      allow get: if signedIn();
+      allow list: if isOffice();
+      allow create: if signedIn() && active() && role() == 'cashier' && key.size() >= 20 && reqOk(request.resource.data);
+      allow update: if isAdmin()
+        || (signedIn() && active() && role() == 'cashier' && resource.data.status == 'pending'
+            && reqOk(request.resource.data) && request.resource.data.restaurantId == resource.data.restaurantId
+            && onlyChanged(['lastAtMs','lastUid','lastName','platform']));
+      allow delete: if isAdmin();
     }
 
     // ── captains ────────────────────────────────────────────
