@@ -1,0 +1,52 @@
+name: نسخة احتياطية ليلية
+
+on:
+  schedule:
+    - cron: '30 21 * * *'   # 12:30 بعد نص الليل بتوقيت بغداد
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'نسخة كاملة (كل الطلبات من أول يوم + المطاعم والحسابات) — أول مرة'
+        type: boolean
+        default: false
+      day:
+        description: 'يوم معيّن YYYY-MM-DD (فارغ = أمس)'
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: نسخ البيانات من Firebase
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FULL: ${{ inputs.full }}
+          DAY: ${{ inputs.day }}
+        run: |
+          ARGS=""
+          if [ "$FULL" = "true" ]; then ARGS="$ARGS --full"; fi
+          if [ -n "$DAY" ]; then
+            if ! echo "$DAY" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then echo "❌ اليوم لازم يكون YYYY-MM-DD"; exit 1; fi
+            ARGS="$ARGS --day=$DAY"
+          fi
+          node scripts/backup.mjs $ARGS
+      - name: حفظ النسخة بالمستودع
+        run: |
+          git config user.name "sora3a-backup"
+          git config user.email "backup@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then echo "ماكو تغيير"; exit 0; fi
+          git commit -q -m "نسخة احتياطية $(date -u +%F)"
+          git push

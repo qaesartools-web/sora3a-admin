@@ -207,6 +207,9 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 body.rest-mode .rest-banner{display:block;}
 body.rest-mode .admin-only{display:none!important;}
 body:not(.rest-mode) #mcOwnerNote{display:none;}
+.ord-ctl{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}.ord-ctl .form-sel{flex:1;min-width:140px;}
+.ord-wait{text-align:center;color:var(--muted);font-weight:700;}
+.idx-warn{border-color:rgba(217,119,6,.55);background:rgba(217,119,6,.07);}
 .mc-note{font-size:12.5px;line-height:1.8;background:color-mix(in srgb,#4f6bed 8%,var(--panel));border:1px solid color-mix(in srgb,#4f6bed 30%,var(--line));border-radius:10px;padding:8px 12px;margin-bottom:10px;}
 
 /* Install btn */
@@ -387,6 +390,13 @@ body.staff-mode .staff-banner{display:block;}
       <div class="rest-banner" id="restBanner">🍽️ أنت تشوف بيانات مطعمك فقط</div>
       <div class="staff-banner">👥 وضع الموظف — عرض فقط بدون صلاحية تعديل أو حذف</div>
       <div class="stats" id="dashStats"></div>
+      <div class="card admin-only idx-warn" id="idxWarn" hidden>
+        <div class="card-title"><span class="dot"></span> ⚠️ فهرس الطلبات مو مسوّى بـ Firebase</div>
+        <div style="font-size:12.5px;line-height:1.9;margin-bottom:8px">بدونه الكاشير ولوحة صاحب المطعم يرجعون ينزّلون كل الطلبات من أول يوم (أبطأ وأغلى). سوّيه مرة وحدة:
+          Firebase ← Firestore ← <b>Indexes</b> ← <b>Composite</b> ← <b>Create index</b>: المجموعة <b dir="ltr">orders</b>، الحقول
+          <b dir="ltr">restaurantId</b> (Ascending) و <b dir="ltr">createdAtMs</b> (Ascending)، النطاق Collection ← Create. يخلص خلال دقائق.</div>
+        <div class="idx-link"></div>
+      </div>
       <div class="card" id="brSumCard" hidden>
         <div class="card-title"><span class="dot"></span> 🏢 كل الفروع — اليوم <button class="btn-sm btn-edit" style="margin-inline-start:auto" onclick="renderBranchSum(true)">🔄 تحديث</button></div>
         <div id="brSum"></div>
@@ -405,6 +415,10 @@ body.staff-mode .staff-banner{display:block;}
     <!-- Orders -->
     <div class="screen" id="scOrders">
       <div class="search-box"><input id="orderSearch" placeholder="🔍 بحث بالاسم أو رقم الهاتف..." oninput="renderOrders()"></div>
+      <div class="ord-ctl">
+        <select class="form-sel" id="ordRange" onchange="renderOrders()"><option value="live">⚡ آخر الطلبات</option><option value="today">اليوم</option><option value="yesterday">أمس</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يوم</option></select>
+        <select class="form-sel admin-only" id="ordRest" onchange="renderOrders()"><option value="">كل المطاعم</option></select>
+      </div>
 <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
   <button class="btn-sm btn-del manage-only" onclick="deleteAllOrders()" style="font-size:12px;padding:6px 12px;">🗑️ حذف الكل</button>
 </div>
@@ -424,7 +438,7 @@ body.staff-mode .staff-banner{display:block;}
       <div class="date-filter">
         <input type="date" id="capFrom">
         <input type="date" id="capTo">
-        <button onclick="renderCapStats()">🔍 بحث</button>
+        <button onclick="renderCapStats(true)">🔍 بحث</button>
       </div>
       <div id="capStatsList"></div>
       <!-- Add Captain Form -->
@@ -519,7 +533,7 @@ body.staff-mode .staff-banner{display:block;}
       <div class="date-filter">
         <input type="date" id="anFrom">
         <input type="date" id="anTo">
-        <button onclick="renderAnalytics()">🔍 بحث</button>
+        <button onclick="renderAnalytics(true)">🔍 بحث</button>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
         <button class="btn-export" onclick="exportCSV()">⬇️ تصدير CSV</button>
@@ -613,6 +627,21 @@ body.staff-mode .staff-banner{display:block;}
 
     <!-- Security (admin only) -->
     <div class="screen admin-only" id="scSecurity">
+      <div class="card" id="bkCard">
+        <div class="card-title"><span class="dot"></span> 📥 تنزيل نسخة من الطلبات</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:10px">تنزّل طلبات أي فترة على جهازك: <b>Excel</b> للقراءة والمحاسب، و<b>نسخة كاملة</b> (JSON) فيها كل تفاصيل الطلبات كما هي. احفظها باللابتوب أو الفلاش.
+          وكل ليلة تنحفظ نسخة تلقائية بمستودع النسخ الخاص (إذا مفعّل).</div>
+        <div class="form-row">
+          <div class="form-group"><label>المطعم</label><select class="form-sel" id="bkRest"><option value="">كل المطاعم</option></select></div>
+          <div class="form-group"><label>من</label><input type="date" class="form-inp" id="bkFrom"></div>
+          <div class="form-group"><label>إلى</label><input type="date" class="form-inp" id="bkTo"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-primary" style="flex:1" id="bkCsvBtn" onclick="bkDownload('csv')">⬇️ Excel (CSV)</button>
+          <button class="btn-sm btn-edit" style="flex:1;padding:12px" id="bkJsonBtn" onclick="bkDownload('json')">⬇️ نسخة كاملة (JSON)</button>
+        </div>
+        <div id="bkStatus" style="font-size:12.5px;font-weight:700;margin-top:8px"></div>
+      </div>
       <div class="card" id="pushCard">
         <div class="card-title"><span class="dot"></span> 🔔 سيرفر إشعارات الكابتن (يرن والتطبيق مسكّر)</div>
         <div style="font-size:12px;color:var(--muted);line-height:1.9;margin-bottom:10px">سيرفر مجاني (Cloudflare Workers) يدز إشعار لتلفون الكابتن أول ما الكاشير يرسل طلب دلفري، حتى لو التطبيق مسكّر. الصق رابط الـ Worker هنا (مثل <b style="direction:ltr;display:inline-block">https://sora3a-push.xxx.workers.dev</b>) واضغط حفظ ثم فحص.</div>
@@ -709,7 +738,7 @@ import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch }
+  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch, getAggregateFromServer, count, sum }
   from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
@@ -735,7 +764,7 @@ const auth = initializeAuth(app,{persistence:[indexedDBLocalPersistence,browserL
 const auth2 = initializeAuth(app2,{persistence:[]});
 const db = getFirestore(app);
 window._fb={auth,auth2,db,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged,
-  collection,doc,addDoc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,query,where,orderBy,limit,onSnapshot,serverTimestamp,writeBatch};
+  collection,doc,addDoc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,query,where,orderBy,limit,onSnapshot,serverTimestamp,writeBatch,getAggregateFromServer,count,sum};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -956,6 +985,7 @@ window.goTab=function(screenId,btn){
   document.querySelectorAll(`[data-screen="${screenId}"]`).forEach(b=>b.classList.add('on'));
   // على الموبايل: التبويب المختار يبان بشريط التبويبات
   const db=document.querySelector(`.dnav-btn[data-screen="${screenId}"]`);if(db&&db.scrollIntoView)try{db.scrollIntoView({block:'nearest',inline:'center'});}catch(e){}
+  if(screenId==='scOrders')renderOrders();
   if(screenId==='scCaptains')renderCapStats();
   if(screenId==='scMap')initMap();
   if(screenId==='scAnalytics')renderAnalytics();
@@ -964,30 +994,116 @@ window.goTab=function(screenId,btn){
   if(screenId==='scRests')renderRests();
   if(screenId==='scLeads')renderLeads();
   if(screenId==='scStaff')renderStaffList();
-  if(screenId==='scSecurity'){secLoadAudit();pushLoad();}
+  if(screenId==='scSecurity'){secLoadAudit();pushLoad();bkInit();}
   if(screenId==='scMyRest')mrInit();
 };
 
+// تاريخ افتراضي لحقول «من/إلى» الفارغة (المدير: اليوم — كل المطاعم كثيرة؛ صاحب المطعم: آخر ٧ أيام)
+const ymdLocal=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+function dateDefaults(fromId,toId){
+  const f=document.getElementById(fromId),t=document.getElementById(toId);if(!f||!t)return;
+  if(!f.value)f.value=ymdLocal(isRest()?Date.now()-6*86400000:Date.now());
+  if(!t.value)t.value=ymdLocal(Date.now());
+}
+// ═══ الطلبات بلوحة الإدارة: ما ننزّل كل التاريخ ═══
+// مباشر — المدير: آخر ١٠٠ طلب بكل المطاعم + النشطة. صاحب المطعم: من بداية أمس + المفتوحة.
+// الفترات (التحليلات، الحسابات، الكباتن، الأوقات، الطلبات): تنجاب من السيرفر وقت الحاجة وتنحفظ بالذاكرة.
+// يحتاج فهرس orders (restaurantId + createdAtMs)؛ إذا مو موجود: صاحب المطعم يرجع للطريقة القديمة، والمدير يطلعله تنبيه برابط إنشائه
+const DAY=86400000,ORD_ACTIVE=['pending','accepted','pickup','delivering','preparing','ready'];
+let ordSets={},ordExpect=[],ordSince=0,ordIdxMissing=false,ordIdxLink='',ordUnsubs=[],ordTimer=0;
+const ordRanges=new Map();
+const dayStart=ms=>{const d=new Date(ms??Date.now());d.setHours(0,0,0,0);return d.getTime();};
+function ordRecalc(){
+  const m=new Map();
+  ordRanges.forEach(r=>{if(r.list)r.list.forEach(o=>m.set(o.id,o));});
+  ['all','active','latest','win'].forEach(k=>(ordSets[k]||[]).forEach(o=>m.set(o.id,o)));   // المباشر يغلب (أحدث نسخة)
+  allOrders=[...m.values()].sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0));
+}
+// طلبات انحذفت: نشيلها من المحفوظ بالذاكرة هم
+function ordForget(ids){
+  const del=new Set(ids);
+  ordRanges.forEach(r=>{if(r.list)r.list=r.list.filter(o=>!del.has(o.id));});
+  Object.keys(ordSets).forEach(k=>{ordSets[k]=ordSets[k].filter(o=>!del.has(o.id));});
+  ordOnChange();
+}
+function ordIdxFail(e){
+  ordIdxMissing=true;
+  const m=String((e&&e.message)||'').match(/https:\/\/console\.firebase\.google\.com\S+/);if(m)ordIdxLink=m[0];
+  renderDash();
+}
+function ordStart(){
+  const fb=window._fb,col=fb.collection(fb.db,'orders');
+  ordUnsubs.forEach(u=>u&&u());ordUnsubs=[];ordSets={};
+  const on=k=>snap=>{ordSets[k]=snap.docs.map(d=>({id:d.id,...d.data()}));ordOnChange();};
+  const err=k=>e=>{
+    if(k==='win'&&e&&e.code==='failed-precondition'&&!ordIdxMissing){console.warn('orders index missing',e.message);ordIdxFail(e);ordStart();return;}
+    console.warn('orders '+k,e&&e.code);
+  };
+  if(isRest()){
+    const rid=currentUser.restaurantId;
+    if(ordIdxMissing||window.__ordLegacy){ordIdxMissing=true;ordSince=0;ordExpect=['all'];ordUnsubs.push(fb.onSnapshot(fb.query(col,fb.where('restaurantId','==',rid)),on('all'),err('all')));return;}
+    ordSince=dayStart()-DAY;ordExpect=['win','active'];
+    ordUnsubs.push(fb.onSnapshot(fb.query(col,fb.where('restaurantId','==',rid),fb.where('createdAtMs','>=',ordSince)),on('win'),err('win')));
+    ordUnsubs.push(fb.onSnapshot(fb.query(col,fb.where('restaurantId','==',rid),fb.where('status','in',ORD_ACTIVE)),on('active'),err('active')));
+  }else{
+    ordSince=Infinity;ordExpect=['latest','active'];
+    ordUnsubs.push(fb.onSnapshot(fb.query(col,fb.orderBy('createdAtMs','desc'),fb.limit(100)),on('latest'),err('latest')));
+    ordUnsubs.push(fb.onSnapshot(fb.query(col,fb.where('status','in',ORD_ACTIVE)),on('active'),err('active')));
+  }
+}
+// المدير: نتأكد الفهرس موجود (استعلام فارغ ما يكلّف) — إذا مو موجود يطلع تنبيه بالرئيسية برابط إنشائه
+function ordIdxProbe(){
+  const fb=window._fb;
+  fb.getDocs(fb.query(fb.collection(fb.db,'orders'),fb.where('restaurantId','==','__probe__'),fb.where('createdAtMs','>=',0),fb.limit(1)))
+    .catch(e=>{if(e&&e.code==='failed-precondition')ordIdxFail(e);});
+}
+// يتأكد إن طلبات الفترة [from,to) محمّلة (rid فارغ = كل المطاعم). يرجّع true إذا جاهزة؛ وإلا يحمّلها، يرجّع false، ويعيد الرسم بعدين
+function needOrders(from,to,rid,rerender){
+  rid=isRest()?currentUser.restaurantId:(rid||'');
+  if(isRest()&&from>=ordSince)return true;
+  const hi=to>Date.now()+DAY?Infinity:to,covers=r=>(r.rid===''||r.rid===rid)&&r.from<=from&&r.to>=hi;
+  for(const r of ordRanges.values())if(covers(r)){if(r.list)return true;r.cbs.add(rerender);return false;}
+  const key=rid+'|'+from+'|'+hi,e={rid,from,to:hi,list:null,cbs:new Set([rerender])};
+  ordRanges.set(key,e);
+  const fb=window._fb,col=fb.collection(fb.db,'orders'),map=s=>s.docs.map(d=>({id:d.id,...d.data()}));
+  const cons=[fb.where('createdAtMs','>=',from)];if(hi!==Infinity)cons.push(fb.where('createdAtMs','<',hi));
+  fb.getDocs(rid?fb.query(col,fb.where('restaurantId','==',rid),...cons):fb.query(col,...cons)).then(map)
+    .catch(err=>{
+      if(!(rid&&err&&err.code==='failed-precondition'))throw err;
+      ordIdxFail(err);e.from=0;e.to=Infinity;   // بدون الفهرس: كل طلبات المطعم مرة وحدة
+      return fb.getDocs(fb.query(col,fb.where('restaurantId','==',rid))).then(map);
+    })
+    .then(list=>{e.list=list;ordRecalc();},err=>{ordRanges.delete(key);toast('📶 تعذّر تحميل الطلبات: '+(err.code||err.message),'error');})
+    .finally(()=>{e.cbs.forEach(f=>{try{f&&f();}catch(_){}});});
+  return false;
+}
+// «🔍 بحث»: يجيب الفترات من جديد (المحفوظ ممكن يكون قديم)
+function ordRefresh(){for(const [k,r] of ordRanges)if(r.list)ordRanges.delete(k);ordRecalc();}
+const ordWait=msg=>`<div class="card ord-wait">⏳ ${msg||'دا ينجاب طلبات الفترة من السيرفر…'}</div>`;
+function ordOnChange(){
+  ordRecalc();
+  // صوت «طلب جديد» بس بعد ما توصل كل المستمعات أول مرة (حتى ما يرن عند الفتح)
+  if(!ordExpect.every(k=>ordSets[k])){renderDash();renderOrders();return;}
+  const pendingCount=allOrders.filter(o=>o.status==='pending').length;
+  if(notifReady&&prevPendingCount!==null&&pendingCount>prevPendingCount){
+    playNotifSound();
+    toast('🔔 طلب جديد وصل!','success');
+    const hb=document.querySelector('.hdr-logo');
+    if(hb){hb.classList.add('notif-pulse');setTimeout(()=>hb.classList.remove('notif-pulse'),3000);}
+  }
+  prevPendingCount=pendingCount;
+  notifReady=true;
+  renderDash();renderOrders();
+  if(document.getElementById('scTimes').classList.contains('on'))renderTimes();
+}
 // LISTENERS
 function startListeners(){
   const fb=window._fb;
-  const ordersQ=isRest()
-    ? fb.query(fb.collection(fb.db,'orders'),fb.where('restaurantId','==',currentUser.restaurantId))
-    : fb.query(fb.collection(fb.db,'orders'));
-  unsubs.push(fb.onSnapshot(ordersQ,snap=>{
-    allOrders=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAtMs||0)-(a.createdAtMs||0));
-    const pendingCount=allOrders.filter(o=>o.status==='pending').length;
-    if(notifReady&&prevPendingCount!==null&&pendingCount>prevPendingCount){
-      playNotifSound();
-      toast('🔔 طلب جديد وصل!','success');
-      const hb=document.querySelector('.hdr-logo');
-      if(hb){hb.classList.add('notif-pulse');setTimeout(()=>hb.classList.remove('notif-pulse'),3000);}
-    }
-    prevPendingCount=pendingCount;
-    notifReady=true;
-    renderDash();renderOrders();
-    if(document.getElementById('scTimes').classList.contains('on'))renderTimes();
-  }));
+  ordStart();
+  clearInterval(ordTimer);
+  ordTimer=setInterval(()=>{if(isRest()&&!ordIdxMissing&&dayStart()-DAY!==ordSince)ordStart();},60000);   // يوم جديد: النافذة تمشي
+  unsubs.push(()=>{clearInterval(ordTimer);ordUnsubs.forEach(u=>u&&u());ordUnsubs=[];});
+  if(isAdmin())ordIdxProbe();
   const capsQ=isRest()
     ? fb.query(fb.collection(fb.db,'captains'),fb.where('restaurantId','==',currentUser.restaurantId))
     : fb.query(fb.collection(fb.db,'captains'));
@@ -1021,6 +1137,8 @@ function startListeners(){
       populateRestSelect();
       renderDash();
       if(document.getElementById('scMyRest').classList.contains('on'))mrFillRests();
+      fillOrdRest();
+      if(document.getElementById('scSecurity').classList.contains('on'))bkInit();
       devDash();devRender();
     }));
     // أجهزة الكاشير اللي تنتظر الاعتماد (بكل المطاعم)
@@ -1090,23 +1208,46 @@ window.renderBranchSum=async()=>{
 };
 setInterval(()=>{if(branchInfo.length&&document.getElementById('scDash').classList.contains('on')&&!document.hidden)renderBranchSum();},120000);
 
+// الرئيسية: أرقام اليوم. المدير: تنحسب بالسيرفر (عدد ومجموع بدون تنزيل الطلبات) كل ٥ دقايق؛ صاحب المطعم: من طلبات اليوم المحمّلة
+let dashAgg=null,dashAggAt=0,dashAggBusy=false;
+async function dashAggLoad(){
+  if(dashAggBusy||Date.now()-dashAggAt<300000||document.hidden||!document.getElementById('scDash').classList.contains('on'))return;
+  dashAggBusy=true;
+  const fb=window._fb,col=fb.collection(fb.db,'orders'),day=bagDay();
+  try{
+    const [all,del,canc]=await Promise.all([
+      fb.getAggregateFromServer(fb.query(col,fb.where('day','==',day)),{n:fb.count()}),
+      fb.getAggregateFromServer(fb.query(col,fb.where('day','==',day),fb.where('status','==','delivered')),{n:fb.count(),v:fb.sum('value')}),
+      fb.getAggregateFromServer(fb.query(col,fb.where('day','==',day),fb.where('status','==','cancelled')),{n:fb.count()})]);
+    dashAgg={n:all.data().n,del:del.data().n,sales:del.data().v||0,canc:canc.data().n};dashAggAt=Date.now();
+  }catch(e){console.warn('dash agg',e.code);dashAggAt=Date.now()-290000;setTimeout(dashAggLoad,11000);}   // خطأ مؤقت: نعيد بعد ١٠ ثواني
+  dashAggBusy=false;renderDash();
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&isAdmin())dashAggLoad();});
 function renderDash(){
-  const orders=allOrders;
-  const today=new Date();today.setHours(0,0,0,0);
-  const todayOrders=orders.filter(o=>(o.createdAtMs||0)>=today.getTime());
-  const active=orders.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
-  const delivered=orders.filter(o=>o.status==='delivered');
-  const revenue=delivered.reduce((s,o)=>s+(o.value||0),0);
+  const today=dayStart();
+  const active=allOrders.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
+  let n,del,canc,sales;
+  if(isRest()){
+    const t=allOrders.filter(o=>(o.createdAtMs||0)>=today),d=t.filter(o=>o.status==='delivered');
+    n=t.length;del=d.length;canc=t.filter(o=>o.status==='cancelled').length;sales=d.reduce((s,o)=>s+(o.value||0),0);
+  }else{
+    dashAggLoad();
+    const a=dashAgg||{};n=a.n;del=a.del;canc=a.canc;sales=a.sales;
+  }
+  const v=x=>x==null?'…':toA(x);
   const statsHTML=`
-    <div class="stat"><div class="stat-v">${toA(orders.length)}</div><div class="stat-l">📦 الكل</div></div>
-    <div class="stat"><div class="stat-v" style="color:var(--yellow);">${toA(todayOrders.length)}</div><div class="stat-l">📅 اليوم</div></div>
-    <div class="stat"><div class="stat-v" style="color:var(--blue);">${toA(active.length)}</div><div class="stat-l">🔵 نشطة</div></div>
-    <div class="stat"><div class="stat-v" style="color:var(--green);">${toA(delivered.length)}</div><div class="stat-l">✅ مسلّمة</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--yellow);">${v(n)}</div><div class="stat-l">📅 طلبات اليوم</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--blue);">${toA(active.length)}</div><div class="stat-l">🔵 نشطة الآن</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--green);">${v(del)}</div><div class="stat-l">✅ مسلّمة اليوم</div></div>
+    <div class="stat"><div class="stat-v" style="color:var(--red);">${v(canc)}</div><div class="stat-l">❌ ملغية اليوم</div></div>
     ${isAdmin()?`<div class="stat"><div class="stat-v" style="color:var(--purple);">${toA(allRestaurants.length)}</div><div class="stat-l">🍽️ مطاعم</div></div>`:''}
     <div class="stat"><div class="stat-v" style="color:var(--accent);">${toA(allCaptains.length)}</div><div class="stat-l">🛵 كباتن</div></div>
-    <div class="stat"><div class="stat-v" style="font-size:16px;">${fmt(revenue)}</div><div class="stat-l">💰 إجمالي (د.ع)</div></div>
+    <div class="stat"><div class="stat-v" style="font-size:16px;">${sales==null?'…':fmt(sales)}</div><div class="stat-l">💰 مبيعات اليوم (د.ع)</div></div>
   `;
   document.getElementById('dashStats').innerHTML=statsHTML;
+  const iw=document.getElementById('idxWarn');
+  if(iw){iw.hidden=!(isAdmin()&&ordIdxMissing);if(!iw.hidden)iw.querySelector('.idx-link').innerHTML=ordIdxLink?`<a class="btn-primary" href="${esc(ordIdxLink)}" target="_blank" rel="noopener">🔗 إنشاء الفهرس بضغطة</a>`:'';}
   // Last 5 orders
   const last5=allOrders.slice(0,5);
   document.getElementById('dashOrders').innerHTML=last5.length?last5.map(o=>orderCard(o)).join(''):'<div style="text-align:center;color:var(--muted);padding:20px;">لا توجد طلبات</div>';
@@ -1184,8 +1325,26 @@ window.setOF=function(f,btn){
   renderOrders();
 };
 
-function renderOrders(){
-  let fil=allOrders;
+// تبويب الطلبات: «آخر الطلبات» من المباشر، أو فترة (تنجاب وقت الحاجة) — والمدير يكدر يختار مطعم
+function ordRangeMs(v){
+  const d0=dayStart();
+  if(v==='today')return[d0,Infinity];if(v==='yesterday')return[d0-DAY,d0];
+  if(v==='7'||v==='30')return[d0-(+v-1)*DAY,Infinity];
+  return null;
+}
+function ordersTabList(rerender){
+  const v=(document.getElementById('ordRange')||{}).value||'live',rid=isAdmin()?((document.getElementById('ordRest')||{}).value||''):'';
+  let fil;
+  const r=ordRangeMs(v);
+  if(r){
+    if(!needOrders(r[0],r[1],rid,rerender))return null;
+    fil=allOrders.filter(o=>{const t=o.createdAtMs||0;return t>=r[0]&&t<r[1];});
+  }else{
+    // آخر الطلبات: المدير آخر ١٠٠ + النشطة، صاحب المطعم اليوم وأمس + المفتوحة
+    const ids=new Set();['latest','win','active','all'].forEach(k=>(ordSets[k]||[]).forEach(o=>ids.add(o.id)));
+    fil=allOrders.filter(o=>ids.has(o.id));
+  }
+  if(rid)fil=fil.filter(o=>o.restaurantId===rid);
   if(orderFilter==='delivery')fil=fil.filter(o=>!o.orderType||o.orderType==='delivery');
   else if(orderFilter==='salon')fil=fil.filter(o=>o.orderType==='salon');
   else if(orderFilter==='takeaway')fil=fil.filter(o=>o.orderType==='takeaway');
@@ -1193,15 +1352,30 @@ function renderOrders(){
   else if(orderFilter==='delivered')fil=fil.filter(o=>o.status==='delivered');
   const q=(document.getElementById('orderSearch')?.value||'').trim().toLowerCase();
   if(q)fil=fil.filter(o=>(o.customer||'').toLowerCase().includes(q)||(o.phone||'').includes(q));
-  document.getElementById('ordersList').innerHTML=fil.length?fil.map(o=>orderCard(o)).join(''):'<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد طلبات</div>';
+  return fil;
+}
+function fillOrdRest(){
+  const sel=document.getElementById('ordRest');
+  if(sel&&isAdmin()&&sel.options.length!==allRestaurants.length+1){const cur=sel.value;sel.innerHTML='<option value="">كل المطاعم</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur;}
+}
+function renderOrders(){
+  fillOrdRest();
+  const el=document.getElementById('ordersList');
+  const fil=ordersTabList(()=>{if(document.getElementById('scOrders').classList.contains('on'))renderOrders();});
+  if(!fil){el.innerHTML=ordWait();return;}
+  const shown=fil.slice(0,300);
+  el.innerHTML=shown.length?shown.map(o=>orderCard(o)).join('')+(fil.length>shown.length?`<div style="text-align:center;color:var(--muted);padding:10px;font-size:12px">يبين أول ${toA(shown.length)} من ${toA(fil.length)} — ضيّق البحث أو الفترة</div>`:''):'<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد طلبات</div>';
 }
 
 // CAPTAINS STATS
-window.renderCapStats=function(){
+window.renderCapStats=function(force){
+  dateDefaults('capFrom','capTo');
   const from=document.getElementById('capFrom')?.value;
   const to=document.getElementById('capTo')?.value;
   const start=from?new Date(from+'T00:00:00').getTime():0;
   const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
+  if(force===true)ordRefresh();
+  if(!needOrders(start,end,'',()=>{if(document.getElementById('scCaptains').classList.contains('on'))renderCapStats();})){document.getElementById('capStatsList').innerHTML=ordWait();return;}
   const filtered=allOrders.filter(o=>{const t=o.createdAtMs||0;return t>=start&&t<end;});
   const capMap={};
   allCaptains.forEach(c=>{capMap[c.id]={name:c.name,phone:c.phone||'',known:true,count:0,delivered:0,total:0,fee:0};});
@@ -1283,28 +1457,21 @@ window.deleteOrder=async function(id){
     await window._fb.deleteDoc(window._fb.doc(window._fb.db,'orders',id));
     window._fb.deleteDoc(window._fb.doc(window._fb.db,'tracking',id)).catch(()=>{});
     audit('order.delete',{orderId:id});
+    ordForget([id]);
     toast('🗑️ تم حذف الطلب');
   }catch(e){toast('❌ تعذّر الحذف','error');}
 };
 
 window.deleteAllOrders=async function(){
   if(!isAdmin())return;
-  const fil=document.querySelectorAll('#ordersList .order-row');
-  if(!fil.length){toast('لا توجد طلبات');return;}
-  if(!confirm(`⚠️ حذف ${fil.length} طلب؟ هذا لا يمكن التراجع عنه!`))return;
+  const orders=ordersTabList(()=>{});
+  if(!orders||!orders.length){toast('لا توجد طلبات');return;}
+  if(!confirm(`⚠️ حذف ${orders.length} طلب؟ هذا لا يمكن التراجع عنه!`))return;
   if(prompt('للتأكيد اكتب: حذف')!=='حذف'){toast('أُلغيت العملية','warn');return;}
   try{
-    // get visible order ids from current filter
-    let orders=allOrders;
-    if(orderFilter==='delivery')orders=allOrders.filter(o=>!o.orderType||o.orderType==='delivery');
-    else if(orderFilter==='salon')orders=allOrders.filter(o=>o.orderType==='salon');
-    else if(orderFilter==='takeaway')orders=allOrders.filter(o=>o.orderType==='takeaway');
-    else if(orderFilter==='pending')orders=allOrders.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
-    else if(orderFilter==='delivered')orders=allOrders.filter(o=>o.status==='delivered');
-    const q=(document.getElementById('orderSearch')?.value||'').trim().toLowerCase();
-    if(q)orders=orders.filter(o=>(o.customer||'').toLowerCase().includes(q)||(o.phone||'').includes(q));
     await Promise.all(orders.map(o=>window._fb.deleteDoc(window._fb.doc(window._fb.db,'orders',o.id))));
     audit('order.deleteMany',{count:orders.length,filter:orderFilter});
+    ordForget(orders.map(o=>o.id));
     toast('🗑️ تم حذف '+orders.length+' طلب');
   }catch(e){toast('❌ تعذّر الحذف','error');}
 };
@@ -1393,14 +1560,34 @@ window.deleteStaff=async function(id){
 };
 
 // RESTAURANTS
+// أرقام اليوم لكل مطعم (تنحسب بالسيرفر بدون تنزيل الطلبات) — بس لما تبويب المطاعم مفتوح، وكل ٥ دقايق
+const restDay={};let restDayBusy=false;
+async function restDayLoad(){
+  if(restDayBusy||!isAdmin()||!document.getElementById('scRests').classList.contains('on'))return;
+  const day=bagDay(),stale=allRestaurants.filter(r=>{const x=restDay[r.id];return!x||x.day!==day||Date.now()-x.at>300000;});
+  if(!stale.length)return;
+  restDayBusy=true;
+  const fb=window._fb,col=fb.collection(fb.db,'orders');
+  for(let i=0;i<stale.length;i+=6){
+    await Promise.all(stale.slice(i,i+6).map(async r=>{
+      try{
+        const [a,d]=await Promise.all([
+          fb.getAggregateFromServer(fb.query(col,fb.where('restaurantId','==',r.id),fb.where('day','==',day)),{n:fb.count()}),
+          fb.getAggregateFromServer(fb.query(col,fb.where('restaurantId','==',r.id),fb.where('day','==',day),fb.where('status','==','delivered')),{v:fb.sum('value')})]);
+        restDay[r.id]={n:a.data().n,v:d.data().v||0,day,at:Date.now()};
+      }catch(e){console.warn('rest day',e.code);restDay[r.id]={n:0,v:0,day,at:Date.now()-290000};setTimeout(restDayLoad,11000);}
+    }));
+  }
+  restDayBusy=false;renderRests();
+}
 function renderRests(){
+  setTimeout(restDayLoad,0);
   if(!isAdmin())return;
   const list=document.getElementById('restList');
   if(!allRestaurants.length){list.innerHTML='<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد مطاعم</div>';return;}
   list.innerHTML=allRestaurants.map(r=>{
     const myCaps=allCaptains.filter(c=>c.restaurantId===r.id);
-    const myOrders=allOrders.filter(o=>o.restaurantId===r.id);
-    const delivered=myOrders.filter(o=>o.status==='delivered');
+    const rd=restDay[r.id];
     const active=r.active!==false;
     let subBadge='';
     if(!active){subBadge='<span class="sub-badge sub-off">⏸️ متوقف</span>';}
@@ -1418,8 +1605,8 @@ function renderRests(){
       </div>
       <div class="entity-meta">
         <div class="meta-item"><strong>${toA(myCaps.length)}</strong>كابتن</div>
-        <div class="meta-item"><strong>${toA(myOrders.length)}</strong>طلب</div>
-        <div class="meta-item"><strong>${toA(delivered.length)}</strong>مسلّمة</div>
+        <div class="meta-item"><strong>${rd?toA(rd.n):'…'}</strong>طلب اليوم</div>
+        <div class="meta-item"><strong>${rd?fmt(rd.v):'…'}</strong>مبيعات اليوم</div>
         <div class="meta-item"><strong>${fmt(r.subscription||0)}</strong>د.ع/شهر</div>
       </div>
       ${branchLine(r)}
@@ -1732,14 +1919,17 @@ async function tmSections(rid){
   catch(e){TM_SEC_CACHE[rid]={};}
   return TM_SEC_CACHE[rid];
 }
+let tmInit=false;
 window.renderTimes=async function(){
   const el=document.getElementById('tmBody');if(!el)return;
+  if(!tmInit){tmInit=true;if(isAdmin())document.getElementById('tmRange').value='today';}   // المدير: كل المطاعم كثيرة — نبدي باليوم
   if(isAdmin()){const sel=document.getElementById('tmRest'),cur=sel.value;sel.innerHTML='<option value="">كل المطاعم</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur;}
   const range=document.getElementById('tmRange').value,type=document.getElementById('tmType').value;
   const rid=isRest()?currentUser.restaurantId:document.getElementById('tmRest').value;
   const d0=new Date();d0.setHours(0,0,0,0);
   let from=d0.getTime(),to=Infinity;
   if(range==='yesterday'){to=from;from-=86400000;}else if(range!=='today')from-=(+range-1)*86400000;
+  if(!needOrders(from,to,rid,()=>{if(document.getElementById('scTimes').classList.contains('on'))renderTimes();})){el.innerHTML=ordWait();return;}
   const list=allOrders.filter(o=>(o.createdAtMs||0)>=from&&(o.createdAtMs||0)<to&&o.status!=='cancelled'&&(!type||tmType(o)===type)&&(!rid||o.restaurantId===rid));
   const secNames=rid?await tmSections(rid):{};
   const rows=list.map(o=>({o,s:tmStages(o)}));
@@ -1833,6 +2023,7 @@ window.accRender=function(live){
   if(!axRid){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">اختر المطعم</div>';return;}
   if(axDoc===null){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">⏳ جاري التحميل…</div>';return;}
   const [from,to]=axRange(),inR=ts=>(ts||0)>=from&&(ts||0)<to;
+  if(['rep','sales','fin','items'].includes(axTab)&&!needOrders(from,to,axRid,()=>{if(document.getElementById('scAcc').classList.contains('on'))accRender();})){el.innerHTML=ordWait();return;}
   const mats=(axDoc.materials||[]),moves=(axDoc.moves||[]);
   const kpi=(v,l,sub)=>`<div class="stat"><div class="stat-v">${v}</div><div class="stat-l">${l}</div>${sub?`<div class="stat-s" style="font-size:11px;color:var(--muted)">${sub}</div>`:''}</div>`;
   let h='';
@@ -2077,11 +2268,14 @@ window.axMovView=id=>{
     <div style="font-weight:800;margin:6px 0">📝 الملاحظة</div><div class="ax-note">${esc(e.note||'لا توجد ملاحظة')}</div>
     <div class="modal-btns"><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`);
 };
-window.renderAnalytics=function(){
+window.renderAnalytics=function(force){
+  dateDefaults('anFrom','anTo');
   const from=document.getElementById('anFrom')?.value;
   const to=document.getElementById('anTo')?.value;
   const start=from?new Date(from+'T00:00:00').getTime():0;
   const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
+  if(force===true)ordRefresh();
+  if(!needOrders(start,end,'',()=>{if(document.getElementById('scAnalytics').classList.contains('on'))renderAnalytics();})){document.getElementById('analyticsContent').innerHTML=ordWait();window._lastAnalyticsOrders=[];return;}
   const fil=allOrders.filter(o=>{const t=o.createdAtMs||0;return t>=start&&t<end;});
   const delivered=fil.filter(o=>o.status==='delivered');
   const total=fil.reduce((s,o)=>s+(o.value||0),0);
@@ -2146,6 +2340,46 @@ function renderChart(fil){
   });
 }
 
+// ملف CSV يفتح بالـ Excel (عربي) — ويمنع حقن الصيغ: أي نص يبدأ بـ = + - @ يُسبق بـ '
+const csvCell=v=>{let s=String(v??'');if(typeof v!=='number'&&/^[=+\-@\t\r]/.test(s))s="'"+s;return `"${s.replace(/"/g,'""')}"`;};
+function saveFile(name,text,type){
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+}
+// 📥 نسخة طلبات فترة (المدير الأعلى): Excel للقراءة، أو JSON بكل التفاصيل
+const PAY_NAME={cash:'نقداً',card:'بطاقة',mixed:'مختلط',later:'آجل',cod:'عند الكابتن'};
+window.bkInit=function(){
+  const sel=document.getElementById('bkRest');if(!sel)return;
+  const cur=sel.value;sel.innerHTML='<option value="">كل المطاعم</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur;
+  const f=document.getElementById('bkFrom'),t=document.getElementById('bkTo');
+  if(!f.value)f.value=ymdLocal(new Date(new Date().getFullYear(),new Date().getMonth(),1).getTime());
+  if(!t.value)t.value=ymdLocal(Date.now());
+};
+window.bkDownload=function(kind){
+  if(!isAdmin())return;
+  const rid=document.getElementById('bkRest').value,fv=document.getElementById('bkFrom').value,tv=document.getElementById('bkTo').value;
+  if(!fv||!tv||fv>tv){toast('⚠️ حدد الفترة (من قبل إلى)','warn');return;}
+  const from=new Date(fv+'T00:00:00').getTime(),to=new Date(tv+'T00:00:00').getTime()+86400000;
+  const st=document.getElementById('bkStatus');
+  if(!needOrders(from,to,rid,()=>bkDownload(kind))){st.textContent='⏳ دا ينجاب طلبات الفترة من السيرفر…';return;}
+  const os=allOrders.filter(o=>{const t=o.createdAtMs||0;return t>=from&&t<to&&(!rid||o.restaurantId===rid);}).sort((a,b)=>(a.createdAtMs||0)-(b.createdAtMs||0));
+  if(!os.length){st.textContent='ماكو طلبات بهاي الفترة';return;}
+  // اسم الملف بالإنجليزي: بعض الأجهزة ما تقبل أسماء ملفات عربية (يصير اسمه «download»)
+  const base=`sora3a-orders-${rid?rid.slice(0,8):'all'}-${fv}_${tv}`.replace(/[^A-Za-z0-9_.-]+/g,'-');
+  if(kind==='json'){
+    saveFile(base+'.json',JSON.stringify({app:'sora3a',kind:'orders',restaurantId:rid||null,from:fv,to:tv,exportedAt:new Date().toISOString(),count:os.length,orders:os},null,1),'application/json');
+  }else{
+    const rows=[['رقم الطلب','التاريخ','المطعم','النوع','الحالة','الزبون','الهاتف','العنوان','الأصناف','قبل الخصم','الخصم','المبلغ','التوصيل','الدفع','الكابتن']];
+    const typ={delivery:'دلفري',salon:'صالة',takeaway:'سفري'};
+    os.forEach(o=>rows.push([o.id.substring(0,6).toUpperCase(),o.createdAtMs?new Date(o.createdAtMs).toLocaleString('ar-IQ-u-nu-latn'):(o.createdAt||''),o.restaurantName||(allRestaurants.find(r=>r.id===o.restaurantId)||{}).name||'',
+      typ[o.orderType||'delivery']||o.orderType,o.status||'',o.customer||'',o.phone||'',o.address||'',
+      (o.items||[]).map(i=>`${i.name}${i.variant&&i.variant!=='وحدة'?' ('+i.variant+')':''} ×${i.qty||1}`).join(' + '),
+      o.subtotal??o.value??0,o.discount||0,o.value||0,o.fee||0,PAY_NAME[(o.payment||{}).method]||(o.payment||{}).method||'',o.captainName||'']));
+    saveFile(base+'.csv','\uFEFF'+rows.map(r=>r.map(csvCell).join(',')).join('\n'),'text/csv;charset=utf-8;');
+  }
+  audit('orders.export',{restaurantId:rid||'all',from:fv,to:tv,count:os.length,kind});
+  st.textContent=`✅ نزل ${toA(os.length)} طلب`;
+};
 window.exportCSV=function(){
   const fil=window._lastAnalyticsOrders||[];
   if(!fil.length){toast('لا توجد بيانات للتصدير','warn');return;}
@@ -2159,7 +2393,7 @@ window.exportCSV=function(){
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`تقرير-سرعة-${new Date().toISOString().slice(0,10)}.csv`;
+  a.download=`sora3a-report-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   toast('✅ تم تصدير التقرير');
 };
