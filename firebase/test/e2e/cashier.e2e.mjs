@@ -287,6 +287,56 @@ test('owner sets and clears cashier working hours from the admin app', async () 
   await p.context().close();
 });
 
+test('hours end with no open shift → «end duty» prints today\'s sales report (reprint on the lock screen); up to 100 reports to reprint + any past day', async () => {
+  const bag = () => (Math.floor(Date.now() / 60000) + 180) % 1440;
+  const wrap = (n) => ((n % 1440) + 1440) % 1440;
+  const n = bag(), now = Date.now();
+  // ماكو وردية مفتوحة لهذا الكاشير
+  for (const s of await all('restaurants/RC/shifts', 'status', 'open')) await write('restaurants/RC/shifts/' + s.id, { status: 'closed', closedAtMs: now - 60000, report: { orders: 0, sales: 0 } });
+  await E.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'orders/ODAY1'), { restaurantId: 'RC', status: 'delivered', orderType: 'takeaway', value: 6543, createdAtMs: now - 120000, payment: { method: 'cash', cash: 6543, card: 0 } });
+    await setDoc(doc(db, 'orders/OOLD3'), { restaurantId: 'RC', status: 'delivered', orderType: 'salon', value: 4321, createdAtMs: now - 3 * 86400000, payment: { method: 'card', cash: 0, card: 4321 } });
+    for (let i = 0; i < 7; i++) await setDoc(doc(db, 'restaurants/RC/shifts/Z' + i), { status: 'closed', uid: U.cash, cashier: 'علي', openedAtMs: now - (i + 1) * 86400000, closedAtMs: now - (i + 1) * 86400000 + 3600000, openingCash: 0, report: { orders: 3, sales: 1000 * (i + 1), cash: 1000 * (i + 1), card: 0, byType: {} } });
+    await setDoc(doc(db, 'restaurants/RC/shifts/ZOTHER'), { status: 'closed', uid: 'someoneElse', cashier: 'غيره', openedAtMs: now - 86400000, closedAtMs: now - 86000000, openingCash: 0, report: { orders: 1, sales: 999 } });
+  });
+  await write('users/' + U.cash, { perms: { discount: true }, hours: { from: wrap(n - 120), to: wrap(n + 60) }, hoursExt: { untilMs: 0, atMs: 0, h: '0' } });
+  const p = await page(B, { w: 1280, h: 800 });
+  await posLogin(p, 'cash@x.com', 'cashpass1');
+  await p.waitForSelector('#prods .prod');
+  // خلص الوقت ← «إنهاء الدوام وطباعة تقرير المبيعات» ← ينطبع تقرير اليوم حتى بدون وردية
+  await write('users/' + U.cash, { hours: { from: wrap(n - 120), to: wrap(n - 2) } });
+  await p.waitForSelector('#extAsk.on', { timeout: 10000 });
+  await p.click('#extAsk button >> text=إنهاء الدوام وطباعة تقرير المبيعات');
+  await p.waitForSelector('#dutyLock.on', { timeout: 10000 });
+  await p.waitForFunction(() => (document.getElementById('prtFr').srcdoc || '').includes('التقرير اليومي'), null, { timeout: 10000 });
+  assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), /سفري \(2\)<\/span><span>13,543/);   // ٧٠٠٠ + ٦٥٤٣ (طلب اليوم)
+  // إعادة طباعة من شاشة القفل
+  await p.evaluate(() => { document.getElementById('prtFr').srcdoc = ''; });
+  await p.click('#dutyLock button >> text=إعادة طباعة تقرير المبيعات');
+  await p.waitForFunction(() => (document.getElementById('prtFr').srcdoc || '').includes('التقرير اليومي'));
+  await p.context().close();
+  // تبويب الوردية: تقارير ورديّاته بس (لحد ١٠٠) + تقرير أي يوم سابق
+  await write('users/' + U.cash, { hours: null, hoursExt: { untilMs: 0, atMs: 0, h: '0' } });
+  const q = await page(B, { w: 1280, h: 800 });
+  await posLogin(q, 'cash@x.com', 'cashpass1');
+  await q.waitForSelector('#prods .prod');
+  await q.evaluate(() => goTab('shift'));
+  await q.waitForFunction(() => document.getElementById('shiftScreen').textContent.includes('تقارير ورديّاتي'), null, { timeout: 10000 });
+  const txt = await q.textContent('#shiftScreen');
+  assert.ok(txt.includes('عرض الكل') && !txt.includes('غيره'), 'own reports only, collapsed after 5');
+  assert.ok(await q.locator('#shiftScreen .sh-line button.ac-b').count() >= 7);
+  await q.click('#shiftScreen .sh-line button.ac-b >> nth=0');
+  await q.waitForFunction(() => (document.getElementById('prtFr').srcdoc || '').includes('تقرير إغلاق الوردية'));
+  const ymd = (ms) => { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  await q.fill('#shDay', ymd(Date.now() - 3 * 86400000));
+  await q.click('button >> text=🖨️ طباعة');
+  await q.waitForFunction(() => /4,321|٤٬٣٢١/.test(document.getElementById('prtFr').srcdoc || ''), null, { timeout: 10000 });
+  await q.screenshot({ path: 'shots/pos-reports-history.png', fullPage: true });
+  assert.deepEqual(clean(q), []);
+  await q.context().close();
+});
+
 test('approved devices: a new device locks with a code, the super admin approves it and it opens by itself; one device per account; revoke locks it', async () => {
   await write('users/' + U.cash, { perms: { discount: true }, hours: null });
   const probe = (p) => p.evaluate(async () => { try { await window._fb.getDocFromServer(window._fb.doc(window._fb.db, 'restaurants/RC/probe/t' + Math.random())); return true; } catch (e) { return e.code; } });
