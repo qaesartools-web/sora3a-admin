@@ -52,7 +52,8 @@ test('super admin: only the latest orders load; today numbers from the server; p
   const n = await p.evaluate(() => allOrders.length);
   assert.ok(n <= 101, 'latest 100 + active, not all 307 (got ' + n + ')');
   // أرقام اليوم (كل المطاعم) بالسيرفر
-  await p.waitForFunction(() => document.getElementById('dashStats').textContent.includes('23,000'), null, { timeout: 10000 });
+  await p.waitForFunction(() => document.getElementById('dashStats').textContent.includes('23,000'), null, { timeout: 20000 })
+    .catch(async (e) => { throw new Error('dashboard: ' + (await p.textContent('#dashStats')).replace(/\s+/g, ' ') + ' | errors: ' + p.errors.join(' ; ')); });
   assert.equal(await statOf(p, 'طلبات اليوم'), '7');
   assert.equal(await statOf(p, 'مسلّمة اليوم'), '5');
   assert.equal(await statOf(p, 'ملغية اليوم'), '1');
@@ -60,20 +61,23 @@ test('super admin: only the latest orders load; today numbers from the server; p
   await p.screenshot({ path: 'shots/admin-dash-today.png' });
   // المطاعم: أرقام اليوم لكل مطعم
   await p.click('.dnav-btn[data-screen="scRests"]');
-  await p.waitForFunction(() => /طلب اليوم/.test(document.getElementById('restList').textContent) && !document.getElementById('restList').textContent.includes('…'), null, { timeout: 10000 });
+  await p.waitForFunction(() => /طلب اليوم/.test(document.getElementById('restList').textContent) && !document.getElementById('restList').textContent.includes('…'), null, { timeout: 20000 })
+    .catch(async (e) => { throw new Error('restaurants: ' + (await p.textContent('#restList')).replace(/\s+/g, ' ').slice(0, 400)); });
   const cards = await p.$$eval('#restList .entity', (els) => els.map((e) => e.innerText.replace(/\s+/g, ' ')));
   assert.ok(cards.some((c) => c.includes('المطعم الأول') && /5\s*طلب اليوم/.test(c) && /15,000\s*مبيعات اليوم/.test(c)), cards.join(' | '));
   // تبويب الطلبات: آخر ٣٠ يوم للمطعم الأول → تنجاب من السيرفر
   await p.click('.dnav-btn[data-screen="scOrders"]');
   await p.selectOption('#ordRest', 'R1');
   await p.selectOption('#ordRange', '30');
-  await p.waitForFunction(() => document.querySelectorAll('#ordersList .order-row').length === 155, null, { timeout: 10000 });
+  await p.waitForFunction(() => document.querySelectorAll('#ordersList .order-row').length === 155, null, { timeout: 20000 })
+    .catch(async (e) => { throw new Error('orders tab rows: ' + (await p.evaluate(() => document.querySelectorAll('#ordersList .order-row').length))); });
   // التحليلات: فترة قديمة (كل المطاعم)
   await p.click('.dnav-btn[data-screen="scAnalytics"]');
   const ymd = (ms) => { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
   await p.fill('#anFrom', ymd(Date.now() - 15 * DAY)); await p.fill('#anTo', ymd(Date.now()));
   await p.click('#scAnalytics .date-filter button');
-  await p.waitForFunction(() => (window._lastAnalyticsOrders || []).length === 307, null, { timeout: 15000 });
+  await p.waitForFunction(() => (window._lastAnalyticsOrders || []).length === 307, null, { timeout: 20000 })
+    .catch(async (e) => { throw new Error('analytics: ' + (await p.evaluate(() => (window._lastAnalyticsOrders || []).length))); });
   // طلب جديد يوصل مباشرة للرئيسية
   await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'orders/NEWX'), { restaurantId: 'R2', status: 'pending', orderType: 'takeaway', value: 1500, createdAtMs: Date.now(), day: bagDay(Date.now()), customer: 'زبون جديد' }); });
   await p.click('.dnav-btn[data-screen="scDash"]');

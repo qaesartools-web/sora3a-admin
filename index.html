@@ -1220,7 +1220,7 @@ async function dashAggLoad(){
       fb.getAggregateFromServer(fb.query(col,fb.where('day','==',day),fb.where('status','==','delivered')),{n:fb.count(),v:fb.sum('value')}),
       fb.getAggregateFromServer(fb.query(col,fb.where('day','==',day),fb.where('status','==','cancelled')),{n:fb.count()})]);
     dashAgg={n:all.data().n,del:del.data().n,sales:del.data().v||0,canc:canc.data().n};dashAggAt=Date.now();
-  }catch(e){console.warn('dash agg',e.code);dashAggAt=Date.now()-240000;}
+  }catch(e){console.warn('dash agg',e.code);dashAggAt=Date.now()-290000;setTimeout(dashAggLoad,11000);}   // خطأ مؤقت: نعيد بعد ١٠ ثواني
   dashAggBusy=false;renderDash();
 }
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&isAdmin())dashAggLoad();});
@@ -1575,7 +1575,7 @@ async function restDayLoad(){
           fb.getAggregateFromServer(fb.query(col,fb.where('restaurantId','==',r.id),fb.where('day','==',day)),{n:fb.count()}),
           fb.getAggregateFromServer(fb.query(col,fb.where('restaurantId','==',r.id),fb.where('day','==',day),fb.where('status','==','delivered')),{v:fb.sum('value')})]);
         restDay[r.id]={n:a.data().n,v:d.data().v||0,day,at:Date.now()};
-      }catch(e){restDay[r.id]={n:0,v:0,day,at:Date.now()-240000};}
+      }catch(e){console.warn('rest day',e.code);restDay[r.id]={n:0,v:0,day,at:Date.now()-290000};setTimeout(restDayLoad,11000);}
     }));
   }
   restDayBusy=false;renderRests();
