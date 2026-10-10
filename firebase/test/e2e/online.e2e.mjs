@@ -28,6 +28,7 @@ before(async () => {
         { name: 'شاورما دجاج', variants: [{ name: 'وحدة', price: 2500 }] }] },
       { cat: 'مشروبات', emoji: '🥤', items: [{ name: 'بيبسي', variants: [{ name: 'وحدة', price: 1000 }] }, { name: 'عصير', stock: 0, variants: [{ name: 'وحدة', price: 2000 }] }] }] });
     await setDoc(doc(db, 'restaurants/RQ/settings/main'), { tables: 6, defaultFee: 2000, updatedAtMs: 1 });
+    await setDoc(doc(db, 'captains/CQ'), { restaurantId: 'RQ', userId: 'capq', name: 'كرار', phone: '07700000001', available: true });
   });
 });
 after(async () => { await B?.close(); srv?.close(); await E?.cleanup(); setTimeout(() => process.exit(0), 200).unref(); });
@@ -197,7 +198,7 @@ test('pickup from home: name + phone required, cashier rejects one with a reason
   await c.context().close();
 });
 
-test('delivery: address required, goes to all captains, customer gets the live tracking link', async () => {
+test('delivery: address required → kitchen first → when ready the cashier picks a captain; customer gets the live tracking link', async () => {
   const c = await page(B, { w: 390, h: 844 });
   await c.goto(MENU);
   await c.waitForSelector('.it');
@@ -216,11 +217,28 @@ test('delivery: address required, goes to all captains, customer gets the live t
   assert.ok((await cashier.textContent('#webBox .web-card')).includes('4,500'));
   await cashier.click('#webBox .call-go');
   const o = await until(async () => (await list('orders', 'restaurantId', 'RQ')).find((x) => x.webId === w.id));
-  assert.equal(o.orderType, 'delivery'); assert.equal(o.status, 'pending'); assert.equal(o.captainId, null);
+  // يروح للمطبخ أول — ماكو كابتن (الكباتن ما يشوفونه) لحد ما الكاشير يختار
+  assert.equal(o.orderType, 'delivery'); assert.equal(o.status, 'preparing'); assert.equal(o.captainId, null); assert.equal(o.awaitCap, true);
+  assert.equal(o.kitchen, 'new');
   assert.equal(o.fee, 2000); assert.equal(o.address, 'زيونة، قرب جامع الرحمن');
-  assert.equal((await read('tracking/' + o.id)).status, 'pending');
+  assert.equal((await read('tracking/' + o.id)).status, 'preparing');
   const wl = await until(async () => { const d = await read('webOrders/' + w.id); return d.trackId ? d : null; });
   assert.equal(wl.trackId, o.id);
+  assert.equal(await cashier.locator('#capWaitBox .cap-wait').count(), 0, 'not ready yet');
+  // المطبخ جهّزه ← يطلع للكاشير «دلفري جاهز — اختار الكابتن»
+  await cashier.evaluate((id) => kdsDone(id), o.id);
+  await cashier.waitForSelector('#capWaitBox .cap-wait', { timeout: 10000 });
+  assert.ok((await cashier.textContent('#capWaitBox')).includes('زهراء'));
+  assert.equal((await read('orders/' + o.id)).captainId, null, 'still no captain');
+  await cashier.screenshot({ path: 'shots/online-delivery-ready.png' });
+  await cashier.click('#capWaitBox .call-go');
+  await cashier.waitForSelector('#delivOv.on');
+  assert.equal(await cashier.inputValue('#dName'), 'زهراء');
+  await cashier.click('#capList .capcard');
+  await cashier.click('#confCapBtn');
+  const oa = await until(async () => { const d = await read('orders/' + o.id); return d.captainId ? d : null; });
+  assert.deepEqual({ status: oa.status, captainId: oa.captainId, awaitCap: oa.awaitCap }, { status: 'pending', captainId: 'CQ', awaitCap: false });
+  await cashier.waitForSelector('#capWaitBox .cap-wait', { state: 'detached', timeout: 10000 });
   // الكابتن طلع بالطلب
   await write('orders/' + o.id, { status: 'delivering', captainId: 'C1', captainName: 'كرار' });
   await c.waitForSelector('#stView a[href*="sora3a-captain/?order="]');
