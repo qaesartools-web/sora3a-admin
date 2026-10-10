@@ -12,6 +12,7 @@ rules_version = '2';
 //    captain     كابتن — طلباته + الطلبات المعلّقة لمطعمه (users.captainId)
 //    cashier     كاشير — يعمل على كاشير مطعمه فقط، وصلاحياته (users.perms)
 //                يحددها صاحب المطعم: menu, settings, inventory, reports, cancel, discount
+//    hq          فريق المالك — يشتغل من برنامج المالك بس، ولكل قسم صلاحية (hqTeam/{uid}.perms)
 // ─────────────────────────────────────────────────────────────
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -122,6 +123,29 @@ service cloud.firestore {
     }
     function myCap() { return me().captainId; }
 
+    // ── برنامج المالك (ويندوز + أندرويد) ──────────────────────
+    //  كل أمر منه لازم يجي من جهاز معتمد: الجهاز إله مفتاح سري يتولد بيه ويبقى بيه، ولما يدخل يسجّل جلسته
+    //  hqSessions/{uid}/t/{auth_time} = {key}. نقبل بس إذا المفتاح معتمد لنفس الحساب (hqDevices/{key}) —
+    //  فحتى لو أحد عرف الإيميل وكلمة السر، ما يسوي شي من جهاز ثاني. وكل جهاز إله جلسته (اللابتوب والتلفون سوا).
+    //  الفريق (role = hq): لكل شخص ولكل قسم hide / view / edit (hqTeam/{uid}.perms) — المالك (admin) يحددها.
+    function hqSessPath() { return /databases/$(database)/documents/hqSessions/$(request.auth.uid)/t/$(string(request.auth.token.auth_time)); }
+    function hqKeyOk(k) {
+      return k is string && k.size() >= 20
+        && exists(/databases/$(database)/documents/hqDevices/$(k))
+        && get(/databases/$(database)/documents/hqDevices/$(k)).data.uid == request.auth.uid;
+    }
+    function hqDev() { return signedIn() && exists(hqSessPath()) && hqKeyOk(get(hqSessPath()).data.get('key', '')); }
+    function hqOwner() { return isAdmin() && hqDev(); }
+    function hqTeamDoc() { return get(/databases/$(database)/documents/hqTeam/$(request.auth.uid)).data; }
+    function hqMember() {
+      return active() && role() == 'hq'
+        && exists(/databases/$(database)/documents/hqTeam/$(request.auth.uid)) && hqDev();
+    }
+    function hqAny() { return hqOwner() || hqMember(); }
+    function hqLvl(sec) { return hqTeamDoc().get('perms', {}).get(sec, 'hide'); }
+    function hqView(sec) { return hqOwner() || (hqMember() && hqLvl(sec) in ['view', 'edit']); }
+    function hqEdit(sec) { return hqOwner() || (hqMember() && hqLvl(sec) == 'edit'); }
+
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
     function onlyChanged(keys) { return changed().hasOnly(keys); }
     function str(v, max) { return v is string && v.size() <= max; }
@@ -130,10 +154,17 @@ service cloud.firestore {
 
     // ── users ───────────────────────────────────────────────
     match /users/{uid} {
-      allow get: if signedIn() && (request.auth.uid == uid || isOffice());
-      allow list: if isOffice();
+      allow get: if signedIn() && (request.auth.uid == uid || isOffice() || hqView('rests'));
+      allow list: if isOffice() || hqView('rests');
 
       allow create, update, delete: if isAdmin();
+
+      // فريق المالك: حسابات المطاعم والكاشيرية بس — ما يمسون حسابات الإدارة أو الفريق أو الكباتن
+      allow create: if (hqEdit('rests') && request.resource.data.get('role', '') in ['restaurant', 'cashier'])
+        || (hqEdit('trials') && request.resource.data.get('role', '') == 'restaurant');
+      allow update: if hqEdit('rests') && resource.data.get('role', '') in ['restaurant', 'cashier']
+        && request.resource.data.get('role', '') == resource.data.get('role', '');
+      allow delete: if hqEdit('rests') && resource.data.get('role', '') in ['restaurant', 'cashier'];
 
       // المطعم ينشئ حسابات الكباتن التابعين له فقط
       allow create: if ownsRest(request.resource.data.restaurantId)
@@ -175,11 +206,16 @@ service cloud.firestore {
 
     // ── restaurants ─────────────────────────────────────────
     match /restaurants/{rid} {
-      allow read: if isOffice()
+      allow read: if isOffice() || hqAny()
         || (active() && role() in ['restaurant', 'cashier', 'captain'] && me().get('restaurantId', '') == rid)
         || (active() && role() == 'restaurant' && rid in me().get('branches', []));
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin()
+      allow create: if isAdmin() || hqEdit('rests')
+        || (hqEdit('trials') && request.resource.data.get('trial', false) == true);
+      allow delete: if isAdmin() || hqEdit('rests');
+      allow update: if isAdmin() || hqEdit('rests')
+        // الفلوس: تمديد الاشتراك وتشغيل المطعم بعد الدفع — والتجارب: تمديد التجربة
+        || (hqEdit('money') && onlyChanged(['expiry','expiryMs','active','paidUntilMs']))
+        || (hqEdit('trials') && resource.data.get('trial', false) == true && onlyChanged(['expiry','expiryMs','active','trial']))
         // المطعم لا يستطيع تعديل الاشتراك أو التفعيل أو ربط الحساب
         || (ownsRest(rid) && !changed().hasAny(
              ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs','features']));
@@ -188,10 +224,10 @@ service cloud.firestore {
       //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
       //  devices (الأجهزة المعتمدة): يعتمدها المدير الأعلى بس، ويشوفها صاحب المطعم — الكاشيرية ما يشوفون مفاتيحها
       match /{coll}/{d=**} {
-        allow read: if isOffice()
+        allow read: if isOffice() || hqView('rests') || (coll == 'devices' && hqView('devices'))
           || (coll == 'devices' && ownsRest(rid))
           || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid)));
-        allow write: if isAdmin()
+        allow write: if isAdmin() || hqEdit('rests') || (coll == 'devices' && hqEdit('devices'))
           || (coll != 'devices' && (ownsRest(rid)
           // الكاشير: البيع يحدّث المخزون الجاهز بالمنيو + الورديات + سجل الزبائن
           || (cashierOf(rid) && (coll in ['menu', 'shifts', 'customers']
@@ -203,7 +239,7 @@ service cloud.firestore {
     // ── sessions/{uid}: جلسة الكاشير الحالية (أي جهاز + أي تسجيل دخول) ──
     //  الكاشير يكتبها بس (ما يقراها، حتى ما ينكشف مفتاح الجهاز)، والمدير الأعلى وصاحب المطعم يشوفون مين داخل على أي جهاز
     match /sessions/{uid} {
-      allow read: if isOffice() || ownsRest(resource.data.restaurantId);
+      allow read: if isOffice() || hqView('devices') || hqView('rests') || ownsRest(resource.data.restaurantId);
       allow create, update: if signedIn() && request.auth.uid == uid
         && active() && role() == 'cashier' && me().get('restaurantId', '') != ''
         && request.resource.data.keys().hasOnly(['device','authTime','restaurantId','atMs','name'])
@@ -212,7 +248,7 @@ service cloud.firestore {
         && request.resource.data.authTime == request.auth.token.auth_time
         && optStr(request.resource.data, 'name', 80)
         && (!devicesOn(me().restaurantId) || devApproved(me().restaurantId, request.resource.data.device));
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || hqEdit('devices');
     }
 
     // ── deviceReqs/{مفتاح}: طلب اعتماد جهاز (كل جهاز كاشير يسجّل نفسه؛ المدير الأعلى يعتمد أو يرفض) ──
@@ -224,18 +260,18 @@ service cloud.firestore {
           && optStr(d, 'lastName', 80) && d.get('lastUid', '') == request.auth.uid && d.status == 'pending';
       }
       allow get: if signedIn();
-      allow list: if isOffice();
+      allow list: if isOffice() || hqView('devices') || hqView('rests');
       allow create: if signedIn() && active() && role() == 'cashier' && key.size() >= 20 && reqOk(request.resource.data);
-      allow update: if isAdmin()
+      allow update: if isAdmin() || hqEdit('devices')
         || (signedIn() && active() && role() == 'cashier' && resource.data.status == 'pending'
             && reqOk(request.resource.data) && request.resource.data.restaurantId == resource.data.restaurantId
             && onlyChanged(['lastAtMs','lastUid','lastName','platform']));
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || hqEdit('devices');
     }
 
     // ── captains ────────────────────────────────────────────
     match /captains/{cid} {
-      allow read: if isOffice()
+      allow read: if isOffice() || hqView('rests')
         || (staffOf(resource.data.restaurantId))
         || (isCaptain() && cid == myCap());
       allow create: if isAdmin()
@@ -273,7 +309,7 @@ service cloud.firestore {
           && (d.get('orderType', 'delivery') != 'delivery' || feat(d.restaurantId, 'captain'));
       }
 
-      allow read: if isOffice()
+      allow read: if isOffice() || hqView('overview') || hqView('rests')
         || (staffOf(resource.data.restaurantId))
         // الكابتن: طلباته فقط + الطلبات المعلّقة في مطعمه
         //  (الاستعلامات: where captainId == X  أو  where restaurantId == R && status == 'pending')
@@ -381,13 +417,13 @@ service cloud.firestore {
         return d.keys().hasOnly(['restaurantId','line','label','active','createdAtMs'])
           && str(d.line, 20) && str(d.get('label', ''), 40) && d.active is bool;
       }
-      allow read: if isAdmin() || (ownsRest(resource.data.restaurantId));
+      allow read: if isAdmin() || hqView('rests') || (ownsRest(resource.data.restaurantId));
       allow create: if token.size() >= 24 && lineOk(request.resource.data)
-        && (isAdmin() || ownsRest(request.resource.data.restaurantId));
+        && (isAdmin() || hqEdit('rests') || ownsRest(request.resource.data.restaurantId));
       allow update: if lineOk(request.resource.data)
         && request.resource.data.restaurantId == resource.data.restaurantId
-        && (isAdmin() || ownsRest(resource.data.restaurantId));
-      allow delete: if isAdmin() || ownsRest(resource.data.restaurantId);
+        && (isAdmin() || hqEdit('rests') || ownsRest(resource.data.restaurantId));
+      allow delete: if isAdmin() || hqEdit('rests') || ownsRest(resource.data.restaurantId);
     }
 
     // ── incomingCalls (مكالمة واردة ← تظهر فوراً بكاشير المطعم) ──
@@ -432,7 +468,8 @@ service cloud.firestore {
     function leadInt(d, k, mx) { return d.get(k, 0) is int && d.get(k, 0) >= 0 && d.get(k, 0) <= mx; }
     function leadStr(d, k, mx) { return d.get(k, '') is string && d.get(k, '').size() <= mx; }
     match /leads/{id} {
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin() || hqView('trials');
+      allow update, delete: if isAdmin() || hqEdit('trials');
       allow create: if request.resource.data.keys().hasOnly(['owner','restaurant','phone','city','email','kind','services','cashiers','captains','sections','lines','notes','wantsTrial','status','source','createdAt'])
         && request.resource.data.keys().hasAll(['owner','restaurant','phone','status','createdAt'])
         && request.resource.data.owner is string && request.resource.data.owner.size() >= 2 && request.resource.data.owner.size() <= 60
@@ -516,8 +553,101 @@ service cloud.firestore {
 
     // ── auditLog (سجل العمليات الحساسة — إضافة فقط) ──────────
     match /auditLog/{id} {
-      allow read: if isOffice();
+      allow read: if isOffice() || hqView('log');
       allow create: if active() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // ══ برنامج المالك ══════════════════════════════════════════
+    // hqDevices/{مفتاح}: الأجهزة المعتمدة للمالك وفريقه. المعرّف هو المفتاح السري — الجهاز نفسه يقرا مستنده بالمعرّف
+    function hqDevOk(d) {
+      return d.keys().hasOnly(['uid','name','platform','code','approvedAtMs','by'])
+        && str(d.uid, 128) && optStr(d, 'name', 60) && optStr(d, 'platform', 80) && optStr(d, 'code', 12) && optStr(d, 'by', 120);
+    }
+    match /hqDevices/{key} {
+      allow get: if signedIn() && (resource == null || resource.data.uid == request.auth.uid || hqOwner());
+      allow list: if hqOwner();
+      allow create: if key.size() >= 20 && hqDevOk(request.resource.data) && (
+          hqOwner()
+          // أول جهاز للمالك، مرة وحدة بس: يعتمد نفسه ويا مستند hqMeta/boot بنفس الدفعة
+          //  (إذا ضاع الجهاز: احذف hqMeta/boot وجهازه القديم من Firebase، واعتمد الجديد)
+          || (isAdmin() && request.resource.data.uid == request.auth.uid
+              && !exists(/databases/$(database)/documents/hqMeta/boot)
+              && existsAfter(/databases/$(database)/documents/hqMeta/boot)));
+      allow update: if hqOwner() && hqDevOk(request.resource.data) && request.resource.data.uid == resource.data.uid;
+      allow delete: if hqOwner() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+    // hqDeviceReqs/{مفتاح}: جهاز جديد يطلب اعتماد (المالك يشوف الرمز ويعتمده)
+    match /hqDeviceReqs/{key} {
+      function hqReqOk(d) {
+        return d.keys().hasOnly(['uid','name','email','platform','code','createdAtMs','lastAtMs'])
+          && d.uid == request.auth.uid && str(d.code, 12)
+          && optStr(d, 'name', 80) && optStr(d, 'email', 120) && optStr(d, 'platform', 80);
+      }
+      allow get: if signedIn();
+      allow list: if hqOwner();
+      allow create, update: if signedIn() && key.size() >= 20 && (isAdmin() || (active() && role() == 'hq'))
+        && hqReqOk(request.resource.data) && (resource == null || resource.data.uid == request.auth.uid);
+      allow delete: if hqOwner() || (signedIn() && resource.data.uid == request.auth.uid);
+    }
+    // hqSessions/{uid}/t/{auth_time}: جلسة كل جهاز (كل تسجيل دخول إله جلسته)
+    match /hqSessions/{uid}/t/{at} {
+      allow read: if signedIn() && (request.auth.uid == uid || hqOwner());
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && at == string(request.auth.token.auth_time)
+        && request.resource.data.keys().hasOnly(['key','atMs','platform','name'])
+        && hqKeyOk(request.resource.data.key)
+        && optStr(request.resource.data, 'platform', 80) && optStr(request.resource.data, 'name', 80);
+      allow delete: if signedIn() && (request.auth.uid == uid || hqOwner());
+    }
+    // hqMeta: boot (أول جهاز للمالك) + backup (نتيجة النسخة الليلية — يكتبها GitHub بحساب الخدمة)
+    match /hqMeta/{id} {
+      allow get: if isAdmin() || (id == 'backup' && hqView('backups'));
+      allow create: if id == 'boot' && isAdmin()
+        && request.resource.data.keys().hasOnly(['uid','key','atMs'])
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/hqDevices/$(request.resource.data.key)).data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    // hqTeam/{uid}: فريق المالك وصلاحياتهم — المالك بس يعدّلها، ومن جهازه المعتمد
+    function hqPermOk(p) {
+      return p is map && p.keys().hasOnly(['overview','rests','money','trials','devices','backups','log'])
+        && p.get('overview', 'hide') in ['hide','view','edit'] && p.get('rests', 'hide') in ['hide','view','edit']
+        && p.get('money', 'hide') in ['hide','view','edit'] && p.get('trials', 'hide') in ['hide','view','edit']
+        && p.get('devices', 'hide') in ['hide','view','edit'] && p.get('backups', 'hide') in ['hide','view','edit']
+        && p.get('log', 'hide') in ['hide','view','edit'];
+    }
+    match /hqTeam/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if hqOwner()
+        && request.resource.data.keys().hasOnly(['name','email','job','perms','createdAtMs','updatedAtMs'])
+        && str(request.resource.data.get('name', ''), 60) && optStr(request.resource.data, 'email', 120)
+        && optStr(request.resource.data, 'job', 60) && hqPermOk(request.resource.data.get('perms', {}));
+      allow delete: if hqOwner();
+    }
+    // hqPayments: دفعات اشتراكات المطاعم
+    match /hqPayments/{id} {
+      function hqPayOk(d) {
+        return d.keys().hasOnly(['restaurantId','restaurantName','amount','months','method','note','by','byUid','atMs','day','fromMs','toMs'])
+          && str(d.restaurantId, 64) && d.amount is number && d.amount > 0 && d.amount <= 100000000
+          && d.months is int && d.months >= 0 && d.months <= 24 && str(d.method, 30)
+          && optStr(d, 'note', 300) && optStr(d, 'restaurantName', 80) && optStr(d, 'by', 80)
+          && d.byUid == request.auth.uid && d.atMs is int && optStr(d, 'day', 10) && optNum(d, 'fromMs') && optNum(d, 'toMs');
+      }
+      allow read: if hqView('money');
+      allow create: if hqEdit('money') && hqPayOk(request.resource.data);
+      allow update: if hqEdit('money') && onlyChanged(['note','method'])
+        && optStr(request.resource.data, 'note', 300) && str(request.resource.data.method, 30);
+      allow delete: if hqOwner();
+    }
+    // hqNotes: ملاحظات المالك وفريقه عن كل مطعم (مكالمات، زيارات، اتفاقات) — المطعم ما يشوفها
+    match /hqNotes/{id} {
+      allow read: if hqView('rests');
+      allow create: if hqEdit('rests')
+        && request.resource.data.keys().hasOnly(['restaurantId','text','by','byUid','atMs'])
+        && str(request.resource.data.restaurantId, 64) && str(request.resource.data.text, 2000) && request.resource.data.text.size() > 0
+        && optStr(request.resource.data, 'by', 80) && request.resource.data.byUid == request.auth.uid && request.resource.data.atMs is int;
+      allow delete: if hqOwner() || (hqEdit('rests') && resource.data.byUid == request.auth.uid);
     }
 
     // أي شيء آخر ممنوع
