@@ -178,3 +178,39 @@ test('phone layout: cart is a bottom bar that opens on tap', async () => {
   await p.waitForSelector('#typeOv.on');
   await p.context().close();
 });
+
+// تطبيق الأندرويد (قبل تحديث الـ APK) يتجاهل confirm() ويرجّع «لا» — فالخروج ما چان يشتغل. بالتطبيق النافذة داخل الصفحة
+test('android app: logout + clear cart use the in-page confirm (native dialogs are ignored there)', async () => {
+  const p = await page(B, { w: 1280, h: 800 });
+  await p.context().addInitScript(() => {
+    const ua = navigator.userAgent + ' SoraCashierApp/1.0';
+    Object.defineProperty(navigator, 'userAgent', { get: () => ua });
+    window.confirm = () => false; window.prompt = () => null; window.alert = () => {};   // مثل الـ WebView القديم
+  });
+  const native = []; p.on('dialog', (d) => native.push(d.message()));
+  await login(p);
+  await p.waitForSelector('#prods .prod');
+  await p.click('#prods .prod >> nth=0');
+  await p.waitForFunction(() => cart.length === 1);
+  await p.click('button.cact-b >> text=تفريغ');
+  await p.waitForSelector('.ask-ov >> text=تفريغ السلة؟');
+  await p.click('.ask-ov .ask-no');
+  await p.waitForSelector('.ask-ov', { state: 'detached' });
+  assert.equal(await p.evaluate(() => cart.length), 1, '«لا» keeps the cart');
+  await p.click('button.cact-b >> text=تفريغ');
+  await p.click('.ask-ov .ask-yes');
+  await p.waitForFunction(() => cart.length === 0);
+  // Esc = لا (وما يوصل لاختصارات الكاشير)
+  await p.click('.lout');
+  await p.waitForSelector('.ask-ov >> text=تسجيل الخروج؟');
+  await p.keyboard.press('Escape');
+  await p.waitForSelector('.ask-ov', { state: 'detached' });
+  assert.ok(await p.isVisible('#appPage.show'), 'still logged in after Esc');
+  await p.click('.lout');
+  await p.screenshot({ path: 'shots/pos-app-logout.png' });
+  await p.click('.ask-ov .ask-yes');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 10000 });
+  assert.deepEqual(native, [], 'no native dialogs in the app');
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
