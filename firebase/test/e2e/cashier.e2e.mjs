@@ -57,7 +57,15 @@ test('only the super admin adds and stops cashiers; the owner manages permission
   const p = await page(B, { w: 1280, h: 800 });
   await adminLogin(p, 'boss@x.com');
   await p.click('.dnav-btn[data-screen="scMyRest"]');
+  // بدون اختيار مطعم: ما ينضاف شي، والصفحة تأشر على قائمة المطاعم
+  assert.match(await p.textContent('#mcFor'), /اختر المطعم/);
+  await p.fill('#mcName', 'علي الكاشير'); await p.fill('#mcEmail', 'cash@x.com'); await p.fill('#mcPass', 'cashpass1');
+  await p.click('#mcAddBtn');
+  await p.waitForSelector('#mrRest.pick-me');
+  assert.equal((await all('users', 'role', 'cashier')).length, 0);
+  await p.waitForFunction(() => document.querySelectorAll('#mrRest option').length > 1);
   await p.selectOption('#mrRest', 'RC');
+  await p.waitForFunction(() => document.getElementById('mcFor').textContent.includes('مطعم الاتصال'));
   await p.fill('#mcName', 'علي الكاشير'); await p.fill('#mcEmail', 'cash@x.com'); await p.fill('#mcPass', 'cashpass1');
   await p.click('#mcAddBtn');
   const cu = await until(async () => (await all('users', 'role', 'cashier'))[0]);

@@ -210,6 +210,10 @@ body:not(.rest-mode) #mcOwnerNote{display:none;}
 .ord-ctl{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}.ord-ctl .form-sel{flex:1;min-width:140px;}
 .ord-wait{text-align:center;color:var(--muted);font-weight:700;}
 .idx-warn{border-color:rgba(217,119,6,.55);background:rgba(217,119,6,.07);}
+.mc-for{font-size:13px;font-weight:800;border-radius:10px;padding:8px 12px;margin-bottom:10px;background:rgba(217,119,6,.1);border:1px solid rgba(217,119,6,.45);color:#b45309;}
+.mc-for.on{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.4);color:var(--green);}
+.form-sel.pick-me{outline:3px solid #f59e0b;outline-offset:2px;animation:pickPulse .6s ease-in-out 3;}
+@keyframes pickPulse{50%{outline-color:transparent;}}
 .mc-note{font-size:12.5px;line-height:1.8;background:color-mix(in srgb,#4f6bed 8%,var(--panel));border:1px solid color-mix(in srgb,#4f6bed 30%,var(--line));border-radius:10px;padding:8px 12px;margin-bottom:10px;}
 
 /* Install btn */
@@ -583,6 +587,7 @@ body.staff-mode .staff-banner{display:block;}
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">الكاشير يدخل لتطبيق الكاشير بحسابه، ويشوف فقط الأقسام اللي تسمح له بيها. التغيير يطبّق فوراً على جهازه.</div>
         <div class="mc-note" id="mcOwnerNote">🔐 إضافة الكاشيرية وإيقافهم وحذفهم من <b>إدارة سرعة</b> فقط — تواصل وياهم لإضافة كاشير جديد. انت تكدر تحدد صلاحيات ودوام كل كاشير.</div>
         <div class="admin-only" id="mcAddBox">
+        <div class="mc-for" id="mcFor"></div>
         <div class="form-row">
           <div class="form-group"><label>اسم الكاشير *</label><input class="form-inp" id="mcName" maxlength="40"></div>
           <div class="form-group"><label>الإيميل *</label><input class="form-inp" id="mcEmail" type="email"></div>
@@ -1136,7 +1141,7 @@ function startListeners(){
       renderRests();
       populateRestSelect();
       renderDash();
-      if(document.getElementById('scMyRest').classList.contains('on'))mrFillRests();
+      if(document.getElementById('scMyRest').classList.contains('on')){mrFillRests();mcForLabel();}
       fillOrdRest();
       if(document.getElementById('scSecurity').classList.contains('on'))bkInit();
       devDash();devRender();
@@ -2427,9 +2432,23 @@ window.mrInit=function(){
   document.getElementById('mcPerms').innerHTML=PERMS.map(([k,l])=>`<label><input type="checkbox" data-p="${k}" ${PERM_DEFAULT[k]?'checked':''}> ${l}</label>`).join('');
   mrLoad();
 };
+// المدير الأعلى: لأي مطعم تنضاف الحسابات (حتى ما ينضاف كاشير بدون ما يختار المطعم)
+function mcForLabel(){
+  const el=document.getElementById('mcFor');if(!el)return;
+  const r=mrRid&&allRestaurants.find(x=>x.id===mrRid);
+  el.className='mc-for'+(r?' on':'');
+  el.innerHTML=r?`➕ الكاشير ينضاف لمطعم: <b>${esc(r.name)}</b>`:'⬆️ اختر المطعم من القائمة اللي فوق الصفحة أول';
+}
+function mrPickFirst(){
+  toast('⬆️ اختر المطعم من القائمة اللي فوق أول','warn');
+  const sel=document.getElementById('mrRest');if(!sel)return;
+  try{sel.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
+  sel.classList.add('pick-me');setTimeout(()=>sel.classList.remove('pick-me'),2500);setTimeout(()=>{try{sel.focus();}catch(e){}},400);
+}
 window.mrLoad=function(){
   mrUnsubs.forEach(u=>u&&u());mrUnsubs=[];
   mrRid=mrRestId();
+  mcForLabel();
   mlVisibility();
   devReqsR=[];devApprR=[];devSessR=[];devRender();
   const fb=window._fb;
@@ -2635,7 +2654,7 @@ function mcRender(list){
 // إضافة الكاشيرية وإيقافهم وحذفهم: المدير الأعلى فقط (خدمة يتحكم بيها لكل مطعم)
 window.mcAdd=async function(){
   if(!isAdmin()){toast('🔐 إضافة الكاشيرية من إدارة سرعة فقط','warn');return;}
-  const rid=mrRestId();if(!rid){toast('⚠️ اختر المطعم','warn');return;}
+  const rid=mrRestId();if(!rid){mrPickFirst();return;}
   const name=document.getElementById('mcName').value.trim(),email=document.getElementById('mcEmail').value.trim().toLowerCase(),pass=document.getElementById('mcPass').value;
   if(!name||!email||!pass){toast('⚠️ أدخل الاسم والإيميل وكلمة المرور','warn');return;}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){toast('⚠️ الإيميل غير صحيح','warn');return;}
