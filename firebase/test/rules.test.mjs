@@ -468,6 +468,11 @@ test('publicMenus: أي زائر يقرأ بالمعرّف، والمطعم وك
   await assertFails(setDoc(doc(as('rest2'), 'publicMenus/R1'), PM));
   await assertFails(setDoc(doc(anon(), 'publicMenus/R1'), PM));
   await assertFails(setDoc(doc(as('rest1'), 'publicMenus/R1'), { ...PM, subscription: 1 }), 'no private fields');
+  // ساعات الدوام تنشر ويا المنيو (الزبون يشوف «مسكّر هسه»)
+  await assertSucceeds(setDoc(doc(as('cash1'), 'publicMenus/R1'), { ...PM, hours: { on: true, open: 600, close: 120 } }));
+  await assertFails(setDoc(doc(as('cash1'), 'publicMenus/R1'), { ...PM, hours: { on: true, open: 600, close: 1500 } }), 'minutes < 1440');
+  await assertFails(setDoc(doc(as('cash1'), 'publicMenus/R1'), { ...PM, hours: { on: true, open: '10:00', close: 120 } }), 'minutes are numbers');
+  await assertFails(setDoc(doc(as('cash1'), 'publicMenus/R1'), { ...PM, hours: { on: true, open: 600, close: 120, x: 1 } }));
   await assertSucceeds(setDoc(doc(as('rest1'), 'publicMenus/R1/img/i1'), { data: 'data:image/png;base64,AAAA', updatedAtMs: 1 }));
   await assertSucceeds(getDoc(doc(anon(), 'publicMenus/R1/img/i1')));
   await assertFails(setDoc(doc(anon(), 'publicMenus/R1/img/i2'), { data: 'x' }));
@@ -682,6 +687,11 @@ test('برنامج المالك: صلاحيات الفريق لكل قسم (مش
   await assertSucceeds(updateDoc(doc(h2, 'leads/L1'), { status: 'contacted' }));
   await assertSucceeds(setDoc(doc(h2, 'hqNotes/N1'), { restaurantId: 'R1', text: 'اتصلت وياه', by: 'زينب', byUid: 'hq2', atMs: 1 }));
   await assertFails(getDocs(collection(h1, 'auditLog')), 'log hidden for سجاد');
+  // خارطة الكباتن: اللي يشوف المطاعم يشوف مواقع الكباتن، وساعات الدوام يعدّلها اللي يعدّل المطاعم
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'captainLocations/C1'), { captainId: 'C1', restaurantId: 'R1', lat: 33.3, lng: 44.4, timestamp: 1 }); });
+  await assertSucceeds(getDocs(collection(h1, 'captainLocations')), 'rests view → captains map');
+  await assertFails(updateDoc(doc(h1, 'restaurants/R1'), { hours: { on: true, open: 600, close: 120 } }), 'rests view only');
+  await assertSucceeds(updateDoc(doc(h2, 'restaurants/R1'), { hours: { on: true, open: 600, close: 120 } }));
 });
 
 test('برنامج المالك: بدون جهاز معتمد أو بعد إلغاء الجهاز = ماكو صلاحية', async () => {

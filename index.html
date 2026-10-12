@@ -191,6 +191,26 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 /* Modal */
 .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:5000;display:none;align-items:center;justify-content:center;padding:20px;}
 .modal-ov.open{display:flex;}
+/* تفاصيل الطلب */
+.ord-mo{max-width:520px;}
+.od-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.od-id{font-family:monospace;font-size:20px;font-weight:900;letter-spacing:.05em;}
+.od-big{font-size:13px;font-weight:800;background:var(--panel2,rgba(255,255,255,.06));border:1px solid var(--line);border-radius:10px;padding:3px 10px;}
+.od-kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;margin:8px 0 12px;}
+.od-kv dt{color:var(--muted);}.od-kv dd{margin:0;font-weight:600;word-break:break-word;}
+.od-sec{font-size:12px;color:var(--muted);font-weight:800;margin:14px 0 6px;display:flex;align-items:center;gap:6px;}
+.od-items{border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+.od-it{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:9px 12px;border-bottom:1px dashed var(--line);font-size:14px;}
+.od-it:last-child{border-bottom:0;}
+.od-q{min-width:30px;height:26px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:900;font-size:13px;}
+.od-n b{display:block;}.od-n small{color:var(--muted);font-size:12px;}.od-n .od-note{display:block;color:var(--yellow);font-size:12px;margin-top:2px;}
+.od-p{font-weight:700;white-space:nowrap;}
+.od-tot{margin-top:10px;font-size:13px;}.od-tot div{display:flex;justify-content:space-between;padding:3px 0;}
+.od-tot .od-sum{font-size:17px;font-weight:900;border-top:2px solid var(--line);margin-top:4px;padding-top:7px;}
+.od-tot .od-due{font-weight:900;color:var(--accent2);}
+.od-tl{list-style:none;margin:0;padding:0;font-size:12.5px;}.od-tl li{display:flex;gap:10px;padding:4px 0;border-bottom:1px dashed var(--line);}.od-tl time{color:var(--muted);font-family:monospace;min-width:52px;}
+.od-warn{background:rgba(255,77,46,.12);color:var(--red);border-radius:10px;padding:8px 12px;font-size:13px;font-weight:700;margin-bottom:8px;}
+.order-row.clk{cursor:pointer;}.order-row.clk:hover{border-color:var(--accent);}
 .modal{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;}
 .modal-title{font-size:16px;font-weight:900;margin-bottom:16px;}
 .modal-btns{display:flex;gap:8px;margin-top:16px;}
@@ -725,6 +745,12 @@ body.staff-mode .staff-banner{display:block;}
 </div>
 
 <!-- Delivery proof modal -->
+<div class="modal-ov" id="ordMo">
+  <div class="modal ord-mo">
+    <div id="ordMoBody"></div>
+    <div class="modal-btns"><button class="btn-primary" id="ordMoPrint">🖨️ طباعة الفاتورة كاملة</button><button class="btn-cancel" onclick="closeMo('ordMo')">إغلاق</button></div>
+  </div>
+</div>
 <div class="modal-ov" id="proofMo">
   <div class="modal" style="text-align:center;">
     <div class="modal-title">📸 إثبات التسليم</div>
@@ -1265,7 +1291,7 @@ function orderCard(o){
   const stB={pending:'b-pending',accepted:'b-accepted',pickup:'b-accepted',delivering:'b-delivering',delivered:'b-delivered',cancelled:'b-cancelled',preparing:'b-accepted',ready:'b-delivered'};
   const stL={pending:'🟡 ينتظر',accepted:'🔵 مقبول',pickup:'🟠 استلام',delivering:'🛵 توصيل',delivered:'✅ مسلّم',cancelled:'❌ ملغي',preparing:'🍳 قيد التحضير',ready:'✅ جاهز'};
   const id=esc(o.id);
-  return`<div class="order-row">
+  return`<div class="order-row clk" data-ord="${id}">
     <div class="order-head"><span class="order-id">${esc(o.id.substring(0,6).toUpperCase())}</span><span class="order-time">${esc(o.createdAt||'')}</span></div>
     <div style="margin-bottom:6px;">${typeBadge} <span class="badge ${stB[o.status]||'b-pending'}">${stL[o.status]||esc(o.status)}</span></div>
     ${o.customer?`<div style="font-size:11px;color:var(--muted);">👤 ${esc(o.customer)} ${o.phone?'• 📞 '+esc(o.phone):''}</div>`:''}
@@ -1277,6 +1303,7 @@ function orderCard(o){
     </div>
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
       ${o.hasProof?`<button class="btn-sm btn-cap" onclick="viewProof('${id}')">📸 إثبات التسليم</button>`:''}
+      <button class="btn-sm btn-cap" onclick="orderDetails('${id}')">📄 التفاصيل والأصناف</button>
       <button class="btn-sm btn-edit" onclick="printOrder('${id}')">🖨️ طباعة</button>
       ${isAdmin()?`<button class="btn-sm btn-del" onclick="deleteOrder('${id}')">🗑️ حذف</button>`:''}
     </div>
@@ -1297,29 +1324,110 @@ window.viewProof=async function(id){
   }catch(e){toast('❌ تعذّر تحميل الصورة','error');}
 };
 
+// ── تفاصيل الطلب كاملة: الأصناف والملاحظات والخصم والدفع والمراحل — وفاتورة كاملة للطباعة ──
+const OD_TYPE={salon:'🪑 صالة',takeaway:'🥡 سفري',delivery:'🏍️ دلفري'};
+const OD_ST={pending:'🟡 ينتظر الكابتن',accepted:'🔵 مقبول',pickup:'🟠 استلام',delivering:'🛵 بالطريق',delivered:'✅ مسلّم',cancelled:'❌ ملغي',preparing:'🍳 بالمطبخ',ready:'✅ جاهز'};
+const OD_PAY={cash:'نقداً',card:'بطاقة',mixed:'نقد + بطاقة',later:'آجل',cod:'كاش عند الكابتن'};
+// الأصناف: من items، وللطلبات القديمة من نص notes «اسم(حجم)×عدد [ملاحظة]»
+function odItems(o){
+  if(Array.isArray(o.items)&&o.items.length)return o.items.map(i=>({name:String(i.name||''),variant:String(i.variant||''),qty:Number(i.qty)||1,price:Number(i.price)||0,note:String(i.note||'')}));
+  const out=[];String(o.notes||'').split(/,\s*/).forEach(x=>{const m=x.match(/^(.*)\((.*)\)×(\d+)(?:\s*\[(.*)\])?$/);if(m)out.push({name:m[1].trim(),variant:m[2].trim(),qty:+m[3]||1,price:0,note:(m[4]||'').trim()});});
+  return out;
+}
+// التاريخ والوقت بنظام 12 ساعة (ص / م)
+function odWhen(o){
+  if(!o.createdAtMs)return o.createdAt||'—';
+  try{return new Date(o.createdAtMs).toLocaleString('ar-IQ-u-nu-latn',{timeZone:'Asia/Baghdad',weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});}catch(e){return o.createdAt||'';}
+}
+function odNum(o){
+  const t=o.orderType||'delivery';
+  if(t==='salon')return o.tableNo?'طاولة '+o.tableNo:(o.salonNum?'#'+o.salonNum:'');
+  if(o.holdNum)return '#'+o.holdNum;
+  return o.ticketNo?'#'+o.ticketNo:'';
+}
+function odData(o){
+  const items=odItems(o),type=o.orderType||'delivery';
+  const sub=o.subtotal!=null?Number(o.subtotal):items.reduce((s,i)=>s+i.price*i.qty,0);
+  const p=o.payment||{};
+  return{items,type,sub,p,disc:Number(o.discount)||0,svc:Number(o.service)||0,tax:Number(o.tax)||0,total:Number(o.value)||0,fee:o.fee==null?null:Number(o.fee)};
+}
+function odHTML(o){
+  const d=odData(o),num=odNum(o);
+  const vr=i=>i.variant&&i.variant!=='وحدة'?` <small>(${esc(i.variant)})</small>`:'';
+  const src=o.source==='qr'?'📱 من المنيو الأونلاين':o.source==='waiter'?'🧑‍🍳 من الويتر'+(o.waiter?' ('+esc(o.waiter)+')':''):'';
+  const kv=[
+    (isAdmin()||isStaff())&&o.restaurantName?['المطعم',esc(o.restaurantName)]:null,
+    ['الوقت',esc(odWhen(o))],
+    o.customer&&d.type==='delivery'?['الزبون',esc(o.customer)]:null,
+    o.phone?['الهاتف',`<span dir="ltr">${esc(o.phone)}</span>`]:null,
+    o.address?['العنوان',esc(o.address)]:null,
+    o.captainName?['الكابتن','🛵 '+esc(o.captainName)]:null,
+    o.pager?['البيجر','📟 '+esc(o.pager)]:null,
+    src?['المصدر',src]:null,
+  ].filter(Boolean);
+  const tl=Array.isArray(o.timeline)?o.timeline:[];
+  return`<div class="od-h"><span class="od-id">#${esc(o.id.substring(0,6).toUpperCase())}</span><span class="od-big">${OD_TYPE[d.type]||esc(d.type)}${num?' — '+esc(num):''}</span><span class="badge ${o.status==='cancelled'?'b-cancelled':o.status==='delivered'?'b-delivered':'b-accepted'}">${OD_ST[o.status]||esc(o.status||'')}</span></div>
+    ${o.status==='cancelled'?`<div class="od-warn">❌ ملغي${o.cancelReason?' — '+esc(o.cancelReason):''}${o.cancelNote?' — '+esc(o.cancelNote):''}${o.cancelledBy?' (من '+esc(o.cancelledBy)+')':''}</div>`:''}
+    <dl class="od-kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+    <div class="od-sec">🍽️ الأصناف (${toA(d.items.reduce((s,i)=>s+i.qty,0))})</div>
+    ${d.items.length?`<div class="od-items">${d.items.map(i=>`<div class="od-it"><span class="od-q">${toA(i.qty)}×</span><span class="od-n"><b>${esc(i.name)}${vr(i)}</b>${i.price?`<small>${fmt(i.price)} د.ع للواحد</small>`:''}${i.note?`<span class="od-note">📝 ${esc(i.note)}</span>`:''}</span><span class="od-p">${i.price?fmt(i.price*i.qty):''}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:13px">ما مسجّل أصناف لهذا الطلب</div>'}
+    ${o.note?`<div class="od-sec">📝 ملاحظة الطلب</div><div style="font-size:13px">${esc(o.note)}</div>`:''}
+    <div class="od-tot">
+      ${d.disc||d.svc||d.tax?`<div><span>المجموع</span><span>${fmt(d.sub)} د.ع</span></div>`:''}
+      ${d.disc?`<div><span>خصم${o.discountInfo&&o.discountInfo.reason?' ('+esc(o.discountInfo.reason)+')':''}${o.loyalty||(o.discountInfo&&o.discountInfo.loyalty)?' 🎁 زبون دائم':''}</span><span>-${fmt(d.disc)} د.ع</span></div>`:''}
+      ${d.svc?`<div><span>خدمة</span><span>${fmt(d.svc)} د.ع</span></div>`:''}
+      ${d.tax?`<div><span>ضريبة</span><span>${fmt(d.tax)} د.ع</span></div>`:''}
+      <div class="od-sum"><span>الإجمالي</span><span>${fmt(d.total)} د.ع</span></div>
+      ${d.type==='delivery'&&d.fee!=null?`<div><span>${d.fee?'أجور التوصيل':'🎁 التوصيل مجاني'}</span><span>${fmt(d.fee)} د.ع</span></div><div class="od-due"><span>المطلوب من الزبون</span><span>${fmt(d.total+(d.fee||0))} د.ع</span></div>`:''}
+      ${d.p.method?`<div><span>طريقة الدفع</span><span>${esc(OD_PAY[d.p.method]||d.p.method)}</span></div>`:''}
+      ${d.p.method==='mixed'&&d.p.card?`<div><span>منها بطاقة</span><span>${fmt(d.p.card)} د.ع</span></div>`:''}
+      ${d.p.received&&(d.p.method==='cash'||d.p.method==='mixed')?`<div><span>المستلم نقداً</span><span>${fmt(d.p.received)} د.ع</span></div><div><span>الباقي</span><span>${fmt(d.p.change||0)} د.ع</span></div>`:''}
+    </div>
+    ${tl.length?`<div class="od-sec">🕒 مراحل الطلب</div><ul class="od-tl">${tl.map(x=>`<li><time>${esc(x.time||'')}</time><span>${esc(x.text||OD_ST[x.status]||x.status||'')}</span></li>`).join('')}</ul>`:''}`;
+}
+window.orderDetails=function(id){
+  const o=allOrders.find(x=>x.id===id);if(!o){toast('⚠️ الطلب ما موجود','warn');return;}
+  document.getElementById('ordMoBody').innerHTML=odHTML(o);
+  document.getElementById('ordMoPrint').onclick=()=>printOrder(id);
+  document.getElementById('ordMo').classList.add('open');
+};
+// الضغط على كارت الطلب (مو على أزراره) يفتح التفاصيل
+document.addEventListener('click',e=>{const c=e.target.closest('.order-row[data-ord]');if(c&&!e.target.closest('button,a,input,select'))orderDetails(c.dataset.ord);});
+
+// فاتورة كاملة بكل الأصناف — بحجم طابعة الفواتير (80مم) وتنطبع على A4 هم
 window.printOrder=function(id){
   const o=allOrders.find(x=>x.id===id);
   if(!o)return;
-  const w=window.open('','_blank','width=380,height=600');
-  const type=o.orderType||'delivery';
-  const typeLabel=type==='salon'?'صالة':type==='takeaway'?'سفري':'دلفري';
+  const w=window.open('','_blank','width=420,height=720');
   if(!w){toast('⚠️ اسمح بالنوافذ المنبثقة للطباعة','warn');return;}
-  const sid=esc(o.id.substring(0,6).toUpperCase());
+  const d=odData(o),sid=esc(o.id.substring(0,6).toUpperCase()),num=odNum(o);
+  const row=(k,v)=>`<div class="r"><span>${k}</span><span>${v}</span></div>`;
+  const vr=i=>i.variant&&i.variant!=='وحدة'?' ('+esc(i.variant)+')':'';
   w.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>فاتورة ${sid}</title>
-  <style>body{font-family:Tajawal,sans-serif;padding:20px;color:#111;}h2{text-align:center;margin-bottom:4px;}
-  .l{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #ccc;font-size:14px;}
-  .tot{font-weight:900;font-size:16px;margin-top:10px;}</style></head><body>
-  <h2>🚀 سرعة</h2><p style="text-align:center;color:#666;">فاتورة طلب #${sid}</p>
-  <div class="l"><span>النوع</span><span>${typeLabel}</span></div>
-  <div class="l"><span>الزبون</span><span>${esc(o.customer||'—')}</span></div>
-  <div class="l"><span>الهاتف</span><span>${esc(o.phone||'—')}</span></div>
-  <div class="l"><span>العنوان</span><span>${esc(o.address||'—')}</span></div>
-  <div class="l"><span>المطعم</span><span>${esc(o.restaurantName||'—')}</span></div>
-  <div class="l"><span>الكابتن</span><span>${esc(o.captainName||'—')}</span></div>
-  <div class="l"><span>التاريخ</span><span>${esc(o.createdAt||'')}</span></div>
-  <div class="l tot"><span>المبلغ</span><span>${fmt(o.value)} د.ع</span></div>
-  ${o.fee?`<div class="l"><span>التوصيل</span><span>${fmt(o.fee)} د.ع</span></div>`:''}
-  <script>window.print();<\/script></body></html>`);
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:Tahoma,Arial,sans-serif;color:#000;padding:12px;width:300px;margin:0 auto;font-size:12.5px}
+  .t{text-align:center;font-size:19px;font-weight:900}.s{text-align:center;font-size:11.5px;color:#333}.hr{border-top:1px dashed #000;margin:7px 0}
+  .ty{text-align:center;background:#000;color:#fff;padding:4px;font-weight:700;margin:5px 0;font-size:13.5px}.num{text-align:center;font-size:26px;font-weight:900}
+  .r{display:flex;justify-content:space-between;gap:8px;margin:2px 0}.r span:last-child{text-align:left}
+  .it{margin:5px 0}.it .l{display:flex;justify-content:space-between;gap:8px;font-weight:700;font-size:13px}.it .n{font-size:11px;margin-top:1px}
+  .tot{display:flex;justify-content:space-between;font-size:16px;font-weight:900;border-top:2px solid #000;margin-top:5px;padding-top:5px}
+  .f{text-align:center;margin-top:10px;font-size:11px}@media print{body{padding:0}}</style></head><body>
+  <div class="t">${esc(o.restaurantName||'سرعة')}</div><div class="s">فاتورة طلب #${sid}</div>
+  <div class="hr"></div>${num?`<div class="num">${esc(num)}</div>`:''}<div class="ty">${OD_TYPE[d.type]||''}${o.status==='cancelled'?' — ❌ ملغي':''}</div>
+  ${row('الوقت',esc(odWhen(o)))}
+  ${o.customer&&d.type==='delivery'?row('الزبون',esc(o.customer)):''}${o.phone?row('الهاتف','<span dir="ltr">'+esc(o.phone)+'</span>'):''}${o.address?row('العنوان',esc(o.address)):''}
+  ${o.captainName?row('الكابتن',esc(o.captainName)):''}${o.pager?row('البيجر',esc(o.pager)):''}
+  <div class="hr"></div>
+  ${d.items.length?d.items.map(i=>`<div class="it"><div class="l"><span>${i.qty}× ${esc(i.name)}${vr(i)}</span><span>${i.price?fmt(i.price*i.qty):''}</span></div>${i.note?`<div class="n">📝 ${esc(i.note)}</div>`:''}</div>`).join(''):'<div class="s">بدون أصناف مسجّلة</div>'}
+  ${o.note?`<div class="hr"></div><div>📝 ${esc(o.note)}</div>`:''}
+  <div class="hr"></div>
+  ${d.disc||d.svc||d.tax?row('المجموع',fmt(d.sub)):''}
+  ${d.disc?row('خصم'+(o.discountInfo&&o.discountInfo.reason?' ('+esc(o.discountInfo.reason)+')':''),'-'+fmt(d.disc)):''}
+  ${d.svc?row('خدمة',fmt(d.svc)):''}${d.tax?row('ضريبة',fmt(d.tax)):''}
+  <div class="tot"><span>الإجمالي</span><span>${fmt(d.total)} د.ع</span></div>
+  ${d.type==='delivery'&&d.fee!=null?row(d.fee?'أجور التوصيل':'التوصيل مجاني',fmt(d.fee))+`<div class="r" style="font-weight:900;font-size:13.5px"><span>المطلوب من الزبون</span><span>${fmt(d.total+(d.fee||0))} د.ع</span></div>`:''}
+  ${d.p.method?`<div class="hr"></div>`+row('طريقة الدفع',esc(OD_PAY[d.p.method]||d.p.method)):''}
+  <div class="f">سرعة 🚀</div>
+  <script>window.onload=()=>{window.print();};<\/script></body></html>`);
   w.document.close();
 };
 
