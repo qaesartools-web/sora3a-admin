@@ -123,3 +123,35 @@ test('restaurant role in admin app sees only its data and no delete', async () =
   assert.equal(await p.locator('.dnav-btn[data-screen="scSecurity"]').count(), 0);
   await p.context().close();
 });
+
+test('order details: tap an order → every item (size, qty, price, note), discount, payment and steps; print has all items', async () => {
+  await E.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'orders/ORDFULL000001'), { restaurantId: 'RL', restaurantName: 'مندي المدينة', orderType: 'salon', salonNum: 42, customer: 'صالة #42', status: 'delivered',
+      items: [{ name: 'مندي لحم', variant: 'نص', qty: 2, price: 20000, note: 'بدون بصل' }, { name: 'لبن', variant: 'وحدة', qty: 3, price: 1000 }],
+      notes: 'مندي لحم(نص)×2 [بدون بصل], لبن(وحدة)×3', subtotal: 43000, discount: 3000, discountInfo: { type: 'amt', value: 3000, reason: 'زبون قديم' }, value: 40000,
+      payment: { method: 'mixed', card: 15000, cash: 25000, received: 30000, change: 5000 }, pager: 7,
+      createdAt: '11:55', createdAtMs: Date.now() - 60000, timeline: [{ status: 'delivered', time: '11:55', text: 'تم إنشاء الطلب' }] });
+  });
+  const p = await page(B, { w: 1280, h: 900 });
+  await login(p, 'oldrest@x.com');
+  await p.waitForSelector('#appPage', { state: 'visible' });
+  const card = '#dashOrders .order-row[data-ord="ORDFULL000001"]';
+  await p.waitForSelector(card, { timeout: 15000 });
+  await p.click(card + ' .order-head');
+  await p.waitForSelector('#ordMo.open');
+  const t = await p.textContent('#ordMoBody');
+  for (const re of [/مندي لحم/, /\(نص\)/, /بدون بصل/, /لبن/, /صالة — #42/, /زبون قديم/, /نقد \+ بطاقة/, /📟 7/, /تم إنشاء الطلب/, /40[,٬]000/, /-3[,٬]000/]) assert.match(t, re);
+  assert.match(t, /[صم]/, '12-hour time');
+  await p.screenshot({ path: 'shots/order-details.png' }).catch(() => {});
+  const [pop] = await Promise.all([p.waitForEvent('popup'), p.click('#ordMoPrint')]);
+  await pop.waitForLoadState();
+  const pt = await pop.textContent('body');
+  for (const re of [/2× مندي لحم \(نص\)/, /3× لبن/, /بدون بصل/, /الإجمالي/, /40[,٬]000/, /مندي المدينة/]) assert.match(pt, re);
+  await pop.close();
+  // زر «التفاصيل» بقائمة الطلبات يفتح نفس الشي
+  await p.click('#ordMo .btn-cancel');
+  assert.equal(await p.locator('#ordMo.open').count(), 0);
+  await p.click(card + ' button[onclick^="orderDetails"]');
+  await p.waitForSelector('#ordMo.open');
+  await p.context().close();
+});

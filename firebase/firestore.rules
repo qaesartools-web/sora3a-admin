@@ -286,7 +286,8 @@ service cloud.firestore {
 
     // ── captainLocations ────────────────────────────────────
     match /captainLocations/{cid} {
-      allow read: if isOffice()
+      // برج سرعة: خارطة الكباتن — المالك، والفريق اللي يشوف المطاعم
+      allow read: if isOffice() || hqView('rests')
         || (staffOf(resource.data.restaurantId))
         || (isCaptain() && cid == myCap());
       allow write: if isCaptain() && cid == myCap()
@@ -491,7 +492,13 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create, update: if (isAdmin() || staffOf(rid))
-        && request.resource.data.keys().hasOnly(['name','area','phone','on','modes','fee','tables','note','cats','autoTable','updatedAtMs'])
+        && request.resource.data.keys().hasOnly(['name','area','phone','on','modes','fee','tables','note','cats','autoTable','hours','updatedAtMs'])
+        // ساعات الدوام (من برج سرعة): دقائق من نص الليل بتوقيت بغداد
+        && (request.resource.data.get('hours', null) == null || (request.resource.data.hours is map
+            && request.resource.data.hours.keys().hasOnly(['on','open','close'])
+            && request.resource.data.hours.get('on', false) is bool
+            && request.resource.data.hours.get('open', 0) is int && request.resource.data.hours.get('open', 0) >= 0 && request.resource.data.hours.get('open', 0) < 1440
+            && request.resource.data.hours.get('close', 0) is int && request.resource.data.hours.get('close', 0) >= 0 && request.resource.data.hours.get('close', 0) < 1440))
         && str(request.resource.data.get('name', ''), 80) && str(request.resource.data.get('area', ''), 120)
         && str(request.resource.data.get('phone', ''), 30) && str(request.resource.data.get('note', ''), 300)
         && request.resource.data.get('on', false) is bool

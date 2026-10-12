@@ -81,6 +81,34 @@ test('ready screen: takeaway/pager orders in two columns, new ready number flash
   await p.context().close();
 });
 
+test('ready screen stays signed in when the TV starts without internet — no password again; only «تسجيل خروج» signs out', async () => {
+  const p = await page(B, { w: 1280, h: 720 });
+  await login(p, BASE + 'screen.html', 'scr@x.com');
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
+  // التلفزيون انطفى ورجع اشتغل والواي فاي بعده ما متصل: السيرفر ما يوصل
+  await p.context().route(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/, (r) => r.abort('internetdisconnected'));
+  await p.reload();
+  await p.waitForSelector('.gate-hold', { timeout: 30000 });
+  assert.match(await p.textContent('.gate-hold'), /ننتظر الإنترنت|ترجع وحدها/);
+  assert.equal(await p.locator('#gPass').count(), 0, 'ما يطلب الرمز');
+  // النت رجع: الشاشة ترجع وحدها بدون ما أحد يكتب شي
+  await p.context().unroute(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/);
+  await p.evaluate(() => window.dispatchEvent(new Event('online')));
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
+  assert.equal(await p.locator('#gPass').count(), 0);
+  // نفس الشي لو النت انقطع وهي شغّالة: تبقى
+  await p.context().route(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/, (r) => r.abort('internetdisconnected'));
+  await p.reload();
+  await p.waitForSelector('.gate-hold', { timeout: 30000 });
+  // زر تسجيل الخروج (الحالة الوحيدة اللي يرجع يطلب الرمز)
+  await p.context().unroute(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/);
+  await p.click('.gate-out');
+  await p.waitForSelector('#gPass', { timeout: 15000 });
+  assert.equal(await p.inputValue('#gEmail'), 'scr@x.com', 'الإيميل محفوظ');
+  assert.deepEqual(clean(p).filter((e) => !/Could not reach Cloud Firestore backend|client is offline|internetdisconnected|ERR_INTERNET/i.test(e)), []);
+  await p.context().close();
+});
+
 test('ready screen opens straight from a signed-in cashier and shows orders made at the cashier', async () => {
   const p = await page(B, { w: 1280, h: 860 });
   await posLogin(p);

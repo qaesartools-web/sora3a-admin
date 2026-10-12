@@ -292,6 +292,29 @@ test('view-only menu: customers browse what is available, no ordering, clear mes
   await until(async () => (await read('publicMenus/RQ')).modes.table === true);
 });
 
+test('opening hours from the owner app: outside them the menu says closed (12-hour times) and nobody can order; inside them ordering works', async () => {
+  const n = (Math.floor(Date.now() / 60000) + 180) % 1440, m = (x) => ((x % 1440) + 1440) % 1440;
+  // برج سرعة يحط ساعات دوام ما تشمل هسه
+  await write('restaurants/RQ', { hours: { on: true, open: m(n + 60), close: m(n + 120) } });
+  await until(async () => { const d = await read('publicMenus/RQ'); return d && d.hours && d.hours.open === m(n + 60); });
+  const c = await page(B, { w: 390, h: 844 });
+  await c.goto(MENU + '&t=3');
+  await c.waitForSelector('.it');
+  await c.waitForSelector('#closedBan');
+  assert.match(await c.textContent('#closedBan'), /مسكّر هسه — نفتح الساعة \d{1,2}:\d{2} (صباحاً|مساءً)/);
+  assert.equal(await c.locator('.add').count(), 0);
+  await c.screenshot({ path: 'shots/online-menu-closed.png' });
+  // يفتح (ساعات تشمل هسه، حتى لو تعبر نص الليل) ← الطلب يرجع
+  await write('restaurants/RQ', { hours: { on: true, open: m(n - 60), close: m(n + 60) } });
+  await c.waitForSelector('.add', { timeout: 15000 });
+  assert.equal(await c.locator('#closedBan').count(), 0);
+  // إطفاء ساعات الدوام ← مفتوح دائماً
+  await write('restaurants/RQ', { hours: { on: false, open: 0, close: 0 } });
+  await until(async () => !(await read('publicMenus/RQ')).hours);
+  assert.deepEqual(clean(c), []);
+  await c.context().close();
+});
+
 test('owner pauses online orders / super admin turns the service off → customers can only browse', async () => {
   await openOnlineSettings(cashier);
   await cashier.uncheck('#stOnOn');
