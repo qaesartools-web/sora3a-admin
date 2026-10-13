@@ -89,6 +89,7 @@ test('shift + discount + salon cash payment with change + KDS + Z report', async
   await p.evaluate(() => goTab('kitchen'));
   await p.waitForSelector('.kds-card');
   assert.match(await p.textContent('.kds-card'), /برغر الشيف/);
+  assert.match(await p.textContent('.kds-type'), /^\d{1,2}:\d{2} [صم]/, 'kitchen ticket time is 12-hour');
   await p.click('.kds-done');
   await until(async () => (await read('orders/' + o.id)).kitchen === 'ready');
   await p.waitForSelector('.kds-empty');
