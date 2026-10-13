@@ -375,6 +375,29 @@ test('TV app: «برتقالي مشمس» theme with the app colours, and the au
   await p.context().close();
 });
 
+test('TV app: a newer version shows ⬆️ on ⚙️ and the menu updates the app without a flash drive', async () => {
+  const p = await page(B, { w: 1280, h: 720 });
+  await p.addInitScript(() => { Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 9; smart_tv) Chrome/120 Mobile Safari/537.36 SoraScreenApp/1.25' }); window.__autoState = true; window.__autoDiag = 1; window.__goApp = (u) => { (window.__asked = window.__asked || []).push(u); }; });
+  await login(p, BASE + 'screen.html', 'scr@x.com');
+  await p.waitForSelector('#scr:not([hidden])');
+  assert.equal(await p.isHidden('#mUpd'), true, 'no update → no button');
+  assert.equal(await p.evaluate(() => document.getElementById('menuBtn').classList.contains('upd')), false);
+  // التطبيق لگى نسخة أحدث
+  await p.evaluate(() => window.__setUpdate('1.30'));
+  assert.equal(await p.evaluate(() => document.getElementById('menuBtn').classList.contains('upd')), true, '⬆️ on the settings button');
+  await p.focus('#menuBtn'); await p.keyboard.press('Enter');
+  await p.waitForSelector('#menu:not([hidden])');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'mUpd', 'update is the first choice');
+  assert.match(await p.textContent('#mUpd'), /تحديث التطبيق — نسخة 1\.30/);
+  await p.keyboard.press('Enter');
+  assert.deepEqual(await p.evaluate(() => window.__asked), ['sora3a://update']);
+  assert.equal(await p.isHidden('#menu'), true);
+  await p.evaluate(() => window.__setUpdate(''));
+  assert.equal(await p.isHidden('#mUpd'), true);
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
 test('services: the super admin stops/starts the screen, the QR (barcode) and the waiter app — each on its own, live', async () => {
   // الشاشة موقوفة ← رسالة بدل الطلبات، وترجع وحدها أول ما تتفعّل
   await write('restaurants/RW', { features: { screen: false } });
