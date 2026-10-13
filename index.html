@@ -808,6 +808,9 @@ let unsubs=[], orderFilter='all', installPrompt=null, toastT;
 
 const fmt=n=>Number(n||0).toLocaleString('ar-IQ-u-nu-latn');
 const toA=n=>String(n);
+// الوقت يظهر بنظام 12 ساعة (ص/م): t12 للوقت المخزون كنص "HH:MM"، dt12 للتاريخ والوقت من رقم
+const t12=v=>{const x=v==null?'':String(v),m=/^(\d{1,2}):(\d{2})$/.exec(x.trim());if(!m||+m[1]>23)return x;const h=+m[1];return((h%12)||12)+':'+m[2]+' '+(h<12?'ص':'م');};
+const dt12=ms=>new Date(ms).toLocaleString('ar-IQ-u-nu-latn',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
 // كل نص قادم من قاعدة البيانات يمر من هنا قبل إدراجه في HTML
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dayEndMs=ymd=>ymd?new Date(ymd+'T23:59:59').getTime():0;
@@ -1292,7 +1295,7 @@ function orderCard(o){
   const stL={pending:'🟡 ينتظر',accepted:'🔵 مقبول',pickup:'🟠 استلام',delivering:'🛵 توصيل',delivered:'✅ مسلّم',cancelled:'❌ ملغي',preparing:'🍳 قيد التحضير',ready:'✅ جاهز'};
   const id=esc(o.id);
   return`<div class="order-row clk" data-ord="${id}">
-    <div class="order-head"><span class="order-id">${esc(o.id.substring(0,6).toUpperCase())}</span><span class="order-time">${esc(o.createdAt||'')}</span></div>
+    <div class="order-head"><span class="order-id">${esc(o.id.substring(0,6).toUpperCase())}</span><span class="order-time">${esc(t12(o.createdAt))}</span></div>
     <div style="margin-bottom:6px;">${typeBadge} <span class="badge ${stB[o.status]||'b-pending'}">${stL[o.status]||esc(o.status)}</span></div>
     ${o.customer?`<div style="font-size:11px;color:var(--muted);">👤 ${esc(o.customer)} ${o.phone?'• 📞 '+esc(o.phone):''}</div>`:''}
     ${o.address?`<div style="font-size:11px;color:var(--muted);">📍 ${esc(o.address)}</div>`:''}
@@ -1319,7 +1322,7 @@ window.viewProof=async function(id){
     if(!/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src)){toast('صورة غير صالحة','error');return;}
     const mo=document.getElementById('proofMo');
     document.getElementById('proofImg').src=src;
-    document.getElementById('proofMeta').textContent=`🛵 ${d.captainName||''} • ${d.capturedAtMs?new Date(d.capturedAtMs).toLocaleString('ar-IQ-u-nu-latn'):''}`;
+    document.getElementById('proofMeta').textContent=`🛵 ${d.captainName||''} • ${d.capturedAtMs?dt12(d.capturedAtMs):''}`;
     mo.classList.add('open');
   }catch(e){toast('❌ تعذّر تحميل الصورة','error');}
 };
@@ -1337,7 +1340,7 @@ function odItems(o){
 // التاريخ والوقت بنظام 12 ساعة (ص / م)
 function odWhen(o){
   if(!o.createdAtMs)return o.createdAt||'—';
-  try{return new Date(o.createdAtMs).toLocaleString('ar-IQ-u-nu-latn',{timeZone:'Asia/Baghdad',weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});}catch(e){return o.createdAt||'';}
+  try{return new Date(o.createdAtMs).toLocaleString('ar-IQ-u-nu-latn',{timeZone:'Asia/Baghdad',weekday:'long',day:'numeric',month:'long',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true});}catch(e){return t12(o.createdAt);}
 }
 function odNum(o){
   const t=o.orderType||'delivery';
@@ -1383,7 +1386,7 @@ function odHTML(o){
       ${d.p.method==='mixed'&&d.p.card?`<div><span>منها بطاقة</span><span>${fmt(d.p.card)} د.ع</span></div>`:''}
       ${d.p.received&&(d.p.method==='cash'||d.p.method==='mixed')?`<div><span>المستلم نقداً</span><span>${fmt(d.p.received)} د.ع</span></div><div><span>الباقي</span><span>${fmt(d.p.change||0)} د.ع</span></div>`:''}
     </div>
-    ${tl.length?`<div class="od-sec">🕒 مراحل الطلب</div><ul class="od-tl">${tl.map(x=>`<li><time>${esc(x.time||'')}</time><span>${esc(x.text||OD_ST[x.status]||x.status||'')}</span></li>`).join('')}</ul>`:''}`;
+    ${tl.length?`<div class="od-sec">🕒 مراحل الطلب</div><ul class="od-tl">${tl.map(x=>`<li><time>${esc(t12(x.time))}</time><span>${esc(x.text||OD_ST[x.status]||x.status||'')}</span></li>`).join('')}</ul>`:''}`;
 }
 window.orderDetails=function(id){
   const o=allOrders.find(x=>x.id===id);if(!o){toast('⚠️ الطلب ما موجود','warn');return;}
@@ -1833,7 +1836,7 @@ function renderLeads(){
         <div style="flex:1;min-width:0"><div class="entity-name">🍽️ ${esc(l.restaurant||'—')} ${badge}</div>
         <div class="entity-sub">👤 ${esc(l.owner||'')} • 📞 <span style="direction:ltr;display:inline-block">${esc(l.phone||'')}</span>${l.city?' • 📍 '+esc(l.city):''}${l.kind?' • '+esc(l.kind):''}</div>
         ${l.email?`<div class="entity-sub">📧 ${esc(l.email)}</div>`:''}
-        <div class="entity-sub">🕒 ${ms?new Date(ms).toLocaleString('en-GB',{dateStyle:'short',timeStyle:'short'}):'—'}</div></div>
+        <div class="entity-sub">🕒 ${ms?dt12(ms):'—'}</div></div>
       </div>
       <div class="svc-row"><span class="svc-l">يحتاج:</span>${(l.services||[]).map(k=>`<span class="svc on" style="cursor:default">${esc(LD_SVC[k]||k)}</span>`).join('')||'<span class="entity-sub">—</span>'}</div>
       <div class="ld-grid"><div><b>${toA(l.cashiers||0)}</b>كاشير</div><div><b>${toA(l.captains||0)}</b>كابتن</div><div><b>${toA(l.sections||0)}</b>قسم مطبخ</div><div><b>${toA(l.lines||0)}</b>خط اتصال</div></div>
@@ -1895,7 +1898,7 @@ window.ldTrialGo=async function(id){
     const msg=ldCredMsg(l,email,pass,endMs);
     document.getElementById('ldMoBody').innerHTML=`<div class="modal-title">🎉 الحساب التجريبي جاهز</div>
       <div class="entity-sub" style="margin-bottom:8px">احفظ كلمة المرور هسه — ما تنحفظ بالنظام. ابعثها للزبون:</div>
-      <div class="ld-cred">📧 ${esc(email)}<br>🔑 ${esc(pass)}<br>⏳ ${new Date(endMs).toLocaleString('en-GB',{dateStyle:'short',timeStyle:'short'})}</div>
+      <div class="ld-cred">📧 ${esc(email)}<br>🔑 ${esc(pass)}<br>⏳ ${dt12(endMs)}</div>
       <div class="modal-btns" style="margin-top:12px">
         <a class="btn-primary" style="text-decoration:none;text-align:center" href="https://wa.me/${ldWa(l.phone)}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">💬 إرسال بيانات الدخول بواتساب</a>
         <button class="btn-sm" style="background:var(--panel2)" onclick="navigator.clipboard&&navigator.clipboard.writeText(${esc(JSON.stringify(msg))}).then(()=>toast('📋 تم النسخ'))">📋 نسخ الرسالة</button>
@@ -2008,7 +2011,7 @@ window.deleteRest=async function(id){
 const TM_SEC_CACHE={};
 const tmType=o=>o.orderType||'delivery';
 const tmDur=ms=>{if(ms==null||!isFinite(ms)||ms<0)return'—';const m=Math.round(ms/60000);return m<60?toA(m)+' د':toA(Math.floor(m/60))+' س '+toA(m%60)+' د';};
-const tmClock=ms=>ms?new Date(ms).toLocaleTimeString('ar-IQ-u-nu-latn',{hour:'numeric',minute:'2-digit'}):'—';
+const tmClock=ms=>ms?new Date(ms).toLocaleTimeString('ar-IQ-u-nu-latn',{hour:'numeric',minute:'2-digit',hour12:true}):'—';
 const tmAvg=a=>{const v=a.filter(x=>x!=null&&isFinite(x)&&x>=0);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null;};
 const tmMax=a=>{const v=a.filter(x=>x!=null&&isFinite(x)&&x>=0);return v.length?Math.max(...v):null;};
 // حدود السرعة بالدقائق: [ممتاز، مقبول]
@@ -2099,7 +2102,7 @@ window.renderTimes=async function(){
 const AX_MV={open:'رصيد افتتاحي',purchase:'وارد — مشتريات',sale:'صادر — منصرف للمبيعات',sale_return:'وارد — مردود مبيعات',waste:'صادر — تالف / هالك',count:'تسوية جرد',purchase_return:'صادر — مرتجع للمورد'};
 const AX_CATS=['رواتب','إيجار','كهرباء وماء','غاز / وقود','صيانة','تغليف','تسويق وإعلان','مشتريات أخرى','أخرى'];
 let axRid=null,axDoc=null,axExp=[],axTab='rep',axUnsubs=[],axView=null,axShifts=[],axMenu=[];
-const axFmtD=ms=>ms?new Date(ms).toLocaleString('ar-IQ-u-nu-latn',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'}):'—';
+const axFmtD=ms=>ms?new Date(ms).toLocaleString('ar-IQ-u-nu-latn',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}):'—';
 const axQ=n=>Number(Math.round((Number(n)||0)*1000)/1000).toLocaleString('ar-IQ-u-nu-latn');
 window.axRangeCh=()=>{const c=document.getElementById('axRange').value==='custom';['axFrom','axTo'].forEach(id=>{const e=document.getElementById(id);e.style.display=c?'':'none';if(c&&!e.value){const d=new Date();e.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}});accRender();};
 function axRange(){
@@ -2270,7 +2273,7 @@ window.axPrintSales=()=>{
     ${S.sold.map(x=>`<tr><td style="padding:2px 0">${vn(x)}<div style="font-size:10px">${fmt(x.price)} د.ع</div></td><td style="text-align:center;font-weight:900">${x.q}</td><td style="text-align:left">${fmt(x.rev)}</td></tr>`).join('')}</table>${dv}
     <div style="display:flex;justify-content:space-between;font-weight:900;font-size:13px"><span>المجموع الكلي (${S.qty} صنف)</span><span>${fmt(S.total)} د.ع</span></div>
     ${S.unsold.length?dv+'<div style="font-weight:900;font-size:12px;margin-bottom:3px">⛔ ما انباعت ('+S.unsold.length+')</div>'+S.unsold.map(x=>`<div style="font-size:11px">• ${vn(x)}</div>`).join(''):''}
-    ${dv}<div style="text-align:center;font-size:10px">طُبع ${esc(new Date().toLocaleString('ar-IQ-u-nu-latn'))}</div></body></html>`;
+    ${dv}<div style="text-align:center;font-size:10px">طُبع ${esc(dt12(Date.now()))}</div></body></html>`;
   let f=document.getElementById('axPrt');if(!f){f=document.createElement('iframe');f.id='axPrt';f.style.cssText='position:fixed;left:-9999px;top:0;width:320px;height:600px;border:0';document.body.appendChild(f);}
   f.onload=()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){}};f.srcdoc=html;
 };
@@ -2284,7 +2287,7 @@ window.axPrintReport=()=>{
     ${row('💵 نقداً',fmt(R.cash))}${row('💳 بطاقة',fmt(R.card))}${R.later?row('⏳ آجل',fmt(R.later)):''}${R.cod?row('🏍️ عند الكباتن',fmt(R.cod)):''}${R.disc?row('٪ الخصومات','-'+fmt(R.disc)):''}${R.cancN?row('❌ ملغي ('+R.cancN+')',fmt(R.cancV)):''}${dv}
     ${row('مجموع المبيعات',fmt(R.sales)+' د.ع',true)}${R.exp?row('💸 المصروفات','-'+fmt(R.exp)):''}
     ${R.days.length>1?dv+R.days.map(d=>row(d.label,fmt(d.sales))).join(''):''}
-    ${dv}<div style="text-align:center;font-size:10px">طُبع ${esc(new Date().toLocaleString('ar-IQ-u-nu-latn'))}</div></body></html>`;
+    ${dv}<div style="text-align:center;font-size:10px">طُبع ${esc(dt12(Date.now()))}</div></body></html>`;
   let f=document.getElementById('axPrt');if(!f){f=document.createElement('iframe');f.id='axPrt';f.style.cssText='position:fixed;left:-9999px;top:0;width:320px;height:600px;border:0';document.body.appendChild(f);}
   f.onload=()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){}};f.srcdoc=html;
 };
@@ -2498,7 +2501,7 @@ window.exportCSV=function(){
   if(!fil.length){toast('لا توجد بيانات للتصدير','warn');return;}
   const rows=[['رقم الطلب','النوع','الحالة','المطعم','الكابتن','المبلغ','التوصيل','التاريخ']];
   fil.forEach(o=>{
-    rows.push([o.id.substring(0,6).toUpperCase(),o.orderType||'delivery',o.status||'',o.restaurantName||'',o.captainName||'',o.value||0,o.fee||0,o.createdAt||'']);
+    rows.push([o.id.substring(0,6).toUpperCase(),o.orderType||'delivery',o.status||'',o.restaurantName||'',o.captainName||'',o.value||0,o.fee||0,t12(o.createdAt)]);
   });
   // \u0645\u0646\u0639 \u062D\u0642\u0646 \u0627\u0644\u0635\u064A\u063A \u0641\u064A Excel: \u0623\u064A \u0642\u064A\u0645\u0629 \u0646\u0635\u064A\u0629 \u062A\u0628\u062F\u0623 \u0628\u0640 = + - @ \u062A\u064F\u0633\u0628\u0642 \u0628\u0640 '
   const cell=v=>{let s=String(v);if(typeof v!=='number'&&/^[=+\-@\t\r]/.test(s))s="'"+s;return `"${s.replace(/"/g,'""')}"`;};
@@ -3029,7 +3032,7 @@ window.secLoadAudit=async function(){
     const fb=window._fb;
     const s=await fb.getDocs(fb.query(fb.collection(fb.db,'auditLog'),fb.orderBy('atMs','desc'),fb.limit(30)));
     el.innerHTML=s.empty?'<div style="color:var(--muted);font-size:12px;">لا توجد عمليات مسجلة بعد</div>':s.docs.map(d=>{const a=d.data();return `<div style="display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12px;">
-      <span><b>${esc(a.action)}</b> — ${esc(a.email||a.uid)}</span><span style="color:var(--muted);white-space:nowrap;">${a.atMs?esc(new Date(a.atMs).toLocaleString('ar-IQ-u-nu-latn')):''}</span></div>`;}).join('');
+      <span><b>${esc(a.action)}</b> — ${esc(a.email||a.uid)}</span><span style="color:var(--muted);white-space:nowrap;">${a.atMs?esc(dt12(a.atMs)):''}</span></div>`;}).join('');
   }catch(e){el.innerHTML='<div style="color:var(--muted);font-size:12px;">السجل يعمل بعد نشر قواعد الحماية</div>';}
 };
 

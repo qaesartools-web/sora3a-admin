@@ -60,6 +60,7 @@ test('ready screen: takeaway/pager orders in two columns, new ready number flash
   await login(p, BASE + 'screen.html', 'scr@x.com');
   await p.waitForSelector('#scr:not([hidden]) #prep .n');
   assert.equal(await p.textContent('#nm'), 'برغر الشاشة');
+  assert.match((await p.textContent('#clk')).trim(), /^\d{1,2}:\d{2} [صم]$/, 'TV clock is 12-hour');
   // الافتراضي: الصالة تطلع حتى بدون بيجر (#8)، والدلفري (#7) لا
   assert.deepEqual(await nums(p, '#prep'), ['#12', '#5', '#8', '#11📟 بيجر 4']);
   assert.deepEqual(await nums(p, '#ready'), ['#6📟 بيجر 3']);

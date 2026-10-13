@@ -130,18 +130,20 @@ test('order details: tap an order → every item (size, qty, price, note), disco
       items: [{ name: 'مندي لحم', variant: 'نص', qty: 2, price: 20000, note: 'بدون بصل' }, { name: 'لبن', variant: 'وحدة', qty: 3, price: 1000 }],
       notes: 'مندي لحم(نص)×2 [بدون بصل], لبن(وحدة)×3', subtotal: 43000, discount: 3000, discountInfo: { type: 'amt', value: 3000, reason: 'زبون قديم' }, value: 40000,
       payment: { method: 'mixed', card: 15000, cash: 25000, received: 30000, change: 5000 }, pager: 7,
-      createdAt: '11:55', createdAtMs: Date.now() - 60000, timeline: [{ status: 'delivered', time: '11:55', text: 'تم إنشاء الطلب' }] });
+      createdAt: '23:55', createdAtMs: Date.now() - 60000, timeline: [{ status: 'delivered', time: '23:55', text: 'تم إنشاء الطلب' }] });
   });
   const p = await page(B, { w: 1280, h: 900 });
   await login(p, 'oldrest@x.com');
   await p.waitForSelector('#appPage', { state: 'visible' });
   const card = '#dashOrders .order-row[data-ord="ORDFULL000001"]';
   await p.waitForSelector(card, { timeout: 15000 });
+  assert.match(await p.textContent(card + ' .order-time'), /^11:55 م$/, 'order card time is 12-hour');
   await p.click(card + ' .order-head');
   await p.waitForSelector('#ordMo.open');
   const t = await p.textContent('#ordMoBody');
   for (const re of [/مندي لحم/, /\(نص\)/, /بدون بصل/, /لبن/, /صالة — #42/, /زبون قديم/, /نقد \+ بطاقة/, /📟 7/, /تم إنشاء الطلب/, /40[,٬]000/, /-3[,٬]000/]) assert.match(t, re);
   assert.match(t, /[صم]/, '12-hour time');
+  assert.match(t, /11:55 م/, 'steps in 12-hour time'); assert.ok(!t.includes('23:55'), 'no 24-hour time');
   await p.screenshot({ path: 'shots/order-details.png' }).catch(() => {});
   const [pop] = await Promise.all([p.waitForEvent('popup'), p.click('#ordMoPrint')]);
   await pop.waitForLoadState();
