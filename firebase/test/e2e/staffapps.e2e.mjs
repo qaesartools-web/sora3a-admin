@@ -333,7 +333,7 @@ test('TV app: «برتقالي مشمس» theme with the app colours, and the au
   await write('restaurants/RW/settings/main', { screen: { salon: true, delivery: true, qr: true } });
   await write('publicMenus/RW', { on: true, modes: { table: true, pickup: true, delivery: false } });
   const p = await page(B, { w: 1280, h: 720 });
-  await p.addInitScript(() => { Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 9; X96) Chrome/120 Mobile Safari/537.36 SoraScreenApp/1.6' }); window.__autoState = true; window.__goApp = (u) => { (window.__asked = window.__asked || []).push(u); }; });
+  await p.addInitScript(() => { Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 9; X96) Chrome/120 Mobile Safari/537.36 SoraScreenApp/1.6' }); window.__autoState = true; window.__autoDiag = 1; window.__goApp = (u) => { (window.__asked = window.__asked || []).push(u); }; });
   await login(p, BASE + 'screen.html', 'scr@x.com');
   await p.waitForSelector('#prep .n[data-t="دلفري"]', { timeout: 15000 });
   await p.waitForSelector('#qrBox:not([hidden]) #qrCode svg');
@@ -365,6 +365,12 @@ test('TV app: «برتقالي مشمس» theme with the app colours, and the au
   assert.deepEqual(await p.evaluate(() => window.__asked), ['sora3a://autostart?on=0']);
   await p.evaluate(() => window.__setAuto(false));
   assert.ok((await p.textContent('#mAuto')).includes('مطفي'));
+  // «فحص التشغيل التلقائي» ← التطبيق يعرض شنو صار بالتلفزيون
+  await p.keyboard.press('ArrowDown');
+  assert.equal(await p.evaluate(() => document.activeElement.id), 'mDiag');
+  await p.keyboard.press('Enter');
+  assert.deepEqual(await p.evaluate(() => window.__asked), ['sora3a://autostart?on=0', 'sora3a://autodiag']);
+  assert.equal(await p.isHidden('#menu'), true);
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
