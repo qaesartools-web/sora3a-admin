@@ -407,6 +407,46 @@ test('TV app: a newer version shows ⬆️ on ⚙️ and the menu updates the ap
   await p.context().close();
 });
 
+test('kitchen display (شاشة المجهز): shows new orders, «جاهز» → ready (back to cashier), and the cashier kitchen tab hides when on', async () => {
+  const now = Date.now();
+  // الخدمة موقوفة افتراضياً ← رسالة
+  await put('restaurants/RW', { name: 'مطعم الشاشة', userId: U.owner, active: true, features: {} });
+  const p = await page(B, { w: 1280, h: 800 });
+  await login(p, BASE + 'kitchen.html', 'scr@x.com');
+  await p.waitForSelector('#off:not([hidden])', { timeout: 15000 });
+  // المدير الأعلى يفعّلها ← تشتغل مباشرة
+  await write('restaurants/RW', { features: { kitchen: true } });
+  await p.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  // طلب جديد للمطبخ (أونلاين قيد التحضير)
+  await put('orders/KD1', { restaurantId: 'RW', orderType: 'takeaway', status: 'preparing', kitchen: 'new', ticketNo: 77, value: 9000, day: bagDay(now), createdAt: '20:05', createdAtMs: now - 3 * 60000,
+    items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 2, note: 'بدون بصل' }, { name: 'لبن', variant: 'وحدة', qty: 1 }] });
+  await p.waitForSelector('.card [data-done="KD1"]', { timeout: 15000 });
+  const card = await p.evaluate(() => document.querySelector('[data-done="KD1"]').closest('.card').textContent);
+  for (const re of [/#77/, /برغر لحم/, /بدون بصل/, /لبن/, /8:05 م/, /🥡 سفري/]) assert.match(card, re);
+  // المجهز يضغط «جاهز»
+  await p.click('.card [data-done="KD1"]');
+  const o = await until(async () => { const x = await read('orders/KD1'); return x && x.kitchen === 'ready' ? x : null; });
+  assert.equal(o.kitchen, 'ready'); assert.equal(o.status, 'ready', 'رجع للكاشير جاهز');
+  assert.ok(o.kitchenReadyAt > 0);
+  assert.ok((o.timeline || []).some((t) => t.status === 'ready'), 'انضاف للـtimeline');
+  // طلع من القيد ودخل شريط «جاهز — رجع للكاشير»
+  await p.waitForSelector('.card [data-done="KD1"]', { state: 'detached', timeout: 8000 });
+  assert.match(await p.textContent('#rdy'), /#77/);
+  await p.context().close();
+  // الكاشير: تبويب المطبخ ينخفي لأن شاشة المجهز شغّالة
+  const c = await page(B, { w: 1280, h: 800 });
+  await posLogin(c);
+  await until(async () => await c.evaluate(() => getComputedStyle(document.querySelector('[data-tab="kitchen"]')).display === 'none'));
+  assert.equal(await c.evaluate(() => getComputedStyle(document.querySelector('[data-tab="kitchen"]')).display), 'none', 'المطبخ مخفي من الكاشير');
+  assert.notEqual(await c.evaluate(() => document.getElementById('kdsLink').style.display), 'none', 'رابط شاشة المطبخ مفعّل');
+  // نطفّي الخدمة ← يرجع تبويب المطبخ
+  await write('restaurants/RW', { features: { kitchen: false } });
+  await until(async () => await c.evaluate(() => getComputedStyle(document.querySelector('[data-tab="kitchen"]')).display !== 'none'));
+  assert.notEqual(await c.evaluate(() => getComputedStyle(document.querySelector('[data-tab="kitchen"]')).display), 'none');
+  assert.deepEqual(clean(c), []);
+  await c.context().close();
+});
+
 test('services: the super admin stops/starts the screen, the QR (barcode) and the waiter app — each on its own, live', async () => {
   // الشاشة موقوفة ← رسالة بدل الطلبات، وترجع وحدها أول ما تتفعّل
   await write('restaurants/RW', { features: { screen: false } });
