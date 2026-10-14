@@ -394,6 +394,15 @@ test('TV app: a newer version shows ⬆️ on ⚙️ and the menu updates the ap
   assert.equal(await p.isHidden('#menu'), true);
   await p.evaluate(() => window.__setUpdate(''));
   assert.equal(await p.isHidden('#mUpd'), true);
+  // «الفتح مثل الريموت»: يطلع بالقائمة لما التطبيق يبلّغ بحالته، والضغط يطلب من التطبيق يضبطه
+  assert.equal(await p.isHidden('#mAdb'), true, 'old app → no button');
+  await p.evaluate(() => window.__setAdb(false));
+  assert.match(await p.textContent('#mAdb'), /الفتح مثل الريموت \(وضع المطوّر\)/);
+  await p.click('#menuBtn'); await p.waitForSelector('#menu:not([hidden])');
+  await p.click('#mAdb');
+  assert.deepEqual(await p.evaluate(() => window.__asked), ['sora3a://update', 'sora3a://adb']);
+  await p.evaluate(() => window.__setAdb(true));
+  assert.match(await p.textContent('#mAdb'), /مفعّل ✅/);
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
