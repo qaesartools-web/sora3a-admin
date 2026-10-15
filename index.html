@@ -978,8 +978,32 @@ function enterApp(){
   buildNavs();
   startListeners();
   initBranches();
+  watchHqConsole();
   const au=window.auRestore&&window.auRestore();
   if(au&&au.screen&&document.querySelector(`.dnav-btn[data-screen="${au.screen}"]`))setTimeout(()=>goTab(au.screen),200);
+}
+
+// «الإدارة العليا» يتحكم بيها المالك من برج سرعة: إذا طفّاها، نخفي كل شي عن حساب الإدارة ونوجّهه لبرج سرعة
+// (المطاعم والموظفين ما يتأثرون — هذا بس لحساب الإدارة العليا). يرجّعها المالك بأي وقت من برج سرعة.
+function watchHqConsole(){
+  if(!isAdmin())return;
+  const fb=window._fb;
+  unsubs.push(fb.onSnapshot(fb.doc(fb.db,'hqMeta','config'),s=>{
+    applyHqConsole(!(s.exists()&&s.data().adminConsole===false));
+  },()=>applyHqConsole(true)));
+}
+function applyHqConsole(on){
+  let el=document.getElementById('hqOffNotice');
+  if(on){ if(el)el.remove(); return; }
+  if(!el){
+    el=document.createElement('div');el.id='hqOffNotice';
+    el.style.cssText='position:fixed;inset:0;z-index:9999;display:grid;place-items:center;text-align:center;padding:24px;background:var(--bg,#0e1626);color:var(--text,#e8eef8);font-family:inherit';
+    el.innerHTML=`<div style="max-width:460px"><div style="font-size:60px">👑</div>
+      <h1 style="font-size:22px;margin:12px 0 8px">الإدارة العليا تُدار من «برج سرعة»</h1>
+      <p style="color:var(--muted,#8a93a8);line-height:1.9;margin:0 0 18px">تم نقل التحكم لتطبيق برج سرعة. حسابات المطاعم تشتغل عادي.<br>لترجيع لوحة الإدارة العليا هنا: افتح <b>برج سرعة ← الإعدادات ← «الإدارة العليا بتطبيق الإدارة»</b> وشغّلها.</p>
+      <button onclick="window._fb.signOut(window._fb.auth)" style="border:0;background:var(--accent,#2457d6);color:#fff;font-weight:700;border-radius:12px;padding:12px 24px;font-size:15px;cursor:pointer">🚪 تسجيل خروج</button></div>`;
+    document.body.appendChild(el);
+  }
 }
 
 // NAVS
