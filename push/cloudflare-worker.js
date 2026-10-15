@@ -13,15 +13,43 @@ export default {
   async fetch(req, env) {
     const h = cors(req);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: h });
+    // تحديث برج سرعة (المستودع خاص): نمرّر ملف النسخة/المثبّت من إصدار GitHub بتوكن السيرفر
+    const turl = new URL(req.url);
+    if (req.method === 'GET' && turl.pathname.startsWith('/tower/')) return towerUpdate(turl, env, h);
     const { sa, key } = readServiceAccount(env.FIREBASE_SERVICE_ACCOUNT);
     // افتح رابط السيرفر بالمتصفح: key = ok يعني المفتاح مضبوط، غيرها تبيّن السبب
-    if (req.method === 'GET') return reply({ ok: true, service: 'sora3a-push', key }, 200, h);
+    if (req.method === 'GET') return reply({ ok: true, service: 'sora3a-push', key, tower: env.GITHUB_TOKEN ? 'ok' : 'no_github_token' }, 200, h);
     if (req.method !== 'POST') return reply({ ok: false, error: 'method_not_allowed' }, 405, h);
     if (!sa) return reply({ ok: false, error: 'not_configured', key }, 503, h);
     try { return await handle(req, env, sa, h); }
     catch (e) { return reply({ ok: false, error: 'server_error', detail: String(e && e.message || e).slice(0, 200) }, 500, h); }
   },
 };
+
+// ── تحديث برج سرعة من إصدار GitHub الخاص (يحتاج سر GITHUB_TOKEN: توكن قراءة للمستودع) ──
+const TOWER_REPO = 'qaesartools-web/sora3a-owner';
+const TOWER = {
+  win: { tag: 'tower-windows', file: 'sora3a-tower-setup.exe', type: 'application/octet-stream' },
+  apk: { tag: 'tower-android', file: 'sora3a-tower.apk', type: 'application/vnd.android.package-archive' },
+};
+async function towerUpdate(url, env, h) {
+  const token = env.GITHUB_TOKEN;
+  if (!token) return reply({ ok: false, error: 'no_github_token' }, 503, h);
+  const cfg = TOWER[url.pathname.split('/')[2]];
+  if (!cfg) return reply({ ok: false, error: 'bad_platform' }, 404, h);
+  const gh = { 'Authorization': 'Bearer ' + token, 'User-Agent': 'sora3a-tower', 'Accept': 'application/vnd.github+json' };
+  const rel = await fetch(`https://api.github.com/repos/${TOWER_REPO}/releases/tags/${cfg.tag}`, { headers: gh });
+  if (!rel.ok) return reply({ ok: false, error: 'release_' + rel.status }, 502, h);
+  const want = url.searchParams.get('dl') ? cfg.file : 'version.json';
+  const asset = ((await rel.json()).assets || []).find((a) => a.name === want);
+  if (!asset) return reply({ ok: false, error: 'asset_missing', want }, 404, h);
+  // تنزيل أصل الإصدار: أول طلب بالتوكن يرجّع تحويل (302) لرابط موقّع — نتبعه بدون التوكن
+  let bin = await fetch(asset.url, { headers: { 'Authorization': 'Bearer ' + token, 'User-Agent': 'sora3a-tower', 'Accept': 'application/octet-stream' }, redirect: 'manual' });
+  if (bin.status >= 300 && bin.status < 400 && bin.headers.get('location')) bin = await fetch(bin.headers.get('location'), { headers: { 'User-Agent': 'sora3a-tower' } });
+  if (!bin.ok) return new Response('asset ' + bin.status, { status: 502, headers: h });
+  if (want === 'version.json') return new Response(await bin.text(), { status: 200, headers: { ...h, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
+  return new Response(bin.body, { status: 200, headers: { ...h, 'content-type': cfg.type, 'content-disposition': 'attachment; filename="' + cfg.file + '"', 'cache-control': 'no-store' } });
+}
 
 // يقرأ مفتاح حساب الخدمة ويتسامح مع أخطاء اللصق الشائعة (BOM، علامات تنصيص، base64)
 function readServiceAccount(raw) {

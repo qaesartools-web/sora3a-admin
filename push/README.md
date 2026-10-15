@@ -38,6 +38,17 @@ https://console.firebase.google.com/project/sora3a-system/settings/serviceaccoun
 
 **جرّب:** سكّر تطبيق الكابتن، وأرسل طلب دلفري من الكاشير ← لازم يرن خلال ثواني.
 
+## (اختياري) تحديث «برج سرعة» تلقائياً
+نفس السيرفر يگدر يخلي تطبيق **برج سرعة** يتحدث لحاله (المستودع خاص، فالسيرفر يمرّر النسخة من GitHub بتوكن قراءة).
+
+1. سوّي **توكن GitHub** للقراءة فقط: https://github.com/settings/tokens → **Fine-grained token** → Repository access: اختر `sora3a-owner` فقط → Permissions: **Contents = Read-only** → **Generate**.
+2. انسخ محتوى `push/cloudflare-worker.js` المحدّث والصقه بالـ Worker ← **Deploy**.
+3. بالـ Worker ← **Settings** ← **Variables and Secrets** ← **Add**:
+   - **Type:** Secret · **Name:** `GITHUB_TOKEN` · **Value:** التوكن ← **Deploy / Save**.
+4. تأكد: افتح رابط السيرفر بالمتصفح ← لازم تشوف `"tower":"ok"`.
+
+بعدها، برج سرعة (ويندوز وأندرويد) يفحص لحاله ويعرض «حدّث الآن» أول ما تطلع نسخة جديدة. (أول نسخة بيها هذي الميزة تثبّتها يدوي مرة وحدة، وبعدها كلشي تلقائي.)
+
 ## للمطورين
 - `cloudflare-worker.js`: ملف واحد بدون مكتبات. يتحقق من توكن فايربيس (توقيع Google)، ويقرا ويكتب Firestore عبر REST، ويرسل عبر FCM HTTP v1.
 - `netlify/functions/notify.mts`: نفس المنطق لـ Netlify (بديل).
