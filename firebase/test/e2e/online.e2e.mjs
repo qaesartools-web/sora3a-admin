@@ -89,6 +89,16 @@ test('table QR: customer orders from table 4 → cashier accepts → kitchen tic
   assert.equal(await c.textContent('#rName'), 'مطعم الكود');
   assert.ok((await c.textContent('#rPill')).includes('طاولة 4'));
   assert.ok((await c.textContent('#banners')).includes('التوصيل لحد'));
+  // PWA: مانيفست ديناميكي باسم المطعم + بانر تثبيت التطبيق
+  const man = await c.evaluate(async () => {
+    const l = document.querySelector('link[rel="manifest"]'); if (!l) return null;
+    const j = await (await fetch(l.href)).json();
+    return { name: j.name, icons: (j.icons || []).length, display: j.display, title: (document.querySelector('meta[name="apple-mobile-web-app-title"]') || {}).content };
+  });
+  assert.equal(man && man.name, 'مطعم الكود', 'اسم التطبيق = اسم المطعم');
+  assert.ok(man.icons >= 2 && man.display === 'standalone', 'أيقونات + وضع تطبيق');
+  assert.equal(man.title, 'مطعم الكود', 'عنوان آيفون = اسم المطعم');
+  assert.equal(await c.textContent('#instTtl'), 'ثبّت تطبيق مطعم الكود', 'بانر التثبيت باسم المطعم');
   await until(() => c.evaluate(() => /url\(/.test(document.querySelector('[data-img="img1"]').style.backgroundImage)));
   assert.equal(await c.locator('.it.out .add').count(), 0, 'no add button on sold-out');
   await c.screenshot({ path: 'shots/online-menu-phone.png' });
