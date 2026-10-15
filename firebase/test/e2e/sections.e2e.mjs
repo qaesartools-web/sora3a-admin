@@ -158,7 +158,7 @@ test('QZ Tray mode: each section to its own printer, unassigned section falls ba
 test('Windows cashier app: built-in printing (no QZ) — receipt + each section to its printer, copies, fallback warning, no print dialog', async () => {
   const p = await page(B, { w: 1280, h: 900 });
   await p.addInitScript(() => {
-    window.__dJobs = []; window.__auto = false;
+    window.__dJobs = []; window.__auto = false; window.__drawer = [];
     const PR = [{ name: 'XP-80 Cashier', displayName: 'XP-80 Cashier', isDefault: true, ok: true, statusText: 'جاهزة' },
       { name: 'Shawarma-PR', displayName: 'Shawarma-PR', isDefault: false, ok: true, statusText: 'جاهزة' },
       { name: 'KFC-PR', displayName: 'KFC-PR', isDefault: false, ok: false, statusText: 'مطفية أو مفصولة' }];
@@ -172,6 +172,7 @@ test('Windows cashier app: built-in printing (no QZ) — receipt + each section 
       },
       jobs: async () => window.__dJobs.map((j, i) => ({ id: i + 1, at: Date.now(), title: j.title, printer: j.printer || 'الافتراضية', ok: j.printer !== 'KFC-PR', fallback: j.printer === 'KFC-PR' ? j.fallback : '', error: '', canReprint: true })).reverse(),
       reprint: async () => ({ ok: true }),
+      drawer: async (pr) => { window.__drawer.push(pr); },
       getAutoStart: async () => window.__auto, setAutoStart: async (v) => (window.__auto = v),
       onUpdate() {},
     };
@@ -188,6 +189,7 @@ test('Windows cashier app: built-in printing (no QZ) — receipt + each section 
   await p.selectOption('#dpP_k1', 'Shawarma-PR'); await p.fill('#dpC_k1', '2');
   await p.selectOption('#dpP_k2', 'KFC-PR');
   await p.check('#dpAutoChk'); await until(() => p.evaluate(() => window.__auto));
+  await p.check('#stDrawer');   // 💵 افتح درج الفلوس عند الفاتورة
   await p.click('button[onclick="dpTest(\'k1\')"]');
   await p.waitForFunction(() => window.__dJobs.length === 1);
   assert.equal(await p.evaluate(() => window.__dJobs[0].printer), 'Shawarma-PR');
@@ -202,6 +204,8 @@ test('Windows cashier app: built-in printing (no QZ) — receipt + each section 
   await p.click('#sendBtn'); await p.keyboard.press('1');
   await p.waitForSelector('#payOv.on'); await p.click('#payOk');
   await p.waitForFunction(() => window.__dJobs.length >= 4);
+  await p.waitForFunction(() => window.__drawer.length > 0);
+  assert.deepEqual(await p.evaluate(() => window.__drawer), ['XP-80 Cashier'], 'درج الفلوس انفتح مرة وحدة على الطابعة الرئيسية بعد الفاتورة');
   await p.waitForTimeout(500);
   const jobs = await p.evaluate(() => window.__dJobs.map((j) => ({ printer: j.printer, copies: j.copies, fallback: j.fallback, w: j.widthMm,
     kind: j.html.includes('قسم الشاورما') ? 'sh' : j.html.includes('قسم الكنتاكي') ? 'kfc' : j.html.includes('قسم البيتزا') ? 'pz' : 'receipt' })));
