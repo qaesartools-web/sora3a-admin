@@ -157,3 +157,18 @@ test('order details: tap an order → every item (size, qty, price, note), disco
   await p.waitForSelector('#ordMo.open');
   await p.context().close();
 });
+
+test('HQ console toggle: the Tower can hide the super-admin from the admin app, and bring it back', async () => {
+  const put = async (path, data) => { await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), path), data); }); };
+  await put('hqMeta/config', { adminConsole: false, atMs: Date.now(), by: 'قيصر' });
+  const p = await page(B);
+  await login(p, 'boss@x.com');
+  // الإدارة مخفية ← رسالة توجّه لبرج سرعة، وما تطلع لوحة الإدارة
+  await p.waitForSelector('#hqOffNotice', { timeout: 15000 });
+  assert.match(await p.textContent('#hqOffNotice'), /برج سرعة/);
+  // المالك يرجّعها من برج سرعة ← تختفي الرسالة مباشرة
+  await put('hqMeta/config', { adminConsole: true, atMs: Date.now(), by: 'قيصر' });
+  await p.waitForSelector('#hqOffNotice', { state: 'detached', timeout: 8000 });
+  await p.waitForSelector('#appPage', { state: 'visible' });
+  await p.context().close();
+});
