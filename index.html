@@ -440,7 +440,8 @@ body.staff-mode .staff-banner{display:block;}
     <div class="screen" id="scOrders">
       <div class="search-box"><input id="orderSearch" placeholder="🔍 بحث بالاسم أو رقم الهاتف..." oninput="renderOrders()"></div>
       <div class="ord-ctl">
-        <select class="form-sel" id="ordRange" onchange="renderOrders()"><option value="live">⚡ آخر الطلبات</option><option value="today">اليوم</option><option value="yesterday">أمس</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يوم</option></select>
+        <select class="form-sel" id="ordRange" onchange="ordRangeCh()"><option value="live">⚡ آخر الطلبات</option><option value="today">اليوم</option><option value="yesterday">أمس</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يوم</option><option value="custom">📅 من تاريخ إلى تاريخ</option></select>
+        <input type="date" class="form-inp" id="ordFrom" style="display:none;max-width:170px" onchange="renderOrders()" aria-label="من تاريخ" title="من تاريخ"><input type="date" class="form-inp" id="ordTo" style="display:none;max-width:170px" onchange="renderOrders()" aria-label="إلى تاريخ" title="إلى تاريخ">
         <select class="form-sel admin-only" id="ordRest" onchange="renderOrders()"><option value="">كل المطاعم</option></select>
       </div>
 <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
@@ -1466,10 +1467,15 @@ window.setOF=function(f,btn){
 };
 
 // تبويب الطلبات: «آخر الطلبات» من المباشر، أو فترة (تنجاب وقت الحاجة) — والمدير يكدر يختار مطعم
+window.ordRangeCh=()=>{const c=document.getElementById('ordRange').value==='custom';['ordFrom','ordTo'].forEach(id=>{document.getElementById(id).style.display=c?'':'none';});if(c)dateDefaults('ordFrom','ordTo');renderOrders();};
 function ordRangeMs(v){
   const d0=dayStart();
   if(v==='today')return[d0,Infinity];if(v==='yesterday')return[d0-DAY,d0];
   if(v==='7'||v==='30')return[d0-(+v-1)*DAY,Infinity];
+  if(v==='custom'){   // من تاريخ إلى تاريخ (اليومين داخلين) — وإذا انعكسوا نقلبهم
+    const a=document.getElementById('ordFrom').value,b=document.getElementById('ordTo').value;if(!a||!b)return null;
+    const [x,y]=a<=b?[a,b]:[b,a];return[new Date(x+'T00:00:00').getTime(),new Date(y+'T00:00:00').getTime()+DAY];
+  }
   return null;
 }
 function ordersTabList(rerender){
