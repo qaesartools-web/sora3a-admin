@@ -102,6 +102,29 @@ test('restaurant owner: today + yesterday live; accounting for 30 days loads on 
   await p.selectOption('#axRange', '30');
   await p.waitForFunction(() => /165,000/.test(document.getElementById('axBody').textContent), null, { timeout: 15000 });   // ١٥٠ قديم × ١٠٠٠ + ١٥٠٠٠ اليوم
   assert.equal(await p.evaluate(() => allOrders.length), 155);
+  // تبويب الطلبات: «من تاريخ إلى تاريخ» — حقلين تاريخ (افتراضياً آخر 7 أيام لصاحب المطعم)
+  const ymd = (ms) => { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const rows = () => p.evaluate(() => document.querySelectorAll('#ordersList .order-row').length);
+  await p.click('.dnav-btn[data-screen="scOrders"]');
+  assert.equal(await p.isVisible('#ordFrom'), false);
+  await p.selectOption('#ordRange', 'custom');
+  await p.waitForSelector('#ordFrom', { state: 'visible' });
+  assert.equal(await p.inputValue('#ordFrom'), ymd(Date.now() - 6 * DAY));
+  assert.equal(await p.inputValue('#ordTo'), ymd(Date.now()));
+  await p.waitForFunction(() => document.querySelectorAll('#ordersList .order-row').length === 5, null, { timeout: 15000 })
+    .catch(async () => { throw new Error('last 7 days rows: ' + await rows()); });
+  // فترة قديمة بس (قبل ١٢ ← ٨ أيام): الـ ١٥٠ القديمة وما بيها طلبات اليوم
+  await p.fill('#ordFrom', ymd(Date.now() - 12 * DAY)); await p.dispatchEvent('#ordFrom', 'change');
+  await p.fill('#ordTo', ymd(Date.now() - 8 * DAY)); await p.dispatchEvent('#ordTo', 'change');
+  await p.waitForFunction(() => document.querySelectorAll('#ordersList .order-row').length === 150, null, { timeout: 15000 })
+    .catch(async () => { throw new Error('old range rows: ' + await rows()); });
+  await p.screenshot({ path: 'shots/admin-orders-range.png' });
+  // التاريخين بالمقلوب ← نفس النتيجة
+  await p.fill('#ordFrom', ymd(Date.now() - 8 * DAY)); await p.fill('#ordTo', ymd(Date.now() - 12 * DAY)); await p.dispatchEvent('#ordTo', 'change');
+  await p.waitForTimeout(400); assert.equal(await rows(), 150);
+  // رجوع لـ «آخر الطلبات» يخفي التاريخين
+  await p.selectOption('#ordRange', 'live');
+  assert.equal(await p.isVisible('#ordFrom'), false);
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
