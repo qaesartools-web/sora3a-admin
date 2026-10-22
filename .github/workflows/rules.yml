@@ -11,6 +11,9 @@ on:
       - firebase/scripts/deploy-rules.mjs
       - .github/workflows/rules.yml
   workflow_dispatch:
+  # فحص دوري: إذا القواعد الشغالة مو نفسها اللي بـ GitHub (مثلاً الدمج ما شغّل النشر) تنتشر
+  schedule:
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: read
@@ -56,4 +59,5 @@ jobs:
       - name: نشر القواعد
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          EVENT: ${{ github.event_name }}
         run: node scripts/deploy-rules.mjs
