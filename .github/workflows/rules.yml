@@ -1,0 +1,59 @@
+name: نشر قواعد الحماية
+
+# أي تعديل على firebase/firestore.rules بالـ main ← فحوصات القواعد على المحاكي ← إذا نجحت تنتشر على Firebase وحدها
+# (بدل اللصق اليدوي بـ Firebase Console). يحتاج السر FIREBASE_SERVICE_ACCOUNT بهذا المستودع.
+on:
+  push:
+    branches: [main]
+    paths:
+      - firebase/firestore.rules
+      - firebase/test/rules.test.mjs
+      - firebase/scripts/deploy-rules.mjs
+      - .github/workflows/rules.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firestore-rules
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: فحص القواعد على المحاكي
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: firebase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm install --no-audit --no-fund
+      - name: فحوصات القواعد
+        run: npx firebase emulators:exec --only firestore --project sora3a-rules-test "node --test test/rules.test.mjs"
+
+  deploy:
+    name: نشر على Firebase
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: firebase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: نشر القواعد
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/deploy-rules.mjs

@@ -670,13 +670,14 @@ service cloud.firestore {
       allow delete: if signedIn() && (request.auth.uid == uid || hqOwner());
     }
     // hqMeta: boot (أول جهاز للمالك) + backup (نتيجة النسخة الليلية — يكتبها GitHub بحساب الخدمة)
+    //   + rules (نتيجة النشر التلقائي لقواعد الحماية — يكتبها GitHub بحساب الخدمة)
     //   + config: إعدادات يتحكم بيها المالك من برج سرعة (منها: إظهار «الإدارة العليا» بتطبيق الإدارة)
     function hqCfgOk(d) {
       return d.keys().hasOnly(['adminConsole','atMs','by'])
         && d.adminConsole is bool && optNum(d, 'atMs') && optStr(d, 'by', 120);
     }
     match /hqMeta/{id} {
-      allow get: if isAdmin() || (id == 'backup' && hqView('backups'));
+      allow get: if isAdmin() || (id in ['backup', 'rules'] && hqView('backups'));
       allow create: if (id == 'boot' && isAdmin()
           && request.resource.data.keys().hasOnly(['uid','key','atMs'])
           && request.resource.data.uid == request.auth.uid
