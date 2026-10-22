@@ -384,6 +384,11 @@ body.staff-mode .staff-banner{display:block;}
 @media(max-width:600px){.ld-stats,.ld-grid{grid-template-columns:repeat(2,1fr);}}
 .perm-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
 .perm-grid .ord-perms{grid-column:1/-1;margin:4px 0 0;}
+.pw-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;}
+.pw-box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;max-width:380px;width:100%;}
+.pw-box h3{margin:0 0 10px;font-size:17px;}.pw-box p{font-size:12.5px;color:var(--muted);margin:10px 0;}
+.pw-cred{background:var(--panel2);border:1.5px dashed var(--line);border-radius:12px;padding:10px 12px;line-height:2;direction:ltr;text-align:left;font-size:14px;}
+.pw-acts{display:flex;flex-wrap:wrap;gap:8px;}.pw-acts .btn-primary{flex:1 1 100%;}
 .tok{font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;word-break:break-all;direction:ltr;text-align:left;}
 .setup{font-size:12px;line-height:1.9;background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:8px;}
 .ml-app{font-size:12.5px;line-height:1.9;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.35);border-radius:12px;padding:10px 12px;margin-bottom:10px;}
@@ -2989,7 +2994,9 @@ window.lySave=async function(toggleOnly){
     toast(d.on?'✅ تم حفظ خصم الزبائن الدائمين — يطبّق فوراً بالكاشير':'⏸️ تم إيقاف خصم الزبائن الدائمين');
   }catch(e){toast('❌ تعذّر الحفظ: '+(e.code||e.message),'error');document.getElementById('lyOn').checked=!!lyCur.on;}
 };
+let mcLast=[];
 function mcRender(list){
+  mcLast=list;
   const el=document.getElementById('mcList');
   if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--muted);padding:12px;font-size:12px">لا يوجد كاشيرية بعد</div>';return;}
   el.innerHTML=list.map(u=>{const p=u.perms||{};return `<div class="entity">
@@ -3002,6 +3009,7 @@ function mcRender(list){
     <div class="perm-row" style="align-items:center">⏰ الدوام من <input type="time" class="form-inp" style="width:auto;padding:6px" id="hf_${esc(u.id)}" value="${u.hours?fromMins(u.hours.from):''}">
       إلى <input type="time" class="form-inp" style="width:auto;padding:6px" id="ht_${esc(u.id)}" value="${u.hours?fromMins(u.hours.to):''}">
       <button class="btn-sm btn-edit" onclick="mcHours('${esc(u.id)}')">💾 حفظ الدوام</button>
+      <button class="btn-sm" onclick="mcPass('${esc(u.id)}')">🔑 كلمة سر جديدة</button>
       ${u.hours?`<button class="btn-sm" onclick="mcHours('${esc(u.id)}',true)">بدون وقت</button>`:''}
       ${mcExtOn(u)?`<button class="btn-sm btn-del" onclick="mcExtCancel('${esc(u.id)}')">✖ إلغاء التمديد</button>`:''}</div>
   </div>`;}).join('');
@@ -3031,6 +3039,35 @@ window.mcPerm=async function(uid,k,v){
   try{const fb=window._fb;const s=await fb.getDoc(fb.doc(fb.db,'users',uid));const perms={...(s.data().perms||{}),[k]:v};
     await fb.updateDoc(fb.doc(fb.db,'users',uid),{perms});audit('cashier.perms',{uid,perm:k,value:v});toast('✅ تم تحديث الصلاحية');}
   catch(e){toast('❌ تعذّر التحديث','error');}
+};
+// ── كلمة سر جديدة للكاشير ──
+// فايربيس يحفظ كلمات السر مشفّرة (محد يكدر يقراها) ← نسوي وحدة جديدة عن طريق سيرفر الإشعارات، وتنرسل للكاشير
+const pwGen=()=>{const c='abcdefghjkmnpqrstuvwxyz23456789';return Array.from(crypto.getRandomValues(new Uint32Array(10)),x=>c[x%c.length]).join('');};
+async function pwSet(uid,pass){
+  const fb=window._fb,s=await fb.getDoc(fb.doc(fb.db,'config','push')),url=s.exists()?String(s.data().url||'').trim():'';
+  if(!url)throw new Error('سيرفر الإشعارات مو مربوط — الإدارة العليا تضيفه من 🛡️ الأمان');
+  const r=await fetch(url,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+await fb.auth.currentUser.getIdToken()},body:JSON.stringify({action:'setPassword',uid,password:pass})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.ok)throw new Error(j.error==='forbidden'?'ما عندك صلاحية على هذا الحساب':j.error==='bad_target'?'هذا الحساب ما تتغيّر كلمة سره من هنا':j.error==='bad_order'?'كود سيرفر الإشعارات قديم — حدّثه بـ Cloudflare':'تعذّر التغيير ('+(j.error||r.status)+')');
+}
+function pwShow(name,email,pass){
+  const link=new URL('../sora3a-rest2/',location.href).href;
+  const msg=`🔑 بيانات دخول ${name||'الكاشير'} — سرعة\n📧 الإيميل: ${email}\n🔑 كلمة السر الجديدة: ${pass}\n\n🧾 الكاشير:\n${link}`;
+  const ov=document.createElement('div');ov.className='pw-ov';
+  ov.innerHTML=`<div class="pw-box"><h3>🔑 كلمة السر الجديدة</h3><div class="pw-cred">👤 ${esc(name||'')}<br>📧 ${esc(email)}<br>🔑 <b id="pwNew">${esc(pass)}</b></div>
+    <p>القديمة بطلت. أرسلها هسه — ما تنحفظ بالبرنامج.</p>
+    <div class="pw-acts"><a class="btn-primary" style="text-decoration:none;text-align:center" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(msg)}">💬 إرسال بالواتساب</a>
+    <button class="btn-sm" data-cp>📋 نسخ</button><button class="btn-sm btn-edit" data-x>تمام</button></div></div>`;
+  ov.querySelector('[data-cp]').onclick=async()=>{try{await navigator.clipboard.writeText(msg);toast('📋 تم النسخ');}catch(e){prompt('انسخ:',msg);}};
+  ov.querySelector('[data-x]').onclick=()=>ov.remove();
+  document.body.appendChild(ov);
+}
+window.mcPass=async function(uid){
+  const u=mcLast.find(x=>x.id===uid);if(!u)return;
+  if(!confirm(`كلمة سر جديدة لـ «${u.name||u.email}»؟\nالقديمة تبطل، وتطلعلك الجديدة حتى ترسلها له.`))return;
+  const pass=pwGen();
+  try{await pwSet(uid,pass);audit('cashier.password',{uid});}catch(e){toast('❌ '+e.message,'error');return;}
+  pwShow(u.name||'',u.email||'',pass);
 };
 // تمديد الدوام: الكاشير يمدد بنفسه لما يخلص وقته (ساعة، ساعتين، ٣، أو لنهاية اليوم) — هنا يبين، وصاحب المطعم يكدر يلغيه
 const mcExtOn=u=>!!(u&&u.hoursExt&&Number(u.hoursExt.untilMs)>Date.now());
