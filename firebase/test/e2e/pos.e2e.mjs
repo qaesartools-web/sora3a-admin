@@ -231,6 +231,8 @@ test('«تسديد طلبات الكابتن»: captain cash orders wait per cap
   await put('CS4', { captainId: 'CP', captainName: 'حسن', status: 'cancelled', ticketNo: 34, value: 9000, capSettled: false });                 // ملغي
   await put('CS5', { captainId: 'CP', captainName: 'حسن', status: 'delivered', ticketNo: 35, value: 7000, capSettled: true });                  // مسدد من قبل
   await put('CS6', { captainId: 'CP', captainName: 'حسن', status: 'delivered', ticketNo: 36, value: 6000, capSettled: false, payment: { method: 'cash' } });   // انسدد بالمطعم
+  // وردية مفتوحة: التسديد لازم ينحسب بالدرج
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RP/shifts/SHCAP'), { status: 'open', openedAtMs: now, openingCash: 10000, cashMoves: [], cashier: 'فحص' }); });
   const p = await page(B, { w: 1280, h: 800 });
   await login(p);
   await p.waitForSelector('.dnb[data-tab="capPay"]');
@@ -253,10 +255,64 @@ test('«تسديد طلبات الكابتن»: captain cash orders wait per cap
   await p.click('[data-cap-order="CS3"] button');
   await p.waitForFunction(() => /ماكو طلبات تنتظر التسديد/.test(document.getElementById('capPayBody').textContent));
   assert.equal(await p.isVisible('#capPayPillD'), false);
+  // المبالغ دخلت الدرج: حركات «تسديد كابتن» بالوردية، والمتوقع بالدرج = ١٠٬٠٠٠ + ٢٥٬٠٠٠
+  const sh = await until(async () => { const d = await read('restaurants/RP/shifts/SHCAP'); return (d.cashMoves || []).length === 3 ? d : null; });
+  assert.deepEqual(sh.cashMoves.map((m) => [m.type, m.amount]).sort((a, b) => a[1] - b[1]), [['cap', 5000], ['cap', 8000], ['cap', 12000]]);
+  await p.evaluate(() => goTab('shift'));
+  await p.waitForFunction(() => /تسديد الكباتن/.test(document.getElementById('shiftBody').textContent));
+  const shTxt = await p.textContent('#shiftBody');
+  assert.match(shTxt, /المتوقع بالدرج[^]*35,000/); assert.match(shTxt, /تسديد الكباتن[^]*25,000/);
   // خدمة الكابتن موقوفة ← التبويب ينخفي
   await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RP'), { features: { captain: false } }, { merge: true }); });
   await p.waitForFunction(() => getComputedStyle(document.querySelector('.dnb[data-tab="capPay"]')).display === 'none', null, { timeout: 10000 });
   await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RP'), { features: { captain: true } }, { merge: true }); });
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
+test('delivery edge cases: self pickup is paid into the drawer, paid orders cannot be edited, «captain didn\'t answer» alert, cancelled delivery leaves the captain list', async () => {
+  const now = Date.now();
+  const put = (id, d) => E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'orders/' + id), { restaurantId: 'RP', orderType: 'delivery', createdAtMs: now, fee: 2000, ...d }); });
+  await put('SP1', { status: 'ready', ticketNo: 41, customer: 'أبو سجاد', value: 4000, awaitCap: true, captainId: null, payment: { method: 'cod' }, capSettled: false,
+    items: [{ name: 'x', variant: 'وحدة', qty: 1, price: 4000 }] });
+  await put('ED1', { orderType: 'takeaway', held: true, holdNum: 7, status: 'preparing', customer: 'سفري #7', value: 3000, payment: { method: 'cash', cash: 3000, card: 0 },
+    items: [{ name: 'x', variant: 'وحدة', qty: 1, price: 3000 }] });
+  await put('NA1', { status: 'pending', ticketNo: 43, customer: 'زبون بطيء', value: 5000, captainId: 'CP', captainName: 'حسن', assignedAtMs: now - 6 * 60000, rejectedBy: [], payment: { method: 'cod' }, capSettled: false });
+  await put('CN1', { status: 'pending', ticketNo: 44, customer: 'ملغي', value: 5000, captainId: 'CP', captainName: 'حسن', assignedAtMs: now, rejectedBy: [], payment: { method: 'cod' }, capSettled: false, inv: false });
+  const p = await page(B, { w: 1280, h: 800 });
+  await login(p);
+  await p.waitForFunction(() => orders.some((o) => o.id === 'SP1') && orders.some((o) => o.id === 'NA1'));
+  // الكابتن ما رد من ٦ دقايق ← بطاقة «تغيير الكابتن»
+  await p.waitForSelector('#capWaitBox .cap-noans');
+  assert.match(await p.textContent('#capWaitBox .cap-noans'), /حسن/);
+  // الزبون إجا استلمه بنفسه ← يتحاسب ويدخل الدرج
+  await p.evaluate(() => ordSelfPickup('SP1'));
+  await p.waitForSelector('#payOv.on');
+  await p.click('#payOk');
+  const sp = await until(async () => { const o = await read('orders/SP1'); return o.status === 'delivered' ? o : null; });
+  assert.equal(sp.orderType, 'takeaway'); assert.equal(sp.fee, 0); assert.equal(sp.payment.method, 'cash'); assert.equal(sp.payment.cash, 4000);
+  assert.equal(sp.payment.shiftId, 'SHCAP'); assert.equal(sp.capSettled, null); assert.equal(sp.captainId, null);
+  // الطلب المدفوع ما يتعدل
+  await p.evaluate(() => ordEdit('ED1'));
+  await p.waitForTimeout(400);
+  assert.equal(await p.isVisible('#viewOv.on'), false, 'paid order: no edit dialog');
+  // إلغاء دلفري ← يطلع من قائمة الكباتن (ما يتراكم)
+  await p.evaluate(() => ordCancel('CN1'));
+  await p.waitForSelector('#acOv.on');
+  await p.click('#acDlgOk');
+  const cn = await until(async () => { const o = await read('orders/CN1'); return o.status === 'cancelled' ? o : null; });
+  assert.equal(cn.capSettled, null);
+  // رقم واحد للطلب: تذكرة «قيد التحضير» والشريط والفاتورة = نفس رقم شاشة المجهز و«طلبك جاهز» (ticketNo)
+  await p.click('#prods .prod >> nth=0'); await p.click('#sendBtn'); await p.keyboard.press('3');
+  await p.waitForSelector('#acOv.on'); await p.click('#acDlgOk');
+  const h = await until(async () => (await ordersRP()).find((x) => x.held && x.orderType === 'takeaway' && x.status === 'preparing' && x.id !== 'ED1'));
+  assert.ok(h.ticketNo > 0); assert.equal(h.holdNum, h.ticketNo); assert.equal(h.customer, 'سفري #' + h.ticketNo);
+  assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), new RegExp('تذكرة مطبخ #' + h.ticketNo + '\\b'));
+  await p.waitForSelector(`#holdStrip .hchip:has-text("#${h.ticketNo}")`);
+  await p.click('#prods .prod >> nth=0'); await p.click('#sendBtn'); await p.keyboard.press('2');
+  await p.waitForSelector('#payOv.on'); await p.click('#payOk');
+  const q = await until(async () => (await ordersRP()).find((x) => x.orderType === 'takeaway' && !x.held && x.ticketNo > h.ticketNo));
+  assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), new RegExp('class="num">#' + q.ticketNo + '<'), 'quick takeaway receipt shows the screen number');
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });

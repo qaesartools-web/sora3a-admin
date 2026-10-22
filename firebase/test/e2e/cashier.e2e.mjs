@@ -256,6 +256,17 @@ test('per-cashier order types and pager (from the admin app / Tower) apply live'
   await postCall('07705550002');
   await p.waitForTimeout(2500);
   assert.equal(await p.locator('#callsBox .call-card').count(), 0, 'hall cashier gets no calls');
+  // والطلبات الأونلاين: التوصيل ما يطلع لكاشير الصالة، والطاولة تطلع
+  const web = (id, d) => E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'webOrders/' + id), { restaurantId: 'RC', status: 'new', createdAtMs: Date.now(), customer: 'زبون', phone: '07700000009', items: [{ name: 'كلاسك', variant: 'وحدة', qty: 1 }], ...d }); });
+  await web('WD1', { mode: 'delivery', address: 'الكرادة' });
+  await web('WT1', { mode: 'table', table: 3 });
+  await p.waitForSelector('#webBox .web-card', { timeout: 10000 });
+  await p.waitForTimeout(800);
+  assert.equal(await p.locator('#webBox .web-card').count(), 1);
+  assert.match(await p.textContent('#webBox'), /طاولة/);
+  // ورفض الكابتن ما يطلع لكاشير الصالة
+  assert.equal(await p.isVisible('#rejOverlay.show'), false);
+  await write('webOrders/WD1', { status: 'rejected' }); await write('webOrders/WT1', { status: 'rejected' });
   await p.click('#sendBtn');
   await p.waitForSelector('#typeOv.on');
   assert.deepEqual(await shown(p), ['salon', 'takeaway']);
@@ -271,6 +282,22 @@ test('per-cashier order types and pager (from the admin app / Tower) apply live'
   await p.waitForSelector('#typeNone', { state: 'visible' });
   assert.deepEqual(await shown(p), []);
   await write('users/' + U.cash, { perms: { discount: true, cancel: false } });
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
+test('an untaken call disappears after its time and is marked «missed» (calls never pile up)', async () => {
+  await write('users/' + U.cash, { perms: { discount: true, cancel: false } });
+  const p = await page(B, { w: 1280, h: 800 });
+  await p.addInitScript(() => { window.__callTtl = 2500; });
+  await posLogin(p, 'cash@x.com', 'cashpass1');
+  await p.waitForSelector('#prods .prod');
+  await p.waitForTimeout(1200);
+  await postCall('07705550003');
+  await p.waitForSelector('#callsBox .call-card', { timeout: 10000 });
+  await p.waitForFunction(() => !document.querySelector('#callsBox .call-card'), null, { timeout: 10000 });
+  const c = await until(async () => (await all('incomingCalls', 'restaurantId', 'RC')).find((x) => x.number === '07705550003' && x.status === 'missed'));
+  assert.ok(c);
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
