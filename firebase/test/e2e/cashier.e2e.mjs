@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { doc, setDoc, getDoc, getDocs, updateDoc, collection, query, where } from 'firebase/firestore';
-import { serve, env, signUp, clearAuth, browser, page } from './harness.mjs';
+import { serve, env, signUp, clearAuth, browser, page, toCaptain } from './harness.mjs';
 
 let srv, E, B, U = {};
 const until = async (fn, ms = 10000) => { const t = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t > ms) return v; await new Promise((r) => setTimeout(r, 200)); } };
@@ -70,7 +70,7 @@ test('only the super admin adds and stops cashiers; the owner manages permission
   await p.click('#mcAddBtn');
   const cu = await until(async () => (await all('users', 'role', 'cashier'))[0]);
   assert.equal(cu.restaurantId, 'RC');
-  assert.deepEqual(cu.perms, { discount: true, cancel: false, inventory: false, menu: false, settings: false });
+  assert.deepEqual(cu.perms, { discount: true, cancel: false, inventory: false, menu: false, settings: false, oSalon: true, oTake: true, oHold: true, oDeliv: true, pager: true });
   U.cash = cu.id;
   await p.waitForSelector('#mcList .entity');
   // إيقاف وتفعيل من المدير الأعلى
@@ -98,6 +98,13 @@ test('only the super admin adds and stops cashiers; the owner manages permission
   await o.waitForSelector('#mcList .entity');
   assert.equal(await o.locator('#mcList .btn-del').count(), 0);
   assert.equal(await o.locator('#mcList button >> text=إيقاف').count(), 0);
+  // صاحب المطعم يحدد أنواع الطلبات اللي يرحّلها الكاشير (مثلاً يطفي الدلفري) والبيجر
+  assert.equal(await o.isChecked('#mcList input[data-op="oDeliv"]'), true);
+  await o.uncheck('#mcList input[data-op="oDeliv"]');
+  await until(async () => (await read('users/' + U.cash)).perms.oDeliv === false);
+  await o.waitForTimeout(500);
+  await o.check('#mcList input[data-op="oDeliv"]');
+  await until(async () => (await read('users/' + U.cash)).perms.oDeliv === true);
   // وصاحب المطعم: الربط بتطبيق «خط المطعم» بس — ما يشوف التوكن ولا MacroDroid ولا إضافة خط يدوي ولا «توكن جديد»
   assert.match(await o.getAttribute('.ml-app a', 'href'), /download\/line-android\/sora3a-line\.apk$/);
   assert.equal(await o.isVisible('#mlCard > .ml-adv'), false);
@@ -166,9 +173,23 @@ test('incoming call via line token → customer card → repeat last order → d
   assert.equal(await p.inputValue('#dName'), 'أبو حسين');
   assert.equal(await p.inputValue('#dAddr'), 'المنصور شارع 14');
   assert.equal(await p.inputValue('#dPhone'), '07701112222');
-  await p.click('#capList .capcard'); await p.click('#confCapBtn');
+  // الدلفري ما يختار كابتن بالبداية: ينحفظ «قيد التحضير» ولما يجهز يتحول للكابتن
+  assert.equal(await p.isVisible('#capList'), false, 'no captain list for a new delivery');
+  assert.match(await p.textContent('#confCapBtn'), /قيد التحضير/);
+  await p.click('#confCapBtn');
   const o = await until(async () => (await all('orders', 'restaurantId', 'RC')).find((x) => x.orderType === 'delivery'));
   assert.equal(o.phone, '07701112222'); assert.equal(o.customer, 'أبو حسين');
+  assert.equal(o.status, 'preparing'); assert.equal(o.awaitCap, true); assert.equal(o.captainId, null); assert.equal(o.capSettled, false);
+  await p.click('#holdStrip .hchip:has-text("دلفري")');
+  await p.waitForSelector('#viewOv.on');
+  assert.equal(await p.locator('#viewBody button:has-text("تسليم للزبون")').count(), 0);
+  await p.click('#viewBody .confbtn:has-text("تحويل للكابتن")');
+  await p.waitForSelector('#delivOv.on #capList .capcard');
+  assert.equal(await p.inputValue('#dName'), 'أبو حسين');
+  await p.click('#capList .capcard'); await p.click('#confCapBtn');
+  const o2 = await until(async () => { const x = (await all('orders', 'restaurantId', 'RC')).find((y) => y.id === o.id); return x && x.captainId ? x : null; });
+  assert.equal(o2.status, 'pending'); assert.equal(o2.awaitCap, false);
+  await p.waitForFunction(() => !document.querySelector('#holdStrip .hchip'), null, { timeout: 8000 });
   const cust = await until(async () => { const d = await read('restaurants/RC/customers/07701112222'); return d.orders === 5 ? d : null; });
   assert.equal(cust.itemCounts['زنكر'], 9);
   assert.equal(await p.evaluate(() => document.getElementById('curCust').classList.contains('on')), false);
@@ -176,7 +197,7 @@ test('incoming call via line token → customer card → repeat last order → d
   await p.click('#prods .prod >> nth=0');
   await p.click('#sendBtn'); await p.keyboard.press('4');
   await p.fill('#dPhone', '07809998877'); await p.fill('#dName', 'زبون جديد'); await p.fill('#dAddr', 'الكرادة');
-  await p.click('#capList .capcard'); await p.click('#confCapBtn');
+  await p.click('#confCapBtn'); await toCaptain(p);
   await until(() => read('restaurants/RC/customers/07809998877'));
   await p.click('#prods .prod >> nth=0');
   await p.click('#sendBtn'); await p.keyboard.press('4');
@@ -197,6 +218,46 @@ test('cashier without cancel/discount permission cannot cancel or discount', asy
   await p.evaluate(() => goTab('orders'));
   await p.waitForSelector('.ocard');
   assert.equal(await p.locator('button[onclick^="ordCancel"]').count(), 0);
+  await p.context().close();
+});
+
+test('per-cashier order types and pager (from the admin app / Tower) apply live', async () => {
+  const shown = (p) => p.$$eval('#typeOv .otype[data-t]', (b) => b.filter((x) => getComputedStyle(x).display !== 'none').map((x) => x.dataset.t));
+  // كاشير الدلفري بس، والبيجر مطفي عليه
+  await write('users/' + U.cash, { perms: { discount: true, oSalon: false, oTake: false, oHold: false, oDeliv: true, pager: false } });
+  const p = await page(B, { w: 1280, h: 800 });
+  await posLogin(p, 'cash@x.com', 'cashpass1');
+  await p.waitForSelector('#prods .prod');
+  await p.waitForTimeout(800);
+  assert.equal(await p.isVisible('#pagerBar'), false, 'pager hidden for this cashier');
+  await p.click('#prods .prod >> nth=0'); await p.click('#sendBtn');
+  await p.waitForSelector('#typeOv.on');
+  assert.deepEqual(await shown(p), ['delivery']);
+  await p.keyboard.press('1');                                   // صالة ممنوعة حتى بالكيبورد
+  assert.equal(await p.isVisible('#payOv.on'), false);
+  assert.equal(await p.isVisible('#typeOv.on'), true);
+  await p.keyboard.press('4');
+  await p.waitForSelector('#delivOv.on');
+  await p.click('#delivOv', { position: { x: 5, y: 5 } });
+  // كاشير الصالة: صالة + سفري قيد التحضير، والبيجر يرجع — يتحدّث فوراً
+  await write('users/' + U.cash, { perms: { discount: true, oSalon: true, oTake: false, oHold: true, oDeliv: false, pager: true } });
+  await p.waitForSelector('#pagerBar .pg', { timeout: 10000 });
+  await p.click('#sendBtn');
+  await p.waitForSelector('#typeOv.on');
+  assert.deepEqual(await shown(p), ['salon', 'takeaway']);
+  await p.keyboard.press('4');
+  assert.equal(await p.isVisible('#delivOv.on'), false);
+  await p.keyboard.press('1');
+  await p.waitForSelector('#payOv.on');
+  // كل الأنواع مطفية: رسالة بدل نافذة فارغة
+  await p.evaluate(() => { document.getElementById('payOv').classList.remove('on'); });
+  await write('users/' + U.cash, { perms: { discount: true, oSalon: false, oTake: false, oHold: false, oDeliv: false } });
+  await p.waitForFunction(() => (window.posUser.perms || {}).oSalon === false, null, { timeout: 10000 });
+  await p.click('#sendBtn');
+  await p.waitForSelector('#typeNone', { state: 'visible' });
+  assert.deepEqual(await shown(p), []);
+  await write('users/' + U.cash, { perms: { discount: true, cancel: false } });
+  assert.deepEqual(clean(p), []);
   await p.context().close();
 });
 

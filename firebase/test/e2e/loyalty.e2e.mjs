@@ -79,7 +79,7 @@ test('cashier (no discount permission) sees the reward, tells the customer, appl
   await p.click('#feePresets .fee-p.free');
   assert.equal(await p.inputValue('#dFee'), '0');
   await p.screenshot({ path: 'shots/loyalty-applied.png' });
-  await p.click('#capList .capcard'); await p.click('#confCapBtn');
+  await p.click('#confCapBtn');
   const o = await until(async () => (await orders())[0]);
   assert.equal(o.subtotal, 10000); assert.equal(o.discount, 4000); assert.equal(o.value, 6000);
   assert.equal(o.discountInfo.loyalty, true); assert.equal(o.discountInfo.reason, 'خصم الزبون الدائم');
@@ -106,7 +106,7 @@ test('legacy customer counts from orders; turning the service off removes it imm
   // الإدارة توقف الخدمة → يختفي الشريط ويُزال الخصم من السلة
   await put('restaurants/RL/loyalty/main', { on: false, every: 5, type: 'pct', value: 40, cap: 0 });
   await p.waitForFunction(() => !document.querySelector('#loyHint .loy-hint'), null, { timeout: 8000 });
-  await p.click('#capList .capcard'); await p.click('#confCapBtn');
+  await p.click('#confCapBtn');
   const o = await until(async () => (await orders()).find((x) => x.phone === '07809998877'));
   assert.equal(o.discount, 0); assert.equal(o.loyalty, undefined);
   const cust = await until(async () => { const d = await read('restaurants/RL/customers/07809998877'); return d.dOrders === 10 ? d : null; });

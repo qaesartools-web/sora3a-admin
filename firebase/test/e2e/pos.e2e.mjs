@@ -141,7 +141,7 @@ test('settings sync (tables & pagers only) + receipt uses restaurant settings + 
   await p.waitForSelector('#delivOv.on');
   assert.equal(await p.inputValue('#dFee'), '5000');
   await p.fill('#dName', 'زبون'); await p.fill('#dPhone', '0770'); await p.fill('#dAddr', 'زيونة');
-  await p.click('#capList .capcard'); await p.click('#confCapBtn');
+  await p.click('#confCapBtn');
   const d = await until(async () => (await ordersRP()).find((x) => x.orderType === 'delivery'));
   assert.equal(d.fee, 5000); assert.equal(d.tax || 0, 0); assert.equal(d.payment.method, 'cod');
   assert.equal(d.capSettled, false, 'waits for the captain to settle');

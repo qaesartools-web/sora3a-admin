@@ -10,7 +10,7 @@ import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } fro
 import os from 'node:os';
 import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc, arrayUnion } from 'firebase/firestore';
 import { chromium } from 'playwright-core';
-import { serve, env, signUp, clearAuth, browser, page, ROOTS } from './harness.mjs';
+import { serve, env, signUp, clearAuth, browser, page, ROOTS, toCaptain } from './harness.mjs';
 
 const PID = 'sora3a-system';
 let srv, E, B, worker, U = {};
@@ -103,7 +103,7 @@ async function newDelivery(phone, captain) {
   await P.click('#sendBtn'); await P.keyboard.press('4');
   await P.waitForSelector('#delivOv.on');
   await P.fill('#dName', 'زبون'); await P.fill('#dPhone', phone); await P.fill('#dAddr', 'الكرادة');
-  await pickCaptain(captain);
+  await P.click('#confCapBtn'); await toCaptain(P, captain);
   return until(async () => (await orders()).find((o) => o.phone === phone));
 }
 
