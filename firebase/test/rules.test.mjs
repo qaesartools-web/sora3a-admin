@@ -744,7 +744,14 @@ test('برنامج المالك: المطاعم والكاشيرية والكب�
     await assertFails(getDocs(query(collection(as(u), 'hqNotes'), where('restaurantId', '==', 'R1'))), u);
     await assertFails(getDoc(doc(as(u), 'hqTeam/hq1')), u);
     await assertFails(getDoc(doc(as(u), 'hqMeta/backup')), u);
+    await assertFails(getDoc(doc(as(u), 'hqMeta/rules')), u);
   }
+  // نتيجة نشر القواعد التلقائي: يشوفها اللي يشوف النسخ الاحتياطية، ومحد يكتبها غير GitHub (حساب الخدمة)
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'hqMeta/rules'), { ok: true, atMs: 1 }); });
+  await assertFails(getDoc(doc(hqAs('hq1'), 'hqMeta/rules')), 'no backups permission');
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'hqTeam/hq1'), { name: 'سجاد', perms: { overview: 'view', backups: 'view' } }); });
+  await assertSucceeds(getDoc(doc(hqAs('hq1'), 'hqMeta/rules')));
+  await assertFails(setDoc(doc(hqAs('admin1'), 'hqMeta/rules'), { ok: true, atMs: 2 }), 'only GitHub writes it');
   // فريق التجارب: يفتح تجربة لمطعم جديد (trial = true) بس، وما يحذف مطاعم
   const h2 = hqAs('hq2');
   await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'hqTeam/hq2'), { name: 'زينب', perms: { trials: 'edit' } }); });
