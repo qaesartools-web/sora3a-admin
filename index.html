@@ -616,10 +616,10 @@ body.staff-mode .staff-banner{display:block;}
     <!-- Screens: every screen link of the restaurant in one place (restaurant owner + admin) -->
     <div class="screen" id="scScreens">
       <div class="card admin-only"><div class="form-group" style="margin:0"><label>المطعم</label><select class="form-sel" id="scrRest" onchange="scrRender()"></select></div></div>
-      <div class="card scr-intro">📺 <b>كل شاشات المطعم وخدماته بمكان واحد.</b> افتح رابط الشاشة على جهازها (تلفون، تابلت، تلفزيون) وثبّتها، أو امسح الـQR بكاميرا التلفون.<br>🔗 <b>شاشة المجهز والمطبخ بدون إيميل:</b> يطلع رمز على الشاشة، تكتبه هنا بـ«ربط شاشة» وتفتح وحدها — والموظفين ما يعرفون حساب الإدارة.<br>🔐 إذا خدمة «أجهزة معتمدة فقط» شغّالة: الشاشة اللي تربطها تنتظر اعتماد إدارة سرعة مرة وحدة.</div>
+      <div class="card scr-intro">📺 <b>كل شاشات المطعم وخدماته بمكان واحد.</b> افتح رابط الشاشة على جهازها (تلفون، تابلت، تلفزيون) وثبّتها، أو امسح الـQR بكاميرا التلفون.<br>🔗 <b>المجهز والمطبخ والويتر بدون إيميل:</b> يطلع رمز على الجهاز، تكتبه هنا بـ«ربط جهاز» ويفتح وحده — والموظفين ما يعرفون حساب الإدارة.<br>🔐 إذا خدمة «أجهزة معتمدة فقط» شغّالة: الشاشة اللي تربطها تنتظر اعتماد إدارة سرعة مرة وحدة.</div>
       <div class="card scr-svc" id="scrSvc" hidden></div>
-      <div class="card scr-pair"><b>🔗 ربط شاشة (المجهز أو المطبخ)</b><small>افتح رابط الشاشة على جهازها ← يطلع رمز من 6 حروف ← اكتبه هنا واضغط «ربط». بدون إيميل وبدون كلمة سر.</small>
-        <div class="scr-pf"><input class="form-inp" id="scrCode" maxlength="6" dir="ltr" placeholder="ABC234" autocomplete="off" onkeydown="if(event.key==='Enter')scrPair()"><input class="form-inp" id="scrName" maxlength="60" placeholder="اسم الشاشة (اختياري): مطبخ الشوي" onkeydown="if(event.key==='Enter')scrPair()"><button type="button" class="btn-sm" id="scrPairBtn" onclick="scrPair()">🔗 ربط</button></div>
+      <div class="card scr-pair"><b>🔗 ربط جهاز (المجهز، المطبخ، الويتر)</b><small>افتح رابط الشاشة أو تطبيق الويتر على الجهاز ← يطلع رمز من 6 حروف ← اكتبه هنا واضغط «ربط». بدون إيميل وبدون كلمة سر. للويتر اكتب اسمه حتى يطلع على طلباته.</small>
+        <div class="scr-pf"><input class="form-inp" id="scrCode" maxlength="6" dir="ltr" placeholder="ABC234" autocomplete="off" onkeydown="if(event.key==='Enter')scrPair()"><input class="form-inp" id="scrName" maxlength="60" placeholder="الاسم (اختياري): مطبخ الشوي، أو اسم الويتر" onkeydown="if(event.key==='Enter')scrPair()"><button type="button" class="btn-sm" id="scrPairBtn" onclick="scrPair()">🔗 ربط</button></div>
         <div class="scr-pl" id="scrPaired"></div></div>
       <div id="scrList"></div>
     </div>
@@ -2639,7 +2639,7 @@ function scrItems(rid,r){
     {id:'cashier',ic:'🧾',t:'الكاشير',d:'برنامج الكاشير من المتصفح — وإله تطبيق أندرويد وويندوز بقسم التطبيقات.',url:SCR_R2,inst:1},
     {id:'kitchen',ic:'👨‍🍳',t:'شاشة المجهز — كل الطلبات',d:'تطلع كل طلبات المطبخ، وأقسام كل طلب، و«جاهز» يخلّص الطلب ويرجعه للكاشير.',url:k,feat:'kitchen',inst:1},
     {id:'kitchenSec',ic:'🔥',t:'شاشة المطبخ (الأقسام)',d:'نفس الرابط لكل أجهزة المطبخ: كل جهاز يختار قسمه ('+(secs.length?secs.map(x=>x.name).join('، '):'ماكو أقسام بعد — ضيفها من الكاشير ← الإعدادات ← «أقسام المطبخ والطابعات»')+') وتطلعله طلباته بس، و«جاهز» يعلّم قسمه.'+(secs.length&&!scrCfg.secOn?' ⚠️ شغّل «تقسيم الطلب على أقسام المطبخ» من الكاشير ← الإعدادات.':''),url:k+'?sec',feat:'kitchenSec',inst:1},
-    {id:'waiter',ic:'🧑‍🍳',t:'الويتر',d:'الويتر يطلب من الطاولة بالتلفون، والطلب ينطبع بالمطبخ مباشرة.',url:SCR_R2+'waiter.html',feat:'waiter',inst:1},
+    {id:'waiter',ic:'🧑‍🍳',t:'الويتر',d:'الويتر يطلب من الطاولة بالتلفون، والطلب ينطبع بالمطبخ مباشرة. التلفون ينربط برمز (بدون إيميل) من «ربط جهاز» فوق.',url:SCR_R2+'waiter.html',feat:'waiter',inst:1},
     {id:'captain',ic:'🛵',t:'الكابتن (للآيفون أو أي تلفون)',d:'تطبيق الكابتن من المتصفح — وإله تطبيق أندرويد تحت.',url:SCR_CAP+'captain.html',feat:'captain',inst:1},
     {id:'menu',ic:'📱',t:'منيو الباركود',d:'الزبون يفتحه ويطلب — اطبع QR الطاولات من الكاشير.',url:SCR_R2+'menu.html?r='+encodeURIComponent(rid),feat:'online'},
     {g:'تطبيقات تنزّل وتنصّب'},
@@ -2718,7 +2718,7 @@ function scrPairedRender(){
   if(!scrPairList.length){el.innerHTML='<small style="color:var(--muted)">ماكو شاشات مربوطة بعد.</small>';return;}
   el.innerHTML=scrPairList.slice().sort((a,b)=>(b.atMs||0)-(a.atMs||0)).map(x=>{
     const pend=x.approved!==true&&devOn;
-    return `<div class="scr-pr" data-paired="${esc(x.id)}"><div style="font-size:21px">${x.kind==='kitchenSec'?'🔥':'👨‍🍳'}</div><div style="flex:1;min-width:0"><b>${esc(x.name||'شاشة')}</b><small>${esc(x.platform||'')}${x.platform?' • ':''}<span class="scr-st">${pend?'⏳ تنتظر اعتماد إدارة سرعة':'✅ شغّالة'}</span>${x.pairedBy==='hq'?' • ربطتها إدارة سرعة':''}</small></div>${pend&&isAdmin()?`<button type="button" class="btn-sm" onclick="scrApprove('${esc(x.id)}')">✅ اعتماد</button>`:''}<button type="button" class="btn-sm" onclick="scrUnlink('${esc(x.id)}')">🔌 فصل</button></div>`;
+    return `<div class="scr-pr" data-paired="${esc(x.id)}"><div style="font-size:21px">${x.kind==='kitchenSec'?'🔥':x.kind==='waiter'?'🧑‍🍳':'👨‍🍳'}</div><div style="flex:1;min-width:0"><b>${esc(x.name||'شاشة')}</b><small>${esc(x.platform||'')}${x.platform?' • ':''}<span class="scr-st">${pend?'⏳ تنتظر اعتماد إدارة سرعة':'✅ شغّالة'}</span>${x.pairedBy==='hq'?' • ربطتها إدارة سرعة':''}</small></div>${pend&&isAdmin()?`<button type="button" class="btn-sm" onclick="scrApprove('${esc(x.id)}')">✅ اعتماد</button>`:''}<button type="button" class="btn-sm" onclick="scrUnlink('${esc(x.id)}')">🔌 فصل</button></div>`;
   }).join('');
 }
 window.scrPair=async function(){
@@ -2732,13 +2732,13 @@ window.scrPair=async function(){
     if(!p.exists()){toast('❌ الرمز غلط — تأكد منه على الشاشة','error');return;}
     const pd=p.data(),r=isRest()?myRestDoc:allRestaurants.find(x=>x.id===rid),hq=isAdmin();
     const ex=scrPairList.find(x=>x.id===pd.uid);
-    if(ex){toast('✅ هذي الشاشة مربوطة من قبل');ci.value='';return;}
-    const name=(ni.value||'').trim()||(pd.kind==='kitchenSec'?'شاشة المطبخ':'شاشة المجهز');
+    if(ex){toast('✅ هذا الجهاز مربوط من قبل');ci.value='';return;}
+    const name=(ni.value||'').trim()||(pd.kind==='kitchenSec'?'شاشة المطبخ':pd.kind==='waiter'?'ويتر':'شاشة المجهز');
     await fb.setDoc(fb.doc(fb.db,'screens',pd.uid),{restaurantId:rid,restName:String((r&&r.name)||'').slice(0,80),code,kind:String(pd.kind||'').slice(0,20),
       platform:String(pd.platform||'').slice(0,80),name:name.slice(0,60),pairedBy:hq?'hq':'owner',approved:hq,atMs:Date.now(),by:String(currentUser.email||'').slice(0,120)});
     audit('screen.pair',{restaurantId:rid,screen:pd.uid,name});
     ci.value='';ni.value='';
-    toast(!hq&&featBase(r,'devices')?'🔗 انربطت — تنتظر اعتماد إدارة سرعة مرة وحدة':'✅ انربطت الشاشة — تفتح وحدها هسه');
+    toast(!hq&&featBase(r,'devices')?'🔗 انربط — ينتظر اعتماد إدارة سرعة مرة وحدة':'✅ انربط — يفتح وحده هسه');
   }catch(e){toast(e&&e.code==='permission-denied'?'⛔ هذي الشاشة مربوطة بمطعم ثاني — افصلها منه أول':'📶 تعذّر الربط — تأكد من الإنترنت','error');}
   finally{btn.disabled=false;}
 };

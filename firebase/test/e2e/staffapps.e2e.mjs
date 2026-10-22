@@ -144,7 +144,8 @@ test('waiter: picks table 5 on the phone → order auto-accepted at the cashier 
   const cashier = await page(B, { w: 1280, h: 860 });
   await posLogin(cashier);
   const w = await page(B, { w: 390, h: 844 });
-  await login(w, BASE + 'waiter.html', 'waiter@x.com');
+  const ws = await pairScreen(w, BASE + 'waiter.html', { name: 'علي' });   // بدون إيميل: رمز + اسم الويتر
+  assert.equal(ws.pair.kind, 'waiter');
   await w.waitForSelector('.tb');
   assert.equal(await w.locator('.tb').count(), 8);
   assert.ok((await w.textContent('#wName')).includes('علي'));
@@ -168,7 +169,7 @@ test('waiter: picks table 5 on the phone → order auto-accepted at the cashier 
   await w.waitForSelector('#vOrders:not([hidden]) .od');
   const wo = await until(async () => (await list('webOrders', 'restaurantId', 'RW'))[0]);
   assert.equal(wo.source, 'waiter'); assert.equal(wo.mode, 'table'); assert.equal(wo.table, '5');
-  assert.equal(wo.waiter, 'علي'); assert.equal(wo.waiterUid, U.waiter); assert.equal(wo.day, bagDay());
+  assert.equal(wo.waiter, 'علي'); assert.equal(wo.waiterUid, ws.uid); assert.equal(wo.day, bagDay());
   // الكاشير يقبله تلقائياً ويطبع تذكرة المطبخ
   const o = await until(async () => (await list('orders', 'restaurantId', 'RW')).find((x) => x.webId === wo.id));
   assert.equal(o.orderType, 'salon'); assert.equal(o.tableNo, 5); assert.equal(o.source, 'waiter'); assert.equal(o.waiter, 'علي');
@@ -190,24 +191,38 @@ test('waiter: picks table 5 on the phone → order auto-accepted at the cashier 
   await w.context().close(); await cashier.context().close();
 });
 
-test('waiter: a captain account cannot use it; a wrong password shows an Arabic error', async () => {
-  U.cap = await signUp('wcap@x.com', 'secret123');
-  await put('users/' + U.cap, { role: 'captain', restaurantId: 'RW', captainId: 'C1', email: 'wcap@x.com' });
+test('waiter: no email or password — the phone shows a link code + QR; the owner links it from the admin panel with the waiter name; unlink brings a new code', async () => {
+  await write('restaurants/RW', { features: {} });
   const w = await page(B, { w: 390, h: 844 });
-  await w.goto(BASE + 'waiter.html');
-  await w.waitForSelector('#gEmail');
-  await w.fill('#gEmail', 'waiter@x.com'); await w.fill('#gPass', 'wrong-pass'); await w.click('#gGo');
-  await w.waitForFunction(() => document.getElementById('gErr').textContent.includes('غلط'));
-  await w.fill('#gEmail', 'wcap@x.com'); await w.fill('#gPass', 'secret123'); await w.click('#gGo');
-  await w.waitForFunction(() => document.getElementById('gErr') && document.getElementById('gErr').textContent.includes('مو حساب مطعم'));
-  assert.equal(await w.locator('#app:not([hidden])').count(), 0);
-  await w.context().close();
+  const sc = await openScreen(w, BASE + 'waiter.html');
+  assert.equal(await w.$('#gEmail'), null, 'no email login on the waiter app');
+  assert.match(await w.textContent('#gate'), /اربط هذا التلفون/);
+  await w.waitForSelector('#pairQr svg', { timeout: 8000 });
+  await w.screenshot({ path: 'shots/waiter-pair.png' });
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.goto('http://localhost:5050/sora3a-admin/index.html?pair=' + sc.code);
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await a.fill('#lEmail', 'scr@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#scScreens.on #scrCode', { timeout: 15000 });
+  await until(async () => (await a.inputValue('#scrCode')) === sc.code);
+  await a.fill('#scrName', 'حسين'); await a.click('#scrPairBtn');
+  const s1 = await until(() => read('screens/' + sc.uid));
+  assert.equal(s1.kind, 'waiter'); assert.equal(s1.name, 'حسين'); assert.equal(s1.pairedBy, 'owner');
+  await w.waitForSelector('#app:not([hidden]) .tb', { timeout: 20000 });
+  assert.match(await w.textContent('#wName'), /حسين/);
+  await a.waitForSelector(`[data-paired="${sc.uid}"]`);
+  assert.match(await a.textContent(`[data-paired="${sc.uid}"]`), /🧑‍🍳/);
+  // الويتر يفصل التلفون من 🔌 ← يرجع رمز جديد
+  await w.click('#outBtn');   // التأكيد يقبله الـharness
+  await w.waitForSelector('#pairCode', { timeout: 15000 });
+  assert.equal(await read('screens/' + sc.uid), null);
+  for (const y of [w, a]) { assert.deepEqual(clean(y).filter((e) => !/permission/i.test(e)), []); await y.context().close(); }
 });
 
 test('waiter: opening the link asks to install the app (prompt, close, manifest)', async () => {
   const w = await page(B, { w: 390, h: 844 });
   await w.goto(BASE + 'waiter.html');
-  await w.waitForSelector('#gEmail');
+  await w.waitForSelector('#pairCode', { timeout: 15000 });
   assert.equal(await w.isVisible('#inst'), false);
   // المتصفح يعلن إن التطبيق قابل للتثبيت
   await w.evaluate(() => { const e = new Event('beforeinstallprompt', { cancelable: true }); e.prompt = () => { window.__prompted = true; }; e.userChoice = Promise.resolve({ outcome: 'accepted' }); dispatchEvent(e); });
@@ -219,7 +234,7 @@ test('waiter: opening the link asks to install the app (prompt, close, manifest)
   // إغلاق البطاقة يخليها مسكّرة لنفس الجلسة
   await w.evaluate(() => { const e = new Event('beforeinstallprompt'); e.prompt = () => {}; e.userChoice = Promise.resolve({ outcome: 'dismissed' }); dispatchEvent(e); });
   await w.click('#instX');
-  await w.reload(); await w.waitForSelector('#gEmail');
+  await w.reload(); await w.waitForSelector('#pairCode', { timeout: 15000 });
   await w.evaluate(() => { const e = new Event('beforeinstallprompt'); e.prompt = () => {}; e.userChoice = Promise.resolve({}); dispatchEvent(e); });
   assert.equal(await w.isVisible('#inst'), false);
   const m = await (await fetch(BASE + 'waiter.webmanifest')).json();
@@ -592,20 +607,13 @@ test('kitchen screens link with a code — no admin email: owner links from the 
   await write('restaurants/RW', { features: { kitchen: false } });
 });
 
-test('kitchen screen signs out an old restaurant-email login on that device once (so nobody opens the cashier as the owner); waiter still needs approval with the restaurant email', async () => {
+test('a screen on a device signs out an old restaurant-email login there once (so nobody opens the cashier as the owner)', async () => {
   await write('restaurants/RW', { features: {} });
-  const w = await page(B);
-  await login(w, BASE + 'waiter.html', 'scr@x.com');
-  await w.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  const w = await page(B, { w: 1280, h: 860 });
+  await posLogin(w);
   await openScreen(w, BASE + 'kitchen.html');
-  await w.goto(BASE + 'waiter.html');
-  await w.waitForSelector('#gEmail', { timeout: 15000 });
-  // الويتر بإيميل المطعم + الأجهزة المعتمدة ← ينقفل لحد الاعتماد
-  await write('restaurants/RW', { features: { devices: true } });
-  await login(w, BASE + 'waiter.html', 'scr@x.com');
-  await w.waitForSelector('.dev-code', { timeout: 15000 });
-  const wk = await w.evaluate(() => localStorage.getItem('sora3a_dev_key'));
-  assert.match((await until(() => read('deviceReqs/' + wk))).platform, /الويتر/);
+  await w.goto(BASE + 'index.html');
+  await w.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
   assert.deepEqual(clean(w).filter((e) => !/permission/i.test(e)), []); await w.context().close();
   await write('restaurants/RW', { features: { kitchen: false } });
 });
@@ -665,7 +673,7 @@ test('services: the super admin stops/starts the screen, the QR (barcode) and th
   // الويتر موقوف ← رسالة؛ يتفعّل ← يرجع التطبيق بدون تحديث
   await write('restaurants/RW', { features: { waiter: false } });
   const w = await page(B);
-  await login(w, BASE + 'waiter.html', 'waiter@x.com');
+  await pairScreen(w, BASE + 'waiter.html', { name: 'علي' });
   await w.waitForSelector('#off:not([hidden])', { timeout: 15000 });
   assert.equal(await w.isVisible('#app'), false);
   await write('restaurants/RW', { features: {} });

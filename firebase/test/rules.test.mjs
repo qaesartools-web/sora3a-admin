@@ -834,3 +834,36 @@ test('خدمات المطعم: صاحب المطعم يوقف خدمة شغّل�
   await assertFails(updateDoc(doc(as('rest2'), 'restaurants/R1'), { 'svcOff.captain': true }), 'other owner');
   await assertFails(updateDoc(doc(as('cash1'), 'restaurants/R1'), { 'svcOff.captain': true }), 'cashier');
 });
+
+test('تلفون الويتر المربوط برمز: يشوف المنيو ويرسل طلب طاولة باسمه بس — وما يشوف الطلبات؛ وشاشة المطبخ ما ترسل طلبات ويتر', async () => {
+  const day = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'orders/K1'), { restaurantId: 'R1', status: 'delivered', kitchen: 'new', value: 9000 });
+    await setDoc(doc(db, 'restaurants/R1/menu/main'), { cats: [] });
+    await setDoc(doc(db, 'restaurants/R1/settings/main'), { tables: 8 });
+    await setDoc(doc(db, 'screenPairs/WA23CD'), { uid: 'wA', kind: 'waiter', atMs: 1 });
+    await setDoc(doc(db, 'screens/wA'), { restaurantId: 'R1', code: 'WA23CD', kind: 'waiter', name: 'علي', pairedBy: 'hq', approved: true, atMs: 1 });
+    await setDoc(doc(db, 'screens/sK'), { restaurantId: 'R1', code: 'SK23CD', kind: 'kitchen', name: 'المجهز', pairedBy: 'hq', approved: true, atMs: 1 });
+  });
+  const W = as('wA'), K = as('sK');
+  const wo = (uid) => ({ restaurantId: 'R1', source: 'waiter', mode: 'table', table: '5', items: [{ name: 'برغر', qty: 1, price: 6000 }], status: 'new', total: 6000, createdAtMs: Date.now(), waiter: 'علي', waiterUid: uid, day });
+  await assertSucceeds(getDoc(doc(W, 'restaurants/R1')));
+  await assertSucceeds(getDoc(doc(W, 'restaurants/R1/settings/main')));
+  await assertSucceeds(getDoc(doc(W, 'restaurants/R1/menu/main')));
+  await assertSucceeds(getDoc(doc(W, 'restaurants/R1/menuImages/i1')));
+  await assertSucceeds(setDoc(doc(W, 'webOrders/W1'), wo('wA')));
+  await assertFails(setDoc(doc(W, 'webOrders/W2'), wo('someoneElse')), 'only as itself');
+  await assertSucceeds(getDocs(query(collection(W, 'webOrders'), where('restaurantId', '==', 'R1'), where('waiterUid', '==', 'wA'))));
+  await assertFails(getDocs(query(collection(W, 'webOrders'), where('restaurantId', '==', 'R1'))), 'only its own orders');
+  await assertFails(getDoc(doc(W, 'orders/K1')), 'waiter phone does not read orders');
+  await assertFails(updateDoc(doc(W, 'orders/K1'), { kitchen: 'ready', kitchenReadyAt: 1 }), 'waiter phone does not mark ready');
+  await assertFails(getDoc(doc(W, 'restaurants/R1/accounting/x')));
+  // شاشة المطبخ: الطلبات نعم، المنيو وطلبات الويتر لا
+  await assertSucceeds(getDoc(doc(K, 'orders/K1')));
+  await assertFails(getDoc(doc(K, 'restaurants/R1/menu/main')));
+  await assertFails(setDoc(doc(K, 'webOrders/K9'), wo('sK')), 'kitchen screen cannot send waiter orders');
+  // صاحب المطعم يوقف الويتر ← ما يرسل
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'restaurants/R1'), { svcOff: { waiter: true } }); });
+  await assertFails(setDoc(doc(W, 'webOrders/W3'), wo('wA')), 'waiter paused by owner');
+});
