@@ -138,6 +138,10 @@ test('table QR: customer orders from table 4 → cashier accepts → kitchen tic
   assert.equal(o.orderType, 'salon'); assert.equal(o.tableNo, 4); assert.equal(o.customer, 'طاولة 4');
   assert.equal(o.source, 'qr'); assert.equal(o.payment.method, 'later'); assert.equal(o.value, 11000);
   assert.equal(o.note, 'بسرعة رجاءً'); assert.equal(o.kitchen, 'new');
+  // طلب الطاولة يبقى «قيد التحضير» بالكاشير لحد ما يستلم المبلغ
+  assert.equal(o.status, 'preparing'); assert.equal(o.held, true);
+  await cashier.waitForSelector(`#holdStrip .hchip:has-text("QR")`, { timeout: 10000 });
+  assert.match(await cashier.textContent('#holdStrip'), /🪑 4/);
   const slip = await cashier.evaluate(() => document.getElementById('prtFr').srcdoc);
   assert.ok(slip.includes('QR') && slip.includes('شاورما لحم [بدون طماطة]') && !slip.includes('الإجمالي النهائي'), 'kitchen ticket only');
   const w2 = await until(async () => { const d = await read('webOrders/' + w.id); return d.orderId ? d : null; });

@@ -179,6 +179,10 @@ test('waiter: picks table 5 on the phone → the cashier gets an alert and appro
   // الكاشير يوافق ← يروح للمطبخ، وشاشة المجهز تشوفه
   await cashier.click('#webBox .call-go');
   const o = await until(async () => (await list('orders', 'restaurantId', 'RW')).find((x) => x.webId === wo.id));
+  // بعد الموافقة: يبقى «قيد التحضير» بالكاشير (طاولة 5 • علي) لحد ما يستلم المبلغ
+  assert.equal(o.status, 'preparing'); assert.equal(o.held, true);
+  await cashier.waitForSelector('#holdStrip .hchip:has-text("علي")', { timeout: 10000 });
+  assert.match(await cashier.textContent('#holdStrip'), /🪑 5/);
   const k = await page(B, { w: 1280, h: 800 });
   await pairScreen(k, BASE + 'kitchen.html', { name: 'المجهز' });
   await k.waitForSelector(`[data-done="${o.id}"]`, { timeout: 15000 });
@@ -196,6 +200,15 @@ test('waiter: picks table 5 on the phone → the cashier gets an alert and appro
   await w.screenshot({ path: 'shots/waiter-orders.png' });
   await w.click('.tab[data-tab="tables"]');
   await w.waitForSelector('.tb.ready[data-t="5"]');
+  // الكاشير يفتح الطاولة من «قيد التحضير» ← «💰 استلام المبلغ» ← ينشال من الشريط ويصير مدفوع
+  await cashier.click('#holdStrip .hchip:has-text("علي")');
+  await cashier.click('button:has-text("💰 استلام المبلغ")');
+  await cashier.waitForSelector('#payOv.on'); await cashier.click('#payOk');
+  const paid = await until(async () => { const x = (await list('orders', 'restaurantId', 'RW')).find((y) => y.id === o.id); return x && x.status === 'delivered' ? x : null; });
+  assert.equal(paid.payment.method, 'cash'); assert.equal(paid.payment.cash, paid.value);
+  await cashier.waitForFunction(() => !/علي/.test((document.getElementById('holdStrip') || {}).textContent || ''), null, { timeout: 10000 });
+  await w.click('.tab[data-tab="orders"]');
+  await w.waitForFunction(() => /تم/.test(document.querySelector('.od .st').textContent), null, { timeout: 10000 });
   assert.deepEqual(clean(w), []);
   assert.deepEqual(clean(cashier), []);
   await w.context().close(); await cashier.context().close(); await k.context().close();
