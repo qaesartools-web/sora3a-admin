@@ -231,7 +231,7 @@ test('delivery: address required → kitchen first → when ready the cashier pi
   assert.equal(o.orderType, 'delivery'); assert.equal(o.status, 'preparing'); assert.equal(o.captainId, null); assert.equal(o.awaitCap, true);
   assert.equal(o.kitchen, 'new');
   assert.equal(o.fee, 2000); assert.equal(o.address, 'زيونة، قرب جامع الرحمن');
-  assert.equal((await read('tracking/' + o.id)).status, 'preparing');
+  assert.equal((await until(async () => { const t = await read('tracking/' + o.id); return t && t.status === 'preparing' ? t : null; })).status, 'preparing');
   const wl = await until(async () => { const d = await read('webOrders/' + w.id); return d.trackId ? d : null; });
   assert.equal(wl.trackId, o.id);
   assert.equal(await cashier.locator('#capWaitBox .cap-wait').count(), 0, 'not ready yet');

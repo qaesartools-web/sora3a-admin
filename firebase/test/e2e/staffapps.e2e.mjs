@@ -140,7 +140,8 @@ test('ready screen opens straight from a signed-in cashier and shows orders made
   await p.context().close();
 });
 
-test('waiter: picks table 5 on the phone → order auto-accepted at the cashier → kitchen ticket → waiter sees ready', async () => {
+test('waiter: picks table 5 on the phone → the cashier gets an alert and approves → kitchen screen shows it → waiter sees ready', async () => {
+  await write('restaurants/RW', { features: { kitchen: true } });
   const cashier = await page(B, { w: 1280, h: 860 });
   await posLogin(cashier);
   const w = await page(B, { w: 390, h: 844 });
@@ -170,8 +171,17 @@ test('waiter: picks table 5 on the phone → order auto-accepted at the cashier 
   const wo = await until(async () => (await list('webOrders', 'restaurantId', 'RW'))[0]);
   assert.equal(wo.source, 'waiter'); assert.equal(wo.mode, 'table'); assert.equal(wo.table, '5');
   assert.equal(wo.waiter, 'علي'); assert.equal(wo.waiterUid, ws.uid); assert.equal(wo.day, bagDay());
-  // الكاشير يقبله تلقائياً ويطبع تذكرة المطبخ
+  // الكاشير يشوف الطلب بتنبيه وينتظر موافقته — وما يروح للمطبخ قبلها
+  await cashier.waitForSelector('#webBox .web-card:has-text("علي")', { timeout: 15000 });
+  assert.match(await cashier.textContent('#webBox'), /طاولة 5/);
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal((await list('orders', 'restaurantId', 'RW')).find((x) => x.webId === wo.id), undefined, 'not in the kitchen before the cashier accepts');
+  // الكاشير يوافق ← يروح للمطبخ، وشاشة المجهز تشوفه
+  await cashier.click('#webBox .call-go');
   const o = await until(async () => (await list('orders', 'restaurantId', 'RW')).find((x) => x.webId === wo.id));
+  const k = await page(B, { w: 1280, h: 800 });
+  await pairScreen(k, BASE + 'kitchen.html', { name: 'المجهز' });
+  await k.waitForSelector(`[data-done="${o.id}"]`, { timeout: 15000 });
   assert.equal(o.orderType, 'salon'); assert.equal(o.tableNo, 5); assert.equal(o.source, 'waiter'); assert.equal(o.waiter, 'علي');
   assert.equal(o.value, 6000 * 2 + 7500 + 750); assert.equal(o.note, 'الطاولة مستعجلة'); assert.equal(o.payment.method, 'later');
   const slip = await until(() => cashier.evaluate(() => { const f = document.getElementById('prtFr'); return f && f.srcdoc.includes('ويتر') ? f.srcdoc : null; }));
@@ -188,7 +198,8 @@ test('waiter: picks table 5 on the phone → order auto-accepted at the cashier 
   await w.waitForSelector('.tb.ready[data-t="5"]');
   assert.deepEqual(clean(w), []);
   assert.deepEqual(clean(cashier), []);
-  await w.context().close(); await cashier.context().close();
+  await w.context().close(); await cashier.context().close(); await k.context().close();
+  await write('restaurants/RW', { features: {} });
 });
 
 test('waiter: no email or password — the phone shows a link code + QR; the owner links it from the admin panel with the waiter name; unlink brings a new code', async () => {
