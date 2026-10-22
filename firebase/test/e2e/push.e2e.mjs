@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { serve, env, signUp, clearAuth, browser, page } from './harness.mjs';
+import { serve, env, signUp, clearAuth, browser, page, toCaptain } from './harness.mjs';
 
 let srv, E, B, mock, hits = [];
 const until = async (fn, ms = 10000) => { const t = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t > ms) return v; await new Promise((r) => setTimeout(r, 200)); } };
@@ -44,7 +44,7 @@ test('cashier notifies the push server for each new delivery order (with the use
   await p.click('#sendBtn'); await p.keyboard.press('4');
   await p.waitForSelector('#delivOv.on');
   await p.fill('#dName', 'زبون'); await p.fill('#dPhone', '07701234567'); await p.fill('#dAddr', 'الكرادة');
-  await p.click('#capList .capcard'); await p.click('#confCapBtn');
+  await p.click('#confCapBtn'); await toCaptain(p);
   const hit = await until(() => hits.find((x) => x.body.includes('orderId')));
   assert.ok(hit, 'push server was called');
   assert.match(hit.auth, /^Bearer ey/);

@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { doc, setDoc, getDoc, getDocs, collection, query, where, updateDoc } from 'firebase/firestore';
-import { serve, env, signUp, clearAuth, browser, page } from './harness.mjs';
+import { serve, env, signUp, clearAuth, browser, page, toCaptain } from './harness.mjs';
 
 let srv, E, B, U = {};
 const until = async (fn, ms = 8000) => { const t = Date.now(); for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t > ms) return v; await new Promise((r) => setTimeout(r, 200)); } };
@@ -68,9 +68,8 @@ test('cashier: delivery order → tracking, captain reject → escaped notice, c
   await p.click('#sendBtn');
   await p.click('button[onclick="pickType(\'delivery\')"]');
   await p.fill('#dName', 'زبون <script>'); await p.fill('#dPhone', '07701112222'); await p.fill('#dAddr', 'المنصور');
-  await p.click('#capList .capcard >> nth=0');
-  await p.click('#confCapBtn');
-  const o = await until(async () => (await ordersOf('R1'))[0]);
+  await p.click('#confCapBtn'); await toCaptain(p);
+  const o = await until(async () => { const x = (await ordersOf('R1'))[0]; return x && x.captainId ? x : null; });
   assert.equal(o.status, 'pending'); assert.equal(o.captainId, 'C1'); assert.equal(o.orderType, 'delivery');
   const t = await until(() => read('tracking/' + o.id));
   assert.equal(t.status, 'pending'); assert.equal(t.phone, undefined); assert.equal(t.restaurantName, 'برغر ويست');

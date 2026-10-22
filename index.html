@@ -383,6 +383,7 @@ body.staff-mode .staff-banner{display:block;}
 .ld-cred{background:var(--panel2);border:1.5px dashed var(--line);border-radius:12px;padding:12px;font-size:14px;line-height:2;direction:ltr;text-align:left;}
 @media(max-width:600px){.ld-stats,.ld-grid{grid-template-columns:repeat(2,1fr);}}
 .perm-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;}
+.perm-grid .ord-perms{grid-column:1/-1;margin:4px 0 0;}
 .tok{font-family:ui-monospace,monospace;font-size:11px;background:var(--panel2);border:1px dashed var(--line);border-radius:8px;padding:6px 8px;word-break:break-all;direction:ltr;text-align:left;}
 .setup{font-size:12px;line-height:1.9;background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:8px;}
 .ml-app{font-size:12.5px;line-height:1.9;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.35);border-radius:12px;padding:10px 12px;margin-bottom:10px;}
@@ -2608,6 +2609,9 @@ window.exportCSV=function(){
 // التقارير والأرباح صارت للإدارة فقط؛ الكاشير يطبع تقرير اليوم من الوردية
 const PERMS=[['discount','٪ الخصم'],['cancel','❌ إلغاء الطلبات'],['inventory','📦 المخزون والمصروفات (إضافة ومشاهدة)'],['menu','🍔 تعديل المنيو'],['settings','⚙️ الإعدادات']];
 const PERM_DEFAULT={discount:true,cancel:false,inventory:false,menu:false,settings:false};
+// أنواع الطلبات اللي يشتغل عليها الكاشير + البيجر — مفتوحة إلا إذا انطفت (false)
+const ORD_PERMS=[['oSalon','🪑 صالة'],['oTake','🛍️ سفري فوري'],['oHold','🥡 سفري قيد التحضير'],['oDeliv','🏍️ دلفري'],['pager','📟 البيجر']];
+const ordPermRow=(p,on)=>`<div class="perm-row ord-perms"><b style="width:100%;font-size:12px;color:var(--muted)">🧾 أنواع الطلبات اللي يرحّلها:</b>${ORD_PERMS.map(([k,l])=>on(k,l,p[k]!==false)).join('')}</div>`;
 const MAX_LINES=10;
 // الدوام يُخزّن بالدقائق من منتصف الليل (بتوقيت بغداد)
 const toMins=v=>{const m=/^(\d{1,2}):(\d{2})$/.exec(v||'');return m?(+m[1])*60+(+m[2]):null;};
@@ -2776,7 +2780,8 @@ function mrFillRests(){
 }
 window.mrInit=function(){
   mrFillRests();
-  document.getElementById('mcPerms').innerHTML=PERMS.map(([k,l])=>`<label><input type="checkbox" data-p="${k}" ${PERM_DEFAULT[k]?'checked':''}> ${l}</label>`).join('');
+  document.getElementById('mcPerms').innerHTML=PERMS.map(([k,l])=>`<label><input type="checkbox" data-p="${k}" ${PERM_DEFAULT[k]?'checked':''}> ${l}</label>`).join('')
+    +ordPermRow({},(k,l,c)=>`<label><input type="checkbox" data-p="${k}" ${c?'checked':''}> ${l}</label>`);
   mrLoad();
 };
 // المدير الأعلى: لأي مطعم تنضاف الحسابات (حتى ما ينضاف كاشير بدون ما يختار المطعم)
@@ -2991,6 +2996,7 @@ function mcRender(list){
       ${isAdmin()?`<button class="btn-sm ${u.disabled?'btn-cap':'btn-edit'}" onclick="mcToggle('${esc(u.id)}',${u.disabled?'false':'true'})">${u.disabled?'تفعيل':'⏸️ إيقاف'}</button>
       <button class="btn-sm btn-del" onclick="mcDel('${esc(u.id)}')">🗑️</button>`:''}</div>
     <div class="perm-row">${PERMS.map(([k,l])=>`<label><input type="checkbox" ${p[k]?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>
+    ${ordPermRow(p,(k,l,c)=>`<label><input type="checkbox" data-op="${k}" ${c?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`)}
     <div class="perm-row" style="align-items:center">⏰ الدوام من <input type="time" class="form-inp" style="width:auto;padding:6px" id="hf_${esc(u.id)}" value="${u.hours?fromMins(u.hours.from):''}">
       إلى <input type="time" class="form-inp" style="width:auto;padding:6px" id="ht_${esc(u.id)}" value="${u.hours?fromMins(u.hours.to):''}">
       <button class="btn-sm btn-edit" onclick="mcHours('${esc(u.id)}')">💾 حفظ الدوام</button>

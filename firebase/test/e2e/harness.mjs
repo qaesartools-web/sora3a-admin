@@ -65,3 +65,17 @@ export async function page(b, { notif = false, w = 400, h = 860 } = {}) {
   p.on('dialog', (d) => d.accept());
   return p;
 }
+// دلفري جديد ينحفظ «قيد التحضير» بدون كابتن؛ هنا نحوّله للكابتن من الكاشير (اختيارياً كابتن معيّن بالاسم)
+export async function toCaptain(p, name) {
+  const h = await p.waitForFunction(() => {
+    const o = orders.filter((x) => x.orderType === 'delivery' && x.awaitCap && !x.captainId && x.status !== 'cancelled')
+      .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0))[0];
+    return o && o.id;
+  }, null, { timeout: 15000 });
+  const id = await h.jsonValue();
+  await p.evaluate((id) => openChangeCapForOrder(id), id);
+  await p.waitForSelector('#delivOv.on #capList .capcard');
+  await p.click(name ? `#capList .capcard:has-text("${name}")` : '#capList .capcard >> nth=0');
+  await p.click('#confCapBtn');
+  return id;
+}
