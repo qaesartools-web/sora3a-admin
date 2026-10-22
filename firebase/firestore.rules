@@ -37,7 +37,8 @@ service cloud.firestore {
         && (r.get('expiryMs', 0) == 0 || r.get('expiryMs', 0) > request.time.toMillis());
     }
     // خدمات المطعم يفتحها ويغلقها المدير الأعلى فقط: captain / calls / whatsapp / pager / online (الافتراضي مفعّلة)
-    function feat(rid, k) { return restDoc(rid).get('features', {}).get(k, true) != false; }
+    //  وصاحب المطعم يكدر يوقف (ويرجّع) بس الخدمات اللي شغّلها البرج: restaurants/{rid}.svcOff = {خدمة: true}
+    function feat(rid, k) { return restDoc(rid).get('features', {}).get(k, true) != false && restDoc(rid).get('svcOff', {}).get(k, false) != true; }
     function isRestaurant() {
       return active() && role() == 'restaurant'
         && me().get('restaurantId', '') != ''
@@ -103,6 +104,15 @@ service cloud.firestore {
     //  ونفس الحساب ما يشتغل بجهازين بنفس الوقت (آخر دخول يفوز).
     function devicesOn(rid) { return restDoc(rid).get('features', {}).get('devices', false) == true; }
     function devApproved(rid, key) { return exists(/databases/$(database)/documents/restaurants/$(rid)/devices/$(key)); }
+    // ── شاشات المطبخ المربوطة برمز (بدون إيميل ولا كلمة سر) ──
+    //  الشاشة تدخل «مجهول» (Anonymous) وتطلع رمز ← screenPairs/{الرمز} = {uid}. البرج أو صاحب المطعم (لوحة الإدارة) يكتب الرمز
+    //  ← screens/{uid} = {restaurantId, approved…}. الشاشة تشوف طلبات مطعمها وإعداداته، وتعلّم «جاهز» بس.
+    //  الأجهزة المعتمدة شغّالة: الشاشة اللي يربطها صاحب المطعم تنتظر اعتماد البرج (approved)، واللي يربطها البرج معتمدة.
+    function scrPath() { return /databases/$(database)/documents/screens/$(request.auth.uid); }
+    function screenOf(rid) {
+      return signedIn() && rid is string && exists(scrPath()) && get(scrPath()).data.restaurantId == rid && restaurantOpen(rid)
+        && (get(scrPath()).data.get('approved', false) == true || !devicesOn(rid));
+    }
     function deviceOk() {
       let sp = /databases/$(database)/documents/sessions/$(request.auth.uid);
       return !devicesOn(myRest())
@@ -208,7 +218,8 @@ service cloud.firestore {
     match /restaurants/{rid} {
       allow read: if isOffice() || hqAny()
         || (active() && role() in ['restaurant', 'cashier', 'captain'] && me().get('restaurantId', '') == rid)
-        || (active() && role() == 'restaurant' && rid in me().get('branches', []));
+        || (active() && role() == 'restaurant' && rid in me().get('branches', []))
+        || screenOf(rid);
       allow create: if isAdmin() || hqEdit('rests')
         || (hqEdit('trials') && request.resource.data.get('trial', false) == true);
       allow delete: if isAdmin() || hqEdit('rests');
@@ -226,7 +237,8 @@ service cloud.firestore {
       match /{coll}/{d=**} {
         allow read: if isOffice() || hqView('rests') || (coll == 'devices' && hqView('devices'))
           || (coll == 'devices' && ownsRest(rid))
-          || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid)));
+          || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid)))
+          || (coll == 'settings' && screenOf(rid));
         allow write: if isAdmin() || hqEdit('rests') || (coll == 'devices' && hqEdit('devices'))
           || (coll != 'devices' && (ownsRest(rid)
           // الكاشير: البيع يحدّث المخزون الجاهز بالمنيو + الورديات + سجل الزبائن
@@ -272,6 +284,39 @@ service cloud.firestore {
     }
 
     // ── captains ────────────────────────────────────────────
+    // ── screens/{uid}: شاشة مطبخ مربوطة بمطعم (شوف screenOf) ──
+    match /screens/{uid} {
+      function pairOk(d) {
+        return d.keys().hasOnly(['restaurantId','restName','kind','name','code','platform','pairedBy','approved','atMs','by'])
+          && d.restaurantId is string && d.restaurantId != '' && str(d.code, 12)
+          && exists(/databases/$(database)/documents/screenPairs/$(d.code))
+          && get(/databases/$(database)/documents/screenPairs/$(d.code)).data.uid == uid
+          && optStr(d, 'name', 60) && optStr(d, 'restName', 80) && optStr(d, 'kind', 20) && optStr(d, 'platform', 80) && optStr(d, 'by', 120);
+      }
+      function hqScr() { return isAdmin() || hqEdit('devices') || hqEdit('rests'); }
+      allow get: if signedIn() && (request.auth.uid == uid || isOffice() || hqView('devices') || hqView('rests')
+        || ownsRest(resource.data.restaurantId));
+      allow list: if isOffice() || hqView('devices') || hqView('rests') || ownsRest(resource.data.restaurantId);
+      // البرج يربطها معتمدة مباشرة — وصاحب المطعم يربط لمطعمه بس، والاعتماد يبقى للبرج
+      allow create: if pairOk(request.resource.data) && (hqScr()
+        || (ownsRest(request.resource.data.restaurantId) && request.resource.data.get('approved', false) == false
+            && request.resource.data.get('pairedBy', '') == 'owner'));
+      allow update: if hqScr()
+        || (ownsRest(resource.data.restaurantId) && onlyChanged(['name']) && optStr(request.resource.data, 'name', 60));
+      allow delete: if hqScr() || ownsRest(resource.data.restaurantId) || (signedIn() && request.auth.uid == uid);
+    }
+    // ── screenPairs/{الرمز}: الشاشة غير المربوطة تطلع رمز (المعرّف) — اللي يعرف الرمز بس يكدر يربطها ──
+    match /screenPairs/{code} {
+      function pairDoc(d) {
+        return d.keys().hasOnly(['uid','atMs','platform','kind']) && d.uid == request.auth.uid
+          && optStr(d, 'platform', 80) && optStr(d, 'kind', 20);
+      }
+      allow get: if signedIn();
+      allow create: if signedIn() && code.size() == 6 && pairDoc(request.resource.data);
+      allow update: if signedIn() && resource.data.uid == request.auth.uid && pairDoc(request.resource.data);
+      allow delete: if (signedIn() && resource.data.uid == request.auth.uid) || isAdmin() || hqEdit('devices');
+    }
+
     match /captains/{cid} {
       allow read: if isOffice() || hqView('rests')
         || (staffOf(resource.data.restaurantId))
@@ -317,13 +362,22 @@ service cloud.firestore {
         // الكابتن: طلباته فقط + الطلبات المعلّقة في مطعمه
         //  (الاستعلامات: where captainId == X  أو  where restaurantId == R && status == 'pending')
         || (isCaptain() && resource.data.captainId == myCap())
-        || (isCaptain() && resource.data.status == 'pending' && resource.data.restaurantId == me().restaurantId);
+        || (isCaptain() && resource.data.status == 'pending' && resource.data.restaurantId == me().restaurantId)
+        // شاشة المطبخ المربوطة: طلبات مطعمها
+        || screenOf(resource.data.restaurantId);
 
       allow create: if isAdmin() || validNew(request.resource.data);
 
       allow update: if isAdmin()
         || (staffOf(resource.data.restaurantId)
             && request.resource.data.restaurantId == resource.data.restaurantId)
+
+        // شاشة المطبخ المربوطة: «جاهز» بس (الطلب كله أو قسم منه) — وطلب أونلاين قيد التحضير يصير «جاهز للاستلام»
+        || (screenOf(resource.data.restaurantId)
+            && onlyChanged(['kitchen','kitchenReadyAt','kSec','status','readyAt','timeline'])
+            && request.resource.data.get('kitchen', null) in [resource.data.get('kitchen', null), 'ready']
+            && (request.resource.data.get('status', null) == resource.data.get('status', null)
+                || (resource.data.get('status', null) == 'preparing' && request.resource.data.status == 'ready')))
 
         // قبول الطلب: مرة واحدة فقط (يُنفَّذ داخل transaction)
         || (isCaptain()

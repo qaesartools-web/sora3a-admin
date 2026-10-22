@@ -130,6 +130,19 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .scr-qr{display:grid;place-items:center;background:#fff;border-radius:12px;padding:8px}
 .scr-qr svg{width:170px;height:170px}
 .scr-sec{font-size:12.5px;font-weight:800;color:var(--muted);margin:14px 2px 8px}
+.scr-tag.warn{background:rgba(217,119,6,.14);color:#d97706}
+.scr-pair b,.scr-svc b{font-size:14.5px}.scr-pair>small,.scr-svc>small{display:block;color:var(--muted);font-size:12px;margin:4px 0 10px;line-height:1.8}
+.scr-pf{display:flex;flex-wrap:wrap;gap:8px}.scr-pf .form-inp{flex:1 1 170px;margin:0}
+#scrCode{letter-spacing:4px;font-weight:800;text-transform:uppercase;text-align:center;flex:0 1 160px}
+.scr-pf .btn-sm{background:var(--accent);color:#fff;font-size:13px;padding:10px 18px}
+.scr-pl{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.scr-pr{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+.scr-pr b{font-size:13.5px}.scr-pr small{display:block;color:var(--muted);font-size:11.5px}
+.scr-pr .btn-sm{background:var(--panel2);color:var(--text)}
+.scr-sv{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px;font-weight:700}
+.scr-sv small{color:var(--muted);font-weight:600;font-size:12px}
+.scr-sw{min-width:96px;border:none;border-radius:999px;padding:7px 12px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;background:var(--panel2);color:var(--muted)}
+.scr-sw.on{background:#16a34a;color:#fff}
 .card-title{font-size:14px;font-weight:900;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
 .card-title .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
 
@@ -603,7 +616,11 @@ body.staff-mode .staff-banner{display:block;}
     <!-- Screens: every screen link of the restaurant in one place (restaurant owner + admin) -->
     <div class="screen" id="scScreens">
       <div class="card admin-only"><div class="form-group" style="margin:0"><label>المطعم</label><select class="form-sel" id="scrRest" onchange="scrRender()"></select></div></div>
-      <div class="card scr-intro">📺 <b>كل شاشات المطعم بمكان واحد.</b> افتح رابط الشاشة على جهازها (تلفون، تابلت، تلفزيون) وثبّتها، أو امسح الـQR بكاميرا التلفون.<br>🔑 كلها تدخل <b>بإيميل المطعم وكلمة السر</b> — نفس لوحة الإدارة.<br>🔐 إذا خدمة «أجهزة معتمدة فقط» شغّالة: كل جهاز جديد يطلعله رمز، وتعتمده إدارة سرعة مرة وحدة وبعدها يفتح وحده.</div>
+      <div class="card scr-intro">📺 <b>كل شاشات المطعم وخدماته بمكان واحد.</b> افتح رابط الشاشة على جهازها (تلفون، تابلت، تلفزيون) وثبّتها، أو امسح الـQR بكاميرا التلفون.<br>🔗 <b>شاشة المجهز والمطبخ بدون إيميل:</b> يطلع رمز على الشاشة، تكتبه هنا بـ«ربط شاشة» وتفتح وحدها — والموظفين ما يعرفون حساب الإدارة.<br>🔐 إذا خدمة «أجهزة معتمدة فقط» شغّالة: الشاشة اللي تربطها تنتظر اعتماد إدارة سرعة مرة وحدة.</div>
+      <div class="card scr-svc" id="scrSvc" hidden></div>
+      <div class="card scr-pair"><b>🔗 ربط شاشة (المجهز أو المطبخ)</b><small>افتح رابط الشاشة على جهازها ← يطلع رمز من 6 حروف ← اكتبه هنا واضغط «ربط». بدون إيميل وبدون كلمة سر.</small>
+        <div class="scr-pf"><input class="form-inp" id="scrCode" maxlength="6" dir="ltr" placeholder="ABC234" autocomplete="off" onkeydown="if(event.key==='Enter')scrPair()"><input class="form-inp" id="scrName" maxlength="60" placeholder="اسم الشاشة (اختياري): مطبخ الشوي" onkeydown="if(event.key==='Enter')scrPair()"><button type="button" class="btn-sm" id="scrPairBtn" onclick="scrPair()">🔗 ربط</button></div>
+        <div class="scr-pl" id="scrPaired"></div></div>
       <div id="scrList"></div>
     </div>
 
@@ -852,7 +869,11 @@ const canManage=()=>isAdmin()||isRest();
 // العنصر الثالث = مطفية افتراضياً (تشتغل بس إذا شغّلها المدير الأعلى)
 const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 الباركود والمنيو الأونلاين'],['screen','📺 شاشة طلبك جاهز'],['waiter','🧑‍🍳 تطبيق الويتر'],['kitchen','👨‍🍳 شاشة المجهز (مطبخ منفصل)',1],['kitchenSec','🔥 شاشة المطبخ (الأقسام)',1],['printTest','🧪 تجربة الطابعات (محاكي)',1],['devices','🔐 أجهزة معتمدة فقط',1]];
 const OFF_DEFAULT=new Set(SERVICES.filter(x=>x[2]).map(x=>x[0]));
-const featOf=(r,k)=>OFF_DEFAULT.has(k)?!!(r&&r.features&&r.features[k]===true):(!r||!r.features||r.features[k]!==false);
+const featBase=(r,k)=>OFF_DEFAULT.has(k)?!!(r&&r.features&&r.features[k]===true):(!r||!r.features||r.features[k]!==false);
+// صاحب المطعم يكدر يوقف (ويرجّع) بس الخدمات اللي شغّلها البرج: restaurants.svcOff — مو «الأجهزة المعتمدة» ولا التجربة ولا شاشة طلبك جاهز
+const OWNER_SVC=['captain','calls','whatsapp','pager','online','waiter','kitchen','kitchenSec'];
+const ownerOff=(r,k)=>OWNER_SVC.includes(k)&&!!(r&&r.svcOff&&r.svcOff[k]===true);
+const featOf=(r,k)=>featBase(r,k)&&!ownerOff(r,k);
 let myRestDoc=null;
 let prevPendingCount=null, notifReady=false;
 function playNotifSound(){
@@ -1008,6 +1029,14 @@ function enterApp(){
   watchHqConsole();
   const au=window.auRestore&&window.auRestore();
   if(au&&au.screen&&document.querySelector(`.dnav-btn[data-screen="${au.screen}"]`))setTimeout(()=>goTab(au.screen),200);
+  // مسح QR شاشة المطبخ (‎?pair=رمز) ← «ربط شاشة» والرمز جاهز
+  const pc=(new URLSearchParams(location.search).get('pair')||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+  if(pc&&document.querySelector('.dnav-btn[data-screen="scScreens"]'))setTimeout(()=>{
+    goTab('scScreens');const i=document.getElementById('scrCode');if(i)i.value=pc;
+    try{const u=new URL(location.href);u.searchParams.delete('pair');history.replaceState(null,'',u);}catch(e){}
+    const n=document.getElementById('scrName');if(n)n.focus();
+    toast('🔗 رمز الشاشة جاهز — اكتب اسم إلها (اختياري) واضغط «ربط»');
+  },400);
 }
 
 // «الإدارة العليا» يتحكم بيها المالك من برج سرعة: إذا طفّاها، نخفي كل شي عن حساب الإدارة ونوجّهه لبرج سرعة
@@ -1046,7 +1075,7 @@ const tabs=[
   {id:'acc',label:'المخزون والحسابات',icon:'📒',screen:'scAcc',manage:true},
   {id:'staff',label:'الموظفين',icon:'👥',screen:'scStaff',adminOnly:true},
   {id:'myrest',label:'الكاشيرية والخطوط',icon:'☎️',screen:'scMyRest',manage:true},
-  {id:'screens',label:'الشاشات',icon:'📺',screen:'scScreens',manage:true},
+  {id:'screens',label:'الشاشات والخدمات',icon:'📺',screen:'scScreens',manage:true},
   {id:'security',label:'الأمان',icon:'🛡️',screen:'scSecurity',adminOnly:true},
 ];
 
@@ -1202,9 +1231,11 @@ function startListeners(){
   }));
   if(isRest()){
     unsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',currentUser.restaurantId),snap=>{
-      const before=JSON.stringify((myRestDoc&&myRestDoc.features)||{});
+      const svcSig=()=>JSON.stringify([(myRestDoc&&myRestDoc.features)||{},(myRestDoc&&myRestDoc.svcOff)||{}]);
+      const before=svcSig();
       myRestDoc=snap.exists()?{id:snap.id,...snap.data()}:null;
-      if(before!==JSON.stringify((myRestDoc&&myRestDoc.features)||{})){
+      if(document.getElementById('scScreens').classList.contains('on')&&before!==svcSig())scrRender();
+      if(before!==svcSig()){
         const cur=document.querySelector('.screen.on');buildNavs();
         // إذا أُغلقت خدمة الشاشة الحالية نرجع للرئيسية
         if(cur)goTab(document.querySelector(`.dnav-btn[data-screen="${cur.id}"]`)?cur.id:'scDash');
@@ -1784,7 +1815,7 @@ function renderRests(){
         <div class="meta-item"><strong>${fmt(r.subscription||0)}</strong>د.ع/شهر</div>
       </div>
       ${branchLine(r)}
-      <div class="svc-row"><span class="svc-l">الخدمات:</span>${SERVICES.map(([k,l])=>{const on=featOf(r,k);return `<button type="button" class="svc ${on?'on':'off'}" title="${on?'اضغط للإيقاف':'اضغط للتشغيل'}" onclick="toggleFeat('${esc(r.id)}','${k}',${on?'false':'true'})">${on?'✅':'⛔'} ${l}</button>`;}).join('')}</div>
+      <div class="svc-row"><span class="svc-l">الخدمات:</span>${SERVICES.map(([k,l])=>{const on=featBase(r,k),own=on&&ownerOff(r,k);return `<button type="button" class="svc ${on?'on':'off'}" title="${own?'صاحب المطعم موقفها — ':''}${on?'اضغط للإيقاف':'اضغط للتشغيل'}" onclick="toggleFeat('${esc(r.id)}','${k}',${on?'false':'true'})">${own?'⏸️':on?'✅':'⛔'} ${l}</button>`;}).join('')}</div>
       <div class="entity-actions">
         <button class="btn-sm btn-edit" onclick="openEditRest('${esc(r.id)}')">✏️ تعديل</button>
         ${r.userId?`<button class="btn-sm btn-cap" onclick="openBranches('${esc(r.id)}')">🏢 الفروع</button>`:''}
@@ -2027,7 +2058,8 @@ window.toggleFeat=async function(id,k,v,sure){
   if(k==='devices'&&v&&!sure&&!confirm('تشغيل «الأجهزة المعتمدة»؟\nالكاشيرية يدخلون بس من الأجهزة اللي اعتمدتها (من ☎️ الكاشيرية والخطوط)، وأي جهاز ثاني ينقفل فوراً.'))return;
   const name=(SERVICES.find(x=>x[0]===k)||[])[1]||k;
   try{
-    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{['features.'+k]:v});
+    // البرج يشغّل الخدمة من جديد ← تبدي شغّالة (حتى لو صاحب المطعم چان موقفها)
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',id),{['features.'+k]:v,...(v&&OWNER_SVC.includes(k)?{['svcOff.'+k]:false}:{})});
     audit('restaurant.feature',{restaurantId:id,feature:k,value:v});
     toast((v?'✅ تم تشغيل ':'⛔ تم إيقاف ')+name);
   }catch(e){toast('❌ تعذّر التحديث','error');}
@@ -2620,8 +2652,10 @@ function scrItems(rid,r){
 }
 window.scrRender=async function(){
   const rid=scrRid(),el=document.getElementById('scrList');if(!el)return;
-  if(!rid){el.innerHTML='<div class="card" style="color:var(--muted)">⬆️ اختر المطعم أولاً</div>';return;}
+  scrWatchPaired(rid);
+  if(!rid){el.innerHTML='<div class="card" style="color:var(--muted)">⬆️ اختر المطعم أولاً</div>';document.getElementById('scrSvc').hidden=true;return;}
   const r=isRest()?myRestDoc:allRestaurants.find(x=>x.id===rid);
+  scrSvcRender(r);
   if(scrCfg.rid!==rid){
     scrCfg={rid,secs:null,secOn:false};el.innerHTML='<div class="card" style="color:var(--muted)">⏳</div>';
     try{const fb=window._fb,s=await fb.getDoc(fb.doc(fb.db,'restaurants',rid,'settings','main')),d=s.exists()?s.data():{};scrCfg.secs=(d.sections||[]).filter(x=>x&&x.name&&x.id);scrCfg.secOn=!!d.kSecOn;}
@@ -2632,9 +2666,10 @@ window.scrRender=async function(){
   for(const it of scrItems(rid,r)){
     if(it.g){if(open)html+='</div>';html+=`<div class="scr-sec">${esc(it.g)}</div><div class="scr-g">`;open=true;continue;}
     const on=!it.feat||featOf(r,it.feat)||(it.feat==='calls'&&featOf(r,'whatsapp'));
-    const tag=it.none?'':on?`<span class="scr-tag ok">${it.app?'تطبيق':'✅ شغّالة'}</span>`:'<span class="scr-tag bad">⛔ موقوفة</span>';
+    const own=!on&&it.feat&&(featBase(r,it.feat)||(it.feat==='calls'&&featBase(r,'whatsapp')));   // البرج مشغّلها وصاحب المطعم موقفها
+    const tag=it.none?'':on?`<span class="scr-tag ok">${it.app?'تطبيق':'✅ شغّالة'}</span>`:own?`<span class="scr-tag warn">⏸️ ${isRest()?'موقوفة منك':'موقوفة من صاحب المطعم'}</span>`:'<span class="scr-tag bad">⛔ موقوفة</span>';
     html+=`<div class="scr-c ${on||it.none?'':'off'}" data-scr="${esc(it.id)}"><div class="scr-h"><div class="scr-i">${it.ic}</div><div style="flex:1;min-width:0"><b>${esc(it.t)}</b>${it.inst?'<small>📲 تنثبّت كتطبيق من الرابط</small>':it.app?'<small>⬇️ تنزيل وتنصيب</small>':''}</div>${tag}</div>
-      <div class="scr-d">${esc(it.d)}${on||it.none?'':' — تتفعّل من إدارة سرعة.'}</div>
+      <div class="scr-d">${esc(it.d)}${on||it.none?'':own?(isRest()?' — ترجّعها من «خدمات مطعمك» فوق.':' — صاحب المطعم يرجّعها من لوحة الإدارة.'):' — تتفعّل من إدارة سرعة.'}</div>
       ${it.url?`<input class="scr-u" readonly value="${esc(it.url)}" onclick="this.select()">
       <div class="scr-a"><button class="btn-sm" onclick="scrCopy('${esc(it.id)}')">📋 نسخ</button><a class="btn-sm" href="${esc(it.url)}" target="_blank" rel="noopener">${it.app?'⬇️ تنزيل':'🔗 فتح'}</a><button class="btn-sm" onclick="scrWa('${esc(it.id)}')">💬 واتساب</button><button class="btn-sm" onclick="scrQr('${esc(it.id)}')">🔳 QR</button></div>
       <div class="scr-qr" data-qr="${esc(it.id)}" hidden></div>`:''}</div>`;
@@ -2643,6 +2678,80 @@ window.scrRender=async function(){
   el.innerHTML=html;
   el.querySelectorAll('.scr-u').forEach(i=>{i.scrollLeft=i.scrollWidth;});   // آخر الرابط (القسم) هو المهم
   if(scrOpenQr)scrQr(scrOpenQr,true);
+};
+// ── خدمات مطعمك (صاحب المطعم): يوقف ويرجّع بس اللي شغّلها البرج ──
+function scrSvcRender(r){
+  const box=document.getElementById('scrSvc');if(!box)return;
+  if(!isRest()||!r){box.hidden=true;return;}
+  const rows=SERVICES.filter(([k])=>OWNER_SVC.includes(k)).map(([k,l])=>{
+    const base=featBase(r,k),on=featOf(r,k);
+    return `<div class="scr-sv" data-svc="${k}"><span>${l}</span>${base?`<button type="button" class="scr-sw ${on?'on':''}" onclick="scrSvc('${k}',${on?'false':'true'})">${on?'✅ شغّالة':'⏸️ موقوفة'}</button>`:'<small>⛔ تتفعّل من إدارة سرعة</small>'}</div>`;
+  }).join('');
+  box.innerHTML=`<b>🧩 خدمات مطعمك</b><small>توقف وترجّع الخدمات اللي فعّلتها إلك إدارة سرعة — مثلاً تطفي شاشة المطبخ وتشتغل بشاشة المجهز بس.</small>${rows}`;
+  box.hidden=false;
+}
+window.scrSvc=async function(k,on){
+  if(!isRest()||!myRestDoc)return;
+  if(!featBase(myRestDoc,k))return toast('⛔ هذي الخدمة تتفعّل من إدارة سرعة','warn');
+  const name=(SERVICES.find(x=>x[0]===k)||[])[1]||k;
+  try{
+    await window._fb.updateDoc(window._fb.doc(window._fb.db,'restaurants',myRestDoc.id),{['svcOff.'+k]:!on});
+    audit('restaurant.ownerService',{restaurantId:myRestDoc.id,feature:k,value:on});
+    toast((on?'✅ رجّعت ':'⏸️ وقّفت ')+name);
+  }catch(e){toast('❌ تعذّر التحديث','error');}
+};
+// ── ربط شاشة المجهز / المطبخ برمز (بدون إيميل) ──
+let scrPairRid='',scrPairUnsub=null,scrPairList=[];
+function scrWatchPaired(rid){
+  if(scrPairRid===rid)return scrPairedRender();
+  if(scrPairUnsub){scrPairUnsub();scrPairUnsub=null;}
+  scrPairRid=rid;scrPairList=[];scrPairedRender();
+  if(!rid)return;
+  const fb=window._fb;
+  scrPairUnsub=fb.onSnapshot(fb.query(fb.collection(fb.db,'screens'),fb.where('restaurantId','==',rid)),s=>{if(scrPairRid!==rid)return;scrPairList=s.docs.map(d=>({id:d.id,...d.data()}));scrPairedRender();},()=>{});
+  unsubs.push(()=>{if(scrPairUnsub){scrPairUnsub();scrPairUnsub=null;}scrPairRid='';});
+}
+function scrPairedRender(){
+  const el=document.getElementById('scrPaired');if(!el)return;
+  const r=isRest()?myRestDoc:allRestaurants.find(x=>x.id===scrPairRid),devOn=featBase(r,'devices');
+  if(!scrPairRid){el.innerHTML='';return;}
+  if(!scrPairList.length){el.innerHTML='<small style="color:var(--muted)">ماكو شاشات مربوطة بعد.</small>';return;}
+  el.innerHTML=scrPairList.slice().sort((a,b)=>(b.atMs||0)-(a.atMs||0)).map(x=>{
+    const pend=x.approved!==true&&devOn;
+    return `<div class="scr-pr" data-paired="${esc(x.id)}"><div style="font-size:21px">${x.kind==='kitchenSec'?'🔥':'👨‍🍳'}</div><div style="flex:1;min-width:0"><b>${esc(x.name||'شاشة')}</b><small>${esc(x.platform||'')}${x.platform?' • ':''}<span class="scr-st">${pend?'⏳ تنتظر اعتماد إدارة سرعة':'✅ شغّالة'}</span>${x.pairedBy==='hq'?' • ربطتها إدارة سرعة':''}</small></div>${pend&&isAdmin()?`<button type="button" class="btn-sm" onclick="scrApprove('${esc(x.id)}')">✅ اعتماد</button>`:''}<button type="button" class="btn-sm" onclick="scrUnlink('${esc(x.id)}')">🔌 فصل</button></div>`;
+  }).join('');
+}
+window.scrPair=async function(){
+  const rid=scrRid();if(!rid)return toast('⬆️ اختر المطعم أولاً','warn');
+  const ci=document.getElementById('scrCode'),ni=document.getElementById('scrName');
+  const code=(ci.value||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(code.length!==6)return toast('اكتب الرمز اللي طالع على الشاشة (6 حروف)','warn');
+  const fb=window._fb,btn=document.getElementById('scrPairBtn');btn.disabled=true;
+  try{
+    const p=await fb.getDoc(fb.doc(fb.db,'screenPairs',code));
+    if(!p.exists()){toast('❌ الرمز غلط — تأكد منه على الشاشة','error');return;}
+    const pd=p.data(),r=isRest()?myRestDoc:allRestaurants.find(x=>x.id===rid),hq=isAdmin();
+    const ex=scrPairList.find(x=>x.id===pd.uid);
+    if(ex){toast('✅ هذي الشاشة مربوطة من قبل');ci.value='';return;}
+    const name=(ni.value||'').trim()||(pd.kind==='kitchenSec'?'شاشة المطبخ':'شاشة المجهز');
+    await fb.setDoc(fb.doc(fb.db,'screens',pd.uid),{restaurantId:rid,restName:String((r&&r.name)||'').slice(0,80),code,kind:String(pd.kind||'').slice(0,20),
+      platform:String(pd.platform||'').slice(0,80),name:name.slice(0,60),pairedBy:hq?'hq':'owner',approved:hq,atMs:Date.now(),by:String(currentUser.email||'').slice(0,120)});
+    audit('screen.pair',{restaurantId:rid,screen:pd.uid,name});
+    ci.value='';ni.value='';
+    toast(!hq&&featBase(r,'devices')?'🔗 انربطت — تنتظر اعتماد إدارة سرعة مرة وحدة':'✅ انربطت الشاشة — تفتح وحدها هسه');
+  }catch(e){toast(e&&e.code==='permission-denied'?'⛔ هذي الشاشة مربوطة بمطعم ثاني — افصلها منه أول':'📶 تعذّر الربط — تأكد من الإنترنت','error');}
+  finally{btn.disabled=false;}
+};
+window.scrUnlink=async function(id){
+  const x=scrPairList.find(y=>y.id===id);
+  if(!confirm(`فصل «${(x&&x.name)||'الشاشة'}»؟\nترجع الشاشة لرمز جديد وتحتاج ربط مرة ثانية.`))return;
+  try{await window._fb.deleteDoc(window._fb.doc(window._fb.db,'screens',id));audit('screen.unlink',{screen:id});toast('🔌 انفصلت الشاشة');}
+  catch(e){toast('❌ تعذّر الفصل','error');}
+};
+window.scrApprove=async function(id){
+  if(!isAdmin())return;
+  try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'screens',id),{approved:true});audit('screen.approve',{screen:id});toast('✅ انعتمدت الشاشة');}
+  catch(e){toast('❌ تعذّر الاعتماد','error');}
 };
 const scrFind=id=>{const rid=scrRid();return scrItems(rid,isRest()?myRestDoc:allRestaurants.find(x=>x.id===rid)).find(x=>x.id===id);};
 window.scrCopy=async function(id){const it=scrFind(id);if(!it)return;try{await navigator.clipboard.writeText(it.url);toast('📋 تم النسخ');}catch(e){prompt('انسخ الرابط:',it.url);}};
