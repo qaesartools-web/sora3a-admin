@@ -447,6 +447,146 @@ test('kitchen display (شاشة المجهز): shows new orders, «جاهز» �
   await c.context().close();
 });
 
+test('kitchen sections screen (kitchen.html?sec): each device picks its section from a list, sees only its items, «ready» marks its section; its own service, installable', async () => {
+  const now = Date.now();
+  // شاشة المطبخ شغّالة وشاشة المجهز مطفية — كل وحدة بخدمتها
+  await write('restaurants/RW', { features: { kitchen: false, kitchenSec: true } });
+  await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: 2, kSecOn: true,
+    sections: [{ id: 'grill', name: 'الشوي', emoji: '🔥' }, { id: 'drinks', name: 'المشروبات', emoji: '🥤' }] });
+  await put('orders/KS1', { restaurantId: 'RW', orderType: 'salon', status: 'delivered', kitchen: 'new', ticketNo: 88, value: 12750, day: bagDay(now), createdAt: '20:10', createdAtMs: now - 2 * 60000,
+    items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 2, sec: 'grill' }, { name: 'لبن', variant: 'وحدة', qty: 1, sec: 'drinks' }],
+    kSec: { grill: { n: 2, readyAt: 0 }, drinks: { n: 1, readyAt: 0 } } });
+  const p = await page(B, { w: 1280, h: 800 });
+  await login(p, BASE + 'kitchen.html?sec', 'scr@x.com');
+  // أول ما تنفتح: «اختار قسمك» بأقسام المطبخ
+  await p.waitForSelector('#pick:not([hidden]) [data-pick="grill"]', { timeout: 15000 });
+  assert.match(await p.textContent('#pick'), /اختار قسمك/);
+  assert.match(await p.textContent('#pickG'), /الشوي/); assert.match(await p.textContent('#pickG'), /المشروبات/);
+  assert.equal(await p.isVisible('#pickBack'), false, 'أول مرة لازم يختار');
+  await p.screenshot({ path: 'shots/kitchen-pick.png' });
+  await p.click('[data-pick="grill"]');
+  await p.waitForSelector('.card [data-sec="KS1|grill"]', { timeout: 15000 });
+  assert.equal(await p.isVisible('#pick'), false);
+  assert.match(await p.textContent('#rName'), /برغر الشاشة — 🔥 الشوي/);
+  assert.match(new URL(p.url()).search, /sec=grill/);
+  const card = await p.evaluate(() => document.querySelector('[data-sec="KS1|grill"]').closest('.card').textContent);
+  assert.match(card, /برغر لحم/); assert.doesNotMatch(card, /لبن/, 'قسم الشوي ما يشوف المشروبات');
+  assert.match(card, /الشوي جاهز/);
+  await p.screenshot({ path: 'shots/kitchen-section.png' });
+  // ملف التثبيت باسم القسم ويفتح على قسمه
+  const mf = await p.evaluate(async () => (await fetch(document.querySelector('link[rel="manifest"]').href)).json());
+  assert.equal(mf.short_name, 'المطبخ — الشوي'); assert.equal(mf.display, 'standalone');
+  assert.match(mf.start_url, /\/sora3a-rest2\/kitchen\.html\?sec=grill$/); assert.ok(mf.icons.length >= 2);
+  assert.equal(await p.getAttribute('meta[name="apple-mobile-web-app-title"]', 'content'), 'المطبخ — الشوي');
+  // «الشوي جاهز» ← يتعلّم القسم بس، والطلب بعده بالمطبخ (المشروبات ما خلصت)
+  await p.click('.card [data-sec="KS1|grill"]');
+  let o = await until(async () => { const x = await read('orders/KS1'); return x && x.kSec.grill.readyAt ? x : null; });
+  assert.ok(o.kSec.grill.readyAt > 0); assert.equal(o.kSec.drinks.readyAt, 0); assert.equal(o.kitchen, 'new');
+  await p.waitForSelector('.card [data-sec="KS1|grill"]', { state: 'detached', timeout: 8000 });
+  // الجهاز يتذكر قسمه حتى لو انفتح الرابط العام (?sec) مرة ثانية
+  await p.goto(BASE + 'kitchen.html?sec'); await p.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  await until(async () => /الشوي/.test(await p.textContent('#rName')));
+  assert.match(await p.textContent('#rName'), /الشوي/);
+  assert.equal(await p.isVisible('#pick'), false, 'ما يسأله مرة ثانية');
+  // يبدّل لقسم المشروبات من ⚙️ «تغيير القسم» ← «جاهز» يكمّل آخر قسم فالطلب كله يصير جاهز
+  await p.click('#menuBtn'); await p.click('#mSec');
+  await p.waitForSelector('#pick:not([hidden]) #pickBack:not([hidden])', { timeout: 5000 });
+  await p.click('[data-pick="drinks"]');
+  await p.waitForSelector('.card [data-sec="KS1|drinks"]', { timeout: 8000 });
+  assert.match(new URL(p.url()).search, /sec=drinks/);
+  await p.click('.card [data-sec="KS1|drinks"]');
+  o = await until(async () => { const x = await read('orders/KS1'); return x && x.kitchen === 'ready' ? x : null; });
+  assert.equal(o.kitchen, 'ready');
+  // قابلة للتثبيت (فحص المتصفح نفسه)
+  const cdp = await p.context().newCDPSession(p);
+  const errs = await until(async () => { const r = await cdp.send('Page.getInstallabilityErrors'); const e = (r.installabilityErrors || []).map((x) => x.errorId).filter((x) => x !== 'in-incognito'); return e.length ? null : e; }, 15000);
+  assert.deepEqual(errs, [], 'installability errors: ' + JSON.stringify((await cdp.send('Page.getInstallabilityErrors')).installabilityErrors));
+  // شاشة المجهز مطفية ← رسالة بروحها، والمطبخ يبقى شغّال
+  const x = await page(B, { w: 1280, h: 800 });
+  await login(x, BASE + 'kitchen.html', 'scr@x.com');
+  await x.waitForSelector('#off:not([hidden])', { timeout: 15000 });
+  assert.match(await x.textContent('#off'), /المجهز/);
+  assert.equal(await x.getAttribute('meta[name="apple-mobile-web-app-title"]', 'content'), 'شاشة المجهز');
+  // نطفي شاشة المطبخ ونشغّل المجهز ← المطبخ يوكف، والمجهز يشتغل طبيعي بدون تحديث
+  await write('restaurants/RW', { features: { kitchen: true, kitchenSec: false } });
+  await p.waitForSelector('#off:not([hidden])', { timeout: 10000 });
+  assert.match(await p.textContent('#off'), /شاشة المطبخ \(الأقسام\) موقوفة/);
+  await x.waitForSelector('#app:not([hidden])', { timeout: 10000 });
+  assert.equal(await x.isVisible('#pick'), false, 'المجهز ما يسأل عن قسم');
+  for (const y of [p, x]) { assert.deepEqual(clean(y), []); await y.context().close(); }
+  // نرجّع المطعم مثل ما چان للفحوصات اللي بعدها
+  await write('restaurants/RW', { features: { kitchen: false } });
+  await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: 3 });
+});
+
+test('approved devices: every screen (expediter, kitchen, waiter) needs approval when the service is on — even with the restaurant email', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, kitchenSec: true, devices: true } });
+  const p = await page(B, { w: 1280, h: 800 });
+  await login(p, BASE + 'kitchen.html', 'scr@x.com');
+  await p.waitForSelector('.dev-code', { timeout: 15000 });
+  assert.match(await p.textContent('#gate'), /هذا الجهاز مو معتمد/);
+  assert.equal(await p.isVisible('#app'), false);
+  const key = await p.evaluate(() => localStorage.getItem('sora3a_dev_key'));
+  const code = (await p.textContent('.dev-code')).trim();
+  const req = await until(() => read('deviceReqs/' + key));
+  assert.equal(req.restaurantId, 'RW'); assert.equal(req.status, 'pending'); assert.equal(req.code, code);
+  assert.match(req.platform, /شاشة المجهز/);
+  await p.screenshot({ path: 'shots/kitchen-device-block.png' });
+  // المدير الأعلى يعتمده (برج سرعة) ← الشاشة تفتح وحدها
+  await put('restaurants/RW/devices/' + key, { name: 'شاشة المجهز', code, platform: req.platform, approvedAtMs: Date.now() });
+  await write('deviceReqs/' + key, { status: 'approved' });
+  await p.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  // نفس الجهاز المعتمد يفتح شاشة المطبخ مباشرة
+  await p.goto(BASE + 'kitchen.html?sec'); await p.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  // تلفون ثاني (مو معتمد) على الويتر بإيميل المطعم ← ينقفل لحد الاعتماد
+  const w = await page(B);
+  await login(w, BASE + 'waiter.html', 'scr@x.com');
+  await w.waitForSelector('.dev-code', { timeout: 15000 });
+  const wk = await w.evaluate(() => localStorage.getItem('sora3a_dev_key'));
+  assert.match((await until(() => read('deviceReqs/' + wk))).platform, /الويتر/);
+  // الخدمة مطفية ← يدخل عادي
+  await write('restaurants/RW', { features: { devices: false } });
+  await w.reload(); await w.waitForSelector('#app:not([hidden]), #off:not([hidden])', { timeout: 15000 });
+  for (const y of [p, w]) { assert.deepEqual(clean(y).filter((e) => !/permission/i.test(e)), []); await y.context().close(); }
+  await write('restaurants/RW', { features: { kitchen: false } });
+});
+
+test('admin panel «الشاشات»: every screen link in one place — expediter, kitchen sections, waiter, menu, apps — with QR', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, waiter: false } });
+  await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: 4, kSecOn: true,
+    sections: [{ id: 'grill', name: 'الشوي', emoji: '🔥' }, { id: 'drinks', name: 'المشروبات', emoji: '🥤' }] });
+  const p = await page(B, { w: 1280, h: 900 });
+  await p.goto('http://localhost:5050/sora3a-admin/index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#lEmail', 'scr@x.com'); await p.fill('#lPass', 'secret123'); await p.click('#lBtn');
+  await p.waitForSelector('#appPage', { state: 'visible', timeout: 15000 });
+  await p.click('.dnav-btn[data-screen="scScreens"]');
+  await p.waitForSelector('#scrList [data-scr="kitchenSec"]', { timeout: 15000 });
+  const url = (id) => p.inputValue(`[data-scr="${id}"] .scr-u`);
+  assert.equal(await url('cashier'), BASE.replace('http://localhost:5050', 'https://qaesartools-web.github.io'));
+  assert.match(await url('kitchen'), /\/sora3a-rest2\/kitchen\.html$/);
+  assert.match(await url('kitchenSec'), /\/sora3a-rest2\/kitchen\.html\?sec$/);
+  assert.match(await p.textContent('[data-scr="kitchenSec"]'), /شاشة المطبخ/);
+  assert.match(await p.textContent('[data-scr="kitchenSec"]'), /الشوي/, 'يذكر أقسام المطعم');
+  assert.match(await url('waiter'), /\/waiter\.html$/);
+  assert.match(await p.textContent('[data-scr="waiter"] .scr-tag'), /موقوفة/, 'الويتر موقوف لهذا المطعم');
+  assert.match(await p.textContent('[data-scr="kitchen"] .scr-tag'), /شغّالة/);
+  assert.match(await p.textContent('[data-scr="kitchenSec"] .scr-tag'), /موقوفة/, 'المطبخ بخدمته');
+  assert.match(await url('menu'), /\/menu\.html\?r=RW$/);
+  assert.match(await url('screen'), /screen-android\/sora3a-screen\.apk$/);
+  assert.match(await url('line'), /line-android\/sora3a-line\.apk$/);
+  assert.match(await url('captain'), /sora3a-captain\/captain\.html$/);
+  assert.match(await p.textContent('.scr-intro'), /بإيميل المطعم وكلمة السر/);
+  // QR يترسم للمسح بكاميرا التلفون
+  await p.click('[data-scr="kitchenSec"] button:has-text("QR")');
+  await p.waitForSelector('[data-qr="kitchenSec"]:not([hidden]) svg', { timeout: 8000 });
+  await p.screenshot({ path: 'shots/admin-screens.png', fullPage: true });
+  assert.deepEqual(clean(p).filter((e) => !/permission/i.test(e)), []);
+  await p.context().close();
+  await write('restaurants/RW', { features: { kitchen: false } });
+  await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: 5 });
+});
+
 test('services: the super admin stops/starts the screen, the QR (barcode) and the waiter app — each on its own, live', async () => {
   // الشاشة موقوفة ← رسالة بدل الطلبات، وترجع وحدها أول ما تتفعّل
   await write('restaurants/RW', { features: { screen: false } });
