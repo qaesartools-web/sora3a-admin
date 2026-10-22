@@ -123,6 +123,10 @@ test('cashier sees only allowed sections; permissions update live', async () => 
   await p.evaluate(() => goTab('reports'));
   assert.equal(await p.evaluate(() => document.getElementById('reportsScreen').classList.contains('on')), false);
   assert.match(await p.textContent('#restName'), /علي الكاشير/);
+  // لون التطبيق (🎨) يبين لكل الموظفين حتى بدون صلاحية الإعدادات، وينحفظ على نفس الجهاز
+  assert.equal(await p.isVisible('#themeSwitcher .ts-btn'), true);
+  await p.click('#themeSwitcher .ts-btn'); await p.click('#tc-ocean');
+  assert.equal(await p.evaluate(() => localStorage.getItem('pos_theme')), 'ocean');
   // صاحب المطعم يفعّل المخزون → يظهر فوراً، والتقارير تبقى مخفية عن الكاشير دائماً
   await write('users/' + U.cash, { perms: { discount: true, cancel: false, reports: true, inventory: true, menu: false, settings: false } });
   await p.waitForFunction(() => getComputedStyle(document.querySelector('.dnb[data-tab="acc"]')).display !== 'none', null, { timeout: 10000 });
