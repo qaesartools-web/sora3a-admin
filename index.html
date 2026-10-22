@@ -2610,7 +2610,7 @@ window.exportCSV=function(){
 const PERMS=[['discount','٪ الخصم'],['cancel','❌ إلغاء الطلبات'],['inventory','📦 المخزون والمصروفات (إضافة ومشاهدة)'],['menu','🍔 تعديل المنيو'],['settings','⚙️ الإعدادات']];
 const PERM_DEFAULT={discount:true,cancel:false,inventory:false,menu:false,settings:false};
 // أنواع الطلبات اللي يشتغل عليها الكاشير + البيجر — مفتوحة إلا إذا انطفت (false)
-const ORD_PERMS=[['oSalon','🪑 صالة'],['oTake','🛍️ سفري فوري'],['oHold','🥡 سفري قيد التحضير'],['oDeliv','🏍️ دلفري'],['pager','📟 البيجر']];
+const ORD_PERMS=[['oSalon','🪑 صالة'],['oTake','🛍️ سفري فوري'],['oHold','🥡 سفري قيد التحضير'],['oDeliv','🏍️ دلفري والاتصالات 📞'],['pager','📟 البيجر']];
 const ordPermRow=(p,on)=>`<div class="perm-row ord-perms"><b style="width:100%;font-size:12px;color:var(--muted)">🧾 أنواع الطلبات اللي يرحّلها:</b>${ORD_PERMS.map(([k,l])=>on(k,l,p[k]!==false)).join('')}</div>`;
 const MAX_LINES=10;
 // الدوام يُخزّن بالدقائق من منتصف الليل (بتوقيت بغداد)
