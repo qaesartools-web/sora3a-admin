@@ -144,6 +144,7 @@ test('settings sync (tables & pagers only) + receipt uses restaurant settings + 
   await p.click('#capList .capcard'); await p.click('#confCapBtn');
   const d = await until(async () => (await ordersRP()).find((x) => x.orderType === 'delivery'));
   assert.equal(d.fee, 5000); assert.equal(d.tax || 0, 0); assert.equal(d.payment.method, 'cod');
+  assert.equal(d.capSettled, false, 'waits for the captain to settle');
   const html = await p.evaluate(() => document.getElementById('prtFr').srcdoc);
   assert.ok(html.includes('مطعم &lt;b&gt;الذوق&lt;/b&gt;'), 'receipt title escaped');
   assert.ok(!html.includes('ضريبة'), 'no tax line');
@@ -215,6 +216,47 @@ test('android app: logout + clear cart use the in-page confirm (native dialogs a
   await p.click('.ask-ov .ask-yes');
   await p.waitForSelector('#loginPage', { state: 'visible', timeout: 10000 });
   assert.deepEqual(native, [], 'no native dialogs in the app');
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
+test('«تسديد طلبات الكابتن»: captain cash orders wait per captain with a total; «تم التسديد» removes each one and lowers the total', async () => {
+  const now = Date.now();
+  const put = (id, d) => E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'orders/' + id), { restaurantId: 'RP', orderType: 'delivery', payment: { method: 'cod' }, createdAtMs: now, fee: 2000, ...d }); });
+  // طلبات الدلفري من الفحوصات اللي قبل: نعتبرها مسددة حتى نعدّ بس طلبات هذا الفحص
+  for (const o of (await ordersRP()).filter((x) => x.capSettled === false)) await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'orders/' + o.id), { capSettled: true }, { merge: true }); });
+  await put('CS1', { captainId: 'CP', captainName: 'حسن', status: 'delivered', ticketNo: 31, customer: 'أبو علي', address: 'زيونة', value: 12000, capSettled: false });
+  await put('CS2', { captainId: 'CP', captainName: 'حسن', status: 'delivering', ticketNo: 32, customer: 'زينب', value: 8000, capSettled: false });
+  await put('CS3', { captainId: 'CQ', captainName: 'مرتضى', status: 'delivered', ticketNo: 33, customer: 'حيدر', value: 5000, capSettled: false });
+  await put('CS4', { captainId: 'CP', captainName: 'حسن', status: 'cancelled', ticketNo: 34, value: 9000, capSettled: false });                 // ملغي
+  await put('CS5', { captainId: 'CP', captainName: 'حسن', status: 'delivered', ticketNo: 35, value: 7000, capSettled: true });                  // مسدد من قبل
+  await put('CS6', { captainId: 'CP', captainName: 'حسن', status: 'delivered', ticketNo: 36, value: 6000, capSettled: false, payment: { method: 'cash' } });   // انسدد بالمطعم
+  const p = await page(B, { w: 1280, h: 800 });
+  await login(p);
+  await p.waitForSelector('.dnb[data-tab="capPay"]');
+  await until(async () => (await p.textContent('#capPayPillD')) === '3');
+  assert.equal(await p.textContent('#capPayPillD'), '3');
+  await p.click('.dnb[data-tab="capPay"]');
+  await p.waitForSelector('#capPayScreen.on [data-cap-order="CS1"]');
+  assert.match(await p.textContent('#capPayTotal'), /25,000/);
+  const txt = await p.textContent('#capPayBody');
+  assert.match(txt, /حسن/); assert.match(txt, /مرتضى/); assert.match(txt, /أبو علي/);
+  assert.doesNotMatch(txt, /#34|#35|#36/, 'cancelled, already settled, paid at the restaurant: not listed');
+  await p.screenshot({ path: 'shots/pos-cap-pay.png', fullPage: true });
+  // «✅ تم التسديد» ← ينشال وينقص من المجموع
+  await p.click('[data-cap-order="CS1"] button');
+  await p.waitForSelector('[data-cap-order="CS1"]', { state: 'detached' });
+  assert.match(await p.textContent('#capPayTotal'), /13,000/);
+  const s1 = await until(async () => { const o = await read('orders/CS1'); return o.capSettled ? o : null; });
+  assert.equal(s1.capSettled, true); assert.ok(s1.capSettledAtMs > 0);
+  await p.click('[data-cap-order="CS2"] button'); await p.waitForSelector('[data-cap-order="CS2"]', { state: 'detached' });
+  await p.click('[data-cap-order="CS3"] button');
+  await p.waitForFunction(() => /ماكو طلبات تنتظر التسديد/.test(document.getElementById('capPayBody').textContent));
+  assert.equal(await p.isVisible('#capPayPillD'), false);
+  // خدمة الكابتن موقوفة ← التبويب ينخفي
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RP'), { features: { captain: false } }, { merge: true }); });
+  await p.waitForFunction(() => getComputedStyle(document.querySelector('.dnb[data-tab="capPay"]')).display === 'none', null, { timeout: 10000 });
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RP'), { features: { captain: true } }, { merge: true }); });
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
