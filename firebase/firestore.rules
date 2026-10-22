@@ -252,18 +252,20 @@ service cloud.firestore {
     }
 
     // ── deviceReqs/{مفتاح}: طلب اعتماد جهاز (كل جهاز كاشير يسجّل نفسه؛ المدير الأعلى يعتمد أو يرفض) ──
+    //  وشاشات المطعم (المطبخ/المجهز/الويتر) اللي تدخل بإيميل المطعم هم تسجّل نفسها (لمطعمه أو فرع من فروعه)
     //  المعرّف هو مفتاح الجهاز السري: الجهاز نفسه بس يعرفه، فيكدر يقرا طلبه بالمعرّف (بدون قائمة)
     match /deviceReqs/{key} {
       function reqOk(d) {
         return d.keys().hasOnly(['restaurantId','code','platform','status','createdAtMs','lastAtMs','lastUid','lastName'])
-          && d.restaurantId == me().get('restaurantId', '') && str(d.code, 12) && optStr(d, 'platform', 80)
+          && (d.restaurantId == me().get('restaurantId', '') || (role() == 'restaurant' && d.restaurantId in me().get('branches', [])))
+          && str(d.code, 12) && optStr(d, 'platform', 80)
           && optStr(d, 'lastName', 80) && d.get('lastUid', '') == request.auth.uid && d.status == 'pending';
       }
       allow get: if signedIn();
       allow list: if isOffice() || hqView('devices') || hqView('rests');
-      allow create: if signedIn() && active() && role() == 'cashier' && key.size() >= 20 && reqOk(request.resource.data);
+      allow create: if signedIn() && active() && role() in ['cashier', 'restaurant'] && key.size() >= 20 && reqOk(request.resource.data);
       allow update: if isAdmin() || hqEdit('devices')
-        || (signedIn() && active() && role() == 'cashier' && resource.data.status == 'pending'
+        || (signedIn() && active() && role() in ['cashier', 'restaurant'] && resource.data.status == 'pending'
             && reqOk(request.resource.data) && request.resource.data.restaurantId == resource.data.restaurantId
             && onlyChanged(['lastAtMs','lastUid','lastName','platform']));
       allow delete: if isAdmin() || hqEdit('devices');

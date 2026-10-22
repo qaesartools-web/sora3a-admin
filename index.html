@@ -111,6 +111,25 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 
 /* Cards */
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;}
+/* الشاشات */
+.scr-intro{font-size:13px;line-height:1.9;color:var(--text)}
+.scr-g{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.scr-c{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.scr-c.off{opacity:.62}
+.scr-h{display:flex;align-items:center;gap:10px}
+.scr-i{width:42px;height:42px;border-radius:12px;background:var(--panel2);display:grid;place-items:center;font-size:22px;flex:none}
+.scr-h b{font-size:14.5px;display:block}
+.scr-h small{color:var(--muted);font-size:11.5px}
+.scr-tag{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;background:var(--panel2);color:var(--muted);white-space:nowrap}
+.scr-tag.ok{background:rgba(22,163,74,.14);color:#16a34a}
+.scr-tag.bad{background:rgba(220,38,38,.12);color:#dc2626}
+.scr-d{font-size:12px;color:var(--muted);line-height:1.8}
+.scr-u{width:100%;direction:ltr;font-size:11.5px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--text)}
+.scr-a{display:flex;flex-wrap:wrap;gap:6px}
+.scr-a .btn-sm{background:var(--panel2);color:var(--text);text-decoration:none}
+.scr-qr{display:grid;place-items:center;background:#fff;border-radius:12px;padding:8px}
+.scr-qr svg{width:170px;height:170px}
+.scr-sec{font-size:12.5px;font-weight:800;color:var(--muted);margin:14px 2px 8px}
 .card-title{font-size:14px;font-weight:900;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
 .card-title .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
 
@@ -581,6 +600,13 @@ body.staff-mode .staff-banner{display:block;}
       <div id="staffList"></div>
     </div>
 
+    <!-- Screens: every screen link of the restaurant in one place (restaurant owner + admin) -->
+    <div class="screen" id="scScreens">
+      <div class="card admin-only"><div class="form-group" style="margin:0"><label>المطعم</label><select class="form-sel" id="scrRest" onchange="scrRender()"></select></div></div>
+      <div class="card scr-intro">📺 <b>كل شاشات المطعم بمكان واحد.</b> افتح رابط الشاشة على جهازها (تلفون، تابلت، تلفزيون) وثبّتها، أو امسح الـQR بكاميرا التلفون.<br>🔑 كلها تدخل <b>بإيميل المطعم وكلمة السر</b> — نفس لوحة الإدارة.<br>🔐 إذا خدمة «أجهزة معتمدة فقط» شغّالة: كل جهاز جديد يطلعله رمز، وتعتمده إدارة سرعة مرة وحدة وبعدها يفتح وحده.</div>
+      <div id="scrList"></div>
+    </div>
+
     <!-- Restaurant staff & phone lines (restaurant owner + admin) -->
     <div class="screen" id="scMyRest">
       <div class="card admin-only" id="mrPick">
@@ -626,7 +652,7 @@ body.staff-mode .staff-banner{display:block;}
       </div>
       <div class="card admin-only" id="devCard">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-          <div class="card-title" style="margin:0;flex:1"><span class="dot"></span> 🔐 أجهزة الكاشير المعتمدة</div>
+          <div class="card-title" style="margin:0;flex:1"><span class="dot"></span> 🔐 الأجهزة المعتمدة (الكاشير والشاشات)</div>
           <label class="tgl" id="devTgl" title="تشغيل/إيقاف الخدمة لهذا المطعم"><input type="checkbox" id="devOn" onchange="devToggle(this.checked)"><span class="tgl-slider"></span></label>
         </div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.8">الكاشير يشتغل بس على الأجهزة اللي تعتمدها انت. أي جهاز جديد يطلع عليه «هذا الجهاز مو معتمد» ورمز من ٦ حروف — الكاشير يتصل بيك ويقرالك الرمز، تلكاه هنا وتضغط «✅ اعتماد» ويفتح عنده وحده. وكل حساب كاشير يشتغل على جهاز واحد بنفس الوقت.</div>
@@ -824,7 +850,7 @@ const isStaff=()=>currentUser?.role==='staff';
 const canManage=()=>isAdmin()||isRest();
 // خدمات المطعم: يفتحها ويغلقها المدير الأعلى فقط (الافتراضي مفعّلة)
 // العنصر الثالث = مطفية افتراضياً (تشتغل بس إذا شغّلها المدير الأعلى)
-const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 الباركود والمنيو الأونلاين'],['screen','📺 شاشة طلبك جاهز'],['waiter','🧑‍🍳 تطبيق الويتر'],['kitchen','👨‍🍳 شاشة المجهز (مطبخ منفصل)',1],['printTest','🧪 تجربة الطابعات (محاكي)',1],['devices','🔐 أجهزة معتمدة فقط',1]];
+const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 الباركود والمنيو الأونلاين'],['screen','📺 شاشة طلبك جاهز'],['waiter','🧑‍🍳 تطبيق الويتر'],['kitchen','👨‍🍳 شاشة المجهز (مطبخ منفصل)',1],['kitchenSec','🔥 شاشة المطبخ (الأقسام)',1],['printTest','🧪 تجربة الطابعات (محاكي)',1],['devices','🔐 أجهزة معتمدة فقط',1]];
 const OFF_DEFAULT=new Set(SERVICES.filter(x=>x[2]).map(x=>x[0]));
 const featOf=(r,k)=>OFF_DEFAULT.has(k)?!!(r&&r.features&&r.features[k]===true):(!r||!r.features||r.features[k]!==false);
 let myRestDoc=null;
@@ -1020,6 +1046,7 @@ const tabs=[
   {id:'acc',label:'المخزون والحسابات',icon:'📒',screen:'scAcc',manage:true},
   {id:'staff',label:'الموظفين',icon:'👥',screen:'scStaff',adminOnly:true},
   {id:'myrest',label:'الكاشيرية والخطوط',icon:'☎️',screen:'scMyRest',manage:true},
+  {id:'screens',label:'الشاشات',icon:'📺',screen:'scScreens',manage:true},
   {id:'security',label:'الأمان',icon:'🛡️',screen:'scSecurity',adminOnly:true},
 ];
 
@@ -1055,6 +1082,7 @@ window.goTab=function(screenId,btn){
   if(screenId==='scStaff')renderStaffList();
   if(screenId==='scSecurity'){secLoadAudit();pushLoad();bkInit();}
   if(screenId==='scMyRest')mrInit();
+  if(screenId==='scScreens')scrInit();
 };
 
 // تاريخ افتراضي لحقول «من/إلى» الفارغة (المدير: اليوم — كل المطاعم كثيرة؛ صاحب المطعم: آخر ٧ أيام)
@@ -2559,6 +2587,75 @@ function readHours(fromId,toId){
   if(f==null||t==null||f===t)return {ok:false};
   return {ok:true,hours:{from:f,to:t}};
 }
+// ═══ الشاشات: كل روابط شاشات المطعم بمكان واحد — كل وحدة تنفتح على جهازها وتنثبّت كتطبيق ═══
+// شاشة المطبخ لكل قسم (من «أقسام المطبخ» بإعدادات الكاشير): الجهاز يبقى على قسمه ويشوف أصنافه بس
+const SCR_R2='https://qaesartools-web.github.io/sora3a-rest2/',SCR_CAP='https://qaesartools-web.github.io/sora3a-captain/',SCR_DL='https://github.com/qaesartools-web/';
+let scrCfg={rid:'',secs:null,secOn:false},scrOpenQr='';
+const scrRid=()=>isRest()?currentUser.restaurantId:(document.getElementById('scrRest').value||'');
+function scrQrLib(){
+  if(window.qrcode)return Promise.resolve();
+  return new Promise((res,rej)=>{const s=document.createElement('script');s.src='vendor/qrcode.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+}
+window.scrInit=function(){
+  if(isAdmin()){const sel=document.getElementById('scrRest'),cur=sel.value;sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');if(cur)sel.value=cur;}
+  scrRender();
+};
+function scrItems(rid,r){
+  const k=SCR_R2+'kitchen.html',secs=scrCfg.secs||[];
+  return [
+    {g:'شاشات تنثبّت من الرابط (أندرويد وآيفون)'},
+    {id:'cashier',ic:'🧾',t:'الكاشير',d:'برنامج الكاشير من المتصفح — وإله تطبيق أندرويد وويندوز بقسم التطبيقات.',url:SCR_R2,inst:1},
+    {id:'kitchen',ic:'👨‍🍳',t:'شاشة المجهز — كل الطلبات',d:'تطلع كل طلبات المطبخ، وأقسام كل طلب، و«جاهز» يخلّص الطلب ويرجعه للكاشير.',url:k,feat:'kitchen',inst:1},
+    {id:'kitchenSec',ic:'🔥',t:'شاشة المطبخ (الأقسام)',d:'نفس الرابط لكل أجهزة المطبخ: كل جهاز يختار قسمه ('+(secs.length?secs.map(x=>x.name).join('، '):'ماكو أقسام بعد — ضيفها من الكاشير ← الإعدادات ← «أقسام المطبخ والطابعات»')+') وتطلعله طلباته بس، و«جاهز» يعلّم قسمه.'+(secs.length&&!scrCfg.secOn?' ⚠️ شغّل «تقسيم الطلب على أقسام المطبخ» من الكاشير ← الإعدادات.':''),url:k+'?sec',feat:'kitchenSec',inst:1},
+    {id:'waiter',ic:'🧑‍🍳',t:'الويتر',d:'الويتر يطلب من الطاولة بالتلفون، والطلب ينطبع بالمطبخ مباشرة.',url:SCR_R2+'waiter.html',feat:'waiter',inst:1},
+    {id:'captain',ic:'🛵',t:'الكابتن (للآيفون أو أي تلفون)',d:'تطبيق الكابتن من المتصفح — وإله تطبيق أندرويد تحت.',url:SCR_CAP+'captain.html',feat:'captain',inst:1},
+    {id:'menu',ic:'📱',t:'منيو الباركود',d:'الزبون يفتحه ويطلب — اطبع QR الطاولات من الكاشير.',url:SCR_R2+'menu.html?r='+encodeURIComponent(rid),feat:'online'},
+    {g:'تطبيقات تنزّل وتنصّب'},
+    {id:'screen',ic:'📺',t:'شاشة «طلبك جاهز»',d:'تطبيق للتلفزيون أو التيفي بوكس — يتحدث لحاله.',url:SCR_DL+'sora3a-rest2/releases/download/screen-android/sora3a-screen.apk',feat:'screen',app:1},
+    {id:'line',ic:'☎️',t:'خط المطعم',d:'على تلفون شريحة المطعم — رقم المتصل يطلع بالكاشير.',url:SCR_DL+'sora3a-rest2/releases/download/line-android/sora3a-line.apk',feat:'calls',app:1},
+    {id:'cashierApk',ic:'📲',t:'الكاشير (أندرويد)',d:'تطبيق الكاشير للتابلت أو تلفون الكاشير.',url:SCR_DL+'sora3a-rest2/releases/download/cashier-android/sora3a-cashier.apk',app:1},
+    {id:'cashierWin',ic:'💻',t:'الكاشير (ويندوز)',d:'برنامج الكاشير للابتوب — يطبع على الطابعة مباشرة.',url:SCR_DL+'sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe',app:1},
+    {id:'captainApk',ic:'🛵',t:'الكابتن (أندرويد)',d:'تطبيق الكابتن — يوصله الطلب بإشعار حتى لو مسكّر.',url:SCR_DL+'sora3a-captain/releases/latest/download/sora3a-captain.apk',feat:'captain',app:1},
+  ];
+}
+window.scrRender=async function(){
+  const rid=scrRid(),el=document.getElementById('scrList');if(!el)return;
+  if(!rid){el.innerHTML='<div class="card" style="color:var(--muted)">⬆️ اختر المطعم أولاً</div>';return;}
+  const r=isRest()?myRestDoc:allRestaurants.find(x=>x.id===rid);
+  if(scrCfg.rid!==rid){
+    scrCfg={rid,secs:null,secOn:false};el.innerHTML='<div class="card" style="color:var(--muted)">⏳</div>';
+    try{const fb=window._fb,s=await fb.getDoc(fb.doc(fb.db,'restaurants',rid,'settings','main')),d=s.exists()?s.data():{};scrCfg.secs=(d.sections||[]).filter(x=>x&&x.name&&x.id);scrCfg.secOn=!!d.kSecOn;}
+    catch(e){scrCfg.secs=[];}
+    if(scrRid()!==rid)return;
+  }
+  let html='',open=false;
+  for(const it of scrItems(rid,r)){
+    if(it.g){if(open)html+='</div>';html+=`<div class="scr-sec">${esc(it.g)}</div><div class="scr-g">`;open=true;continue;}
+    const on=!it.feat||featOf(r,it.feat)||(it.feat==='calls'&&featOf(r,'whatsapp'));
+    const tag=it.none?'':on?`<span class="scr-tag ok">${it.app?'تطبيق':'✅ شغّالة'}</span>`:'<span class="scr-tag bad">⛔ موقوفة</span>';
+    html+=`<div class="scr-c ${on||it.none?'':'off'}" data-scr="${esc(it.id)}"><div class="scr-h"><div class="scr-i">${it.ic}</div><div style="flex:1;min-width:0"><b>${esc(it.t)}</b>${it.inst?'<small>📲 تنثبّت كتطبيق من الرابط</small>':it.app?'<small>⬇️ تنزيل وتنصيب</small>':''}</div>${tag}</div>
+      <div class="scr-d">${esc(it.d)}${on||it.none?'':' — تتفعّل من إدارة سرعة.'}</div>
+      ${it.url?`<input class="scr-u" readonly value="${esc(it.url)}" onclick="this.select()">
+      <div class="scr-a"><button class="btn-sm" onclick="scrCopy('${esc(it.id)}')">📋 نسخ</button><a class="btn-sm" href="${esc(it.url)}" target="_blank" rel="noopener">${it.app?'⬇️ تنزيل':'🔗 فتح'}</a><button class="btn-sm" onclick="scrWa('${esc(it.id)}')">💬 واتساب</button><button class="btn-sm" onclick="scrQr('${esc(it.id)}')">🔳 QR</button></div>
+      <div class="scr-qr" data-qr="${esc(it.id)}" hidden></div>`:''}</div>`;
+  }
+  if(open)html+='</div>';
+  el.innerHTML=html;
+  el.querySelectorAll('.scr-u').forEach(i=>{i.scrollLeft=i.scrollWidth;});   // آخر الرابط (القسم) هو المهم
+  if(scrOpenQr)scrQr(scrOpenQr,true);
+};
+const scrFind=id=>{const rid=scrRid();return scrItems(rid,isRest()?myRestDoc:allRestaurants.find(x=>x.id===rid)).find(x=>x.id===id);};
+window.scrCopy=async function(id){const it=scrFind(id);if(!it)return;try{await navigator.clipboard.writeText(it.url);toast('📋 تم النسخ');}catch(e){prompt('انسخ الرابط:',it.url);}};
+window.scrWa=function(id){const it=scrFind(id);if(!it)return;
+  const msg=`${it.ic} ${it.t}\n${it.url}\n\n${it.inst?'افتح الرابط على الجهاز وثبّته (📲 تثبيت، أو بالآيفون: مشاركة ⬆️ ← إضافة إلى الشاشة الرئيسية).\n':it.app?'نزّل التطبيق ونصّبه.\n':''}🔑 الدخول بإيميل المطعم وكلمة السر.`;
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank','noopener');};
+window.scrQr=async function(id,keep){
+  const box=document.querySelector(`[data-qr="${id}"]`),it=scrFind(id);if(!box||!it)return;
+  if(!keep&&!box.hidden){box.hidden=true;scrOpenQr='';return;}
+  try{await scrQrLib();const q=window.qrcode(0,'M');q.addData(it.url);q.make();box.innerHTML=q.createSvgTag({cellSize:4,margin:2,scalable:true});box.hidden=false;scrOpenQr=id;}
+  catch(e){toast('📶 تعذّر رسم الـQR','error');}
+};
+
 let mrRid=null,mrUnsubs=[];
 const mrRestId=()=>isRest()?currentUser.restaurantId:(document.getElementById('mrRest').value||null);
 // قائمة المطاعم (المدير الأعلى) — تتحدث لما توصل المطاعم حتى لو التبويب مفتوح قبلها

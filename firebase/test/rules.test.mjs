@@ -320,6 +320,13 @@ test('الأجهزة المعتمدة: الكاشير يشتغل بس من جه�
   await assertFails(updateDoc(doc(B, 'deviceReqs/' + NEW), { status: 'approved' }));
   await assertFails(setDoc(doc(B, 'deviceReqs/SHORT'), req), 'key too short');
   await assertFails(setDoc(doc(B, 'deviceReqs/' + 'X'.repeat(24)), { ...req, restaurantId: 'R1' }), 'only for his own restaurant');
+  // شاشات المطعم بإيميل المطعم (المطبخ/الويتر): تسجّل طلب اعتماد لمطعمها بس، وتشوف إذا انعتمدت
+  const SCR = 'S'.repeat(26), sreq = { ...req, platform: 'Android • شاشة المطبخ', lastUid: 'restD' };
+  await assertSucceeds(setDoc(doc(as('restD'), 'deviceReqs/' + SCR), sreq));
+  await assertSucceeds(updateDoc(doc(as('restD'), 'deviceReqs/' + SCR), { lastAtMs: Date.now(), lastUid: 'restD', lastName: 'المطعم', platform: 'Android • شاشة المجهز' }));
+  await assertFails(updateDoc(doc(as('restD'), 'deviceReqs/' + SCR), { status: 'approved' }), 'owner cannot approve his screen');
+  await assertFails(setDoc(doc(as('restD'), 'deviceReqs/' + 'T'.repeat(26)), { ...sreq, restaurantId: 'R1' }), 'screen only for his own restaurant');
+  await assertSucceeds(getDoc(doc(as('restD'), 'restaurants/RD/devices/' + SCR)));
   // صاحب المطعم يشوف الأجهزة والجلسات، بس الاعتماد للمدير الأعلى
   await assertSucceeds(getDocs(collection(as('restD'), 'restaurants/RD/devices')));
   await assertSucceeds(getDoc(doc(as('restD'), 'sessions/cdA')));
