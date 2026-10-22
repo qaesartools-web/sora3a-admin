@@ -42,6 +42,12 @@ async function posLogin(p, email, pass = 'secret123') {
   await p.waitForSelector('#appPage.show', { timeout: 15000 });
 }
 let LINE;
+// الجهاز (تطبيق خطوط المطعم) يرسل مكالمة بالتوكن
+async function postCall(number) {
+  const body = JSON.stringify({ fields: { token: { stringValue: LINE.id }, restaurantId: { stringValue: 'RC' }, line: { stringValue: '1' }, number: { stringValue: number }, status: { stringValue: 'ringing' } } });
+  const r = await fetch('http://127.0.0.1:8080/v1/projects/sora3a-system/databases/(default)/documents/incomingCalls?key=fake', { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+  assert.equal(r.status, 200, await r.text());
+}
 
 test('only the super admin adds and stops cashiers; the owner manages permissions and phone lines', async () => {
   // صاحب المطعم: ما عنده إضافة كاشير (ملاحظة «من إدارة سرعة») ولا إيقاف/حذف، والسيرفر يرفض لو حاول
@@ -239,9 +245,17 @@ test('per-cashier order types and pager (from the admin app / Tower) apply live'
   await p.keyboard.press('4');
   await p.waitForSelector('#delivOv.on');
   await p.click('#delivOv', { position: { x: 5, y: 5 } });
+  // الاتصالات تطلع لكاشير الدلفري
+  await postCall('07705550001');
+  await p.waitForSelector('#callsBox .call-card', { timeout: 10000 });
   // كاشير الصالة: صالة + سفري قيد التحضير، والبيجر يرجع — يتحدّث فوراً
   await write('users/' + U.cash, { perms: { discount: true, oSalon: true, oTake: false, oHold: true, oDeliv: false, pager: true } });
   await p.waitForSelector('#pagerBar .pg', { timeout: 10000 });
+  // والاتصالات ما تطلع عنده (اللي كانت ظاهرة تختفي، والجديدة ما ترن)
+  await p.waitForFunction(() => !document.querySelector('#callsBox .call-card'), null, { timeout: 8000 });
+  await postCall('07705550002');
+  await p.waitForTimeout(2500);
+  assert.equal(await p.locator('#callsBox .call-card').count(), 0, 'hall cashier gets no calls');
   await p.click('#sendBtn');
   await p.waitForSelector('#typeOv.on');
   assert.deepEqual(await shown(p), ['salon', 'takeaway']);
