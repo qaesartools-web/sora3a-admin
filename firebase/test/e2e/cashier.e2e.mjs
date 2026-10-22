@@ -117,7 +117,7 @@ test('cashier sees only allowed sections; permissions update live', async () => 
   const p = await page(B, { w: 1280, h: 800 });
   await posLogin(p, 'cash@x.com', 'cashpass1');
   await p.waitForSelector('#prods .prod');
-  const vis = async (t) => p.evaluate((t) => getComputedStyle(document.querySelector(`.dnb[data-tab="${t}"]`)).display !== 'none', t);
+  const vis = async (t) => p.evaluate((t) => { const b = document.querySelector(`.dnb[data-tab="${t}"]`); return !!b && getComputedStyle(b).display !== 'none'; }, t);
   assert.equal(await vis('reports'), false); assert.equal(await vis('acc'), false); assert.equal(await vis('menu'), false);
   assert.equal(await vis('cashier'), true); assert.equal(await vis('shift'), true); assert.equal(await vis('kitchen'), true);
   await p.evaluate(() => goTab('reports'));

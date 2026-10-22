@@ -123,27 +123,30 @@ test('shift + discount + salon cash payment with change + KDS + Z report', async
   await p.context().close();
 });
 
-test('settings sync + receipt uses restaurant settings + delivery with default fee', async () => {
+test('settings sync (tables & pagers only) + receipt uses restaurant settings + delivery with default fee, no tax/service', async () => {
   const p = await page(B, { w: 1280, h: 800 });
   await login(p);
   await p.evaluate(() => { goTab('menu'); showMTab('settings'); });
-  await p.fill('#stTitle', 'مطعم <b>الذوق</b>'); await p.fill('#stTax', '5'); await p.fill('#stFee', '4000'); await p.fill('#stTables', '6');
+  // الإعدادات: الطاولات والبيجر بس — ماكو ضريبة ولا خدمة صالة ولا أجرة توصيل
+  for (const id of ['stTax', 'stSvc', 'stFee', 'stFees']) assert.equal(await p.$('#' + id), null, id + ' removed');
+  assert.match(await p.textContent('#menuScreen'), /الطاولات والبيجر/);
+  await p.fill('#stTitle', 'مطعم <b>الذوق</b>'); await p.fill('#stTables', '6'); await p.fill('#stPagers', '12');
   await p.click('button >> text=حفظ الإعدادات');
   const s = await until(() => read('restaurants/RP/settings/main'));
-  assert.equal(s.taxPct, 5); assert.equal(s.defaultFee, 4000); assert.equal(s.tables, 6);
+  assert.equal(s.tables, 6); assert.equal(s.pagers, 12);
   await p.evaluate(() => goTab('cashier'));
   await p.waitForSelector('#prods .prod');
   await p.click('#prods .prod >> nth=0');
   await p.click('#sendBtn'); await p.keyboard.press('4');
   await p.waitForSelector('#delivOv.on');
-  assert.equal(await p.inputValue('#dFee'), '4000');
+  assert.equal(await p.inputValue('#dFee'), '5000');
   await p.fill('#dName', 'زبون'); await p.fill('#dPhone', '0770'); await p.fill('#dAddr', 'زيونة');
   await p.click('#capList .capcard'); await p.click('#confCapBtn');
   const d = await until(async () => (await ordersRP()).find((x) => x.orderType === 'delivery'));
-  assert.equal(d.fee, 4000); assert.equal(d.tax, Math.round(d.subtotal * 0.05)); assert.equal(d.payment.method, 'cod');
+  assert.equal(d.fee, 5000); assert.equal(d.tax || 0, 0); assert.equal(d.payment.method, 'cod');
   const html = await p.evaluate(() => document.getElementById('prtFr').srcdoc);
   assert.ok(html.includes('مطعم &lt;b&gt;الذوق&lt;/b&gt;'), 'receipt title escaped');
-  assert.ok(html.includes('ضريبة'));
+  assert.ok(!html.includes('ضريبة'), 'no tax line');
   // salon with table select
   await p.click('#prods .prod >> nth=0');
   await p.click('#sendBtn'); await p.keyboard.press('1');
