@@ -2240,7 +2240,7 @@ window.accRender=function(live){
     h=`<div class="stats">${kpi(fmt(R.sales),'💰 مجموع المبيعات (د.ع)')}${kpi(toA(R.n),'📦 عدد الطلبات')}${kpi(fmt(R.n?Math.round(R.sales/R.n):0),'🧾 متوسط الطلب')}${kpi(fmt(R.exp),'💸 المصروفات')}</div>
     <div class="card"><div class="card-title"><span class="dot"></span> التقرير — ${esc(axRangeLabel())} <button class="btn-sm btn-edit" style="margin-inline-start:auto" onclick="axPrintReport()">🖨️ طباعة الوصل</button></div><table class="tm-tbl">
       ${ln('🪑 صالة ('+toA(R.byType.salon.n)+' طلب)',fmt(R.byType.salon.v))}${ln('🥡 سفري ('+toA(R.byType.takeaway.n)+' طلب)',fmt(R.byType.takeaway.v))}${ln('🏍️ دلفري ('+toA(R.byType.delivery.n)+' طلب)',fmt(R.byType.delivery.v))}
-      ${R.fees?ln('أجور التوصيل (للكباتن)',fmt(R.fees)):''}${ln('💵 نقداً',fmt(R.cash))}${ln('💳 بطاقة',fmt(R.card))}${R.later?ln('⏳ آجل غير محصّل',fmt(R.later),'ax-neg'):''}${R.cod?ln('🏍️ عند الكباتن (عند الاستلام)',fmt(R.cod)):''}
+      ${R.fees?ln('أجور التوصيل (للكباتن)',fmt(R.fees)):''}${ln('💵 نقداً',fmt(R.cash))}${ln('💳 بطاقة',fmt(R.card))}${R.later?ln('⏳ آجل غير محصّل',fmt(R.later),'ax-neg'):''}${R.cod?ln('🏍️ عند الكباتن (ما مسدد)',fmt(R.cod)):''}
       ${R.disc?ln('٪ الخصومات','−'+fmt(R.disc),'ax-neg'):''}${R.cancN?ln('❌ الطلبات الملغية ('+toA(R.cancN)+')',fmt(R.cancV),'ax-neg'):''}${ln('عدد الأصناف المباعة',toA(R.items))}
       ${ln('= مجموع المبيعات',fmt(R.sales)+' د.ع','ax-pos')}${R.exp?ln('(−) المصروفات','−'+fmt(R.exp),'ax-neg'):''}
     </table></div>
@@ -2337,8 +2337,10 @@ function axReport(from,to){
   const day={},dk=ms=>{const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();};
   live.forEach(o=>{const t=axTypeOf(o),v=o.value||0;R.sales+=v;R.disc+=o.discount||0;R.byType[t].n++;R.byType[t].v+=v;(o.items||[]).forEach(i=>{R.items+=i.qty||1;});
     const k=dk(o.createdAtMs||0),D=day[k]||(day[k]={n:0,sales:0,salon:0,takeaway:0,delivery:0,exp:0});D.n++;D.sales+=v;D[t]+=v;
-    if(t==='delivery'){R.fees+=o.fee||0;R.cod+=v+(o.fee||0);return;}
-    const p=o.payment||{};if(p.method==='later')R.later+=v;else{R.cash+=p.cash!=null?p.cash:(p.method==='card'?0:v);R.card+=p.card||0;}});
+    // الدلفري: الكابتن يستلم من الزبون ويسدد للكاشير قيمة الطلب (الأجرة اله) — اللي انسدد ينحسب نقد، والباقي «عند الكباتن»
+    const p=o.payment||{},paidHere=p.method&&!['cod','later'].includes(p.method);
+    if(t==='delivery'&&!paidHere){R.fees+=o.fee||0;if(o.capSettled===true)R.cash+=v;else R.cod+=v;return;}
+    if(p.method==='later')R.later+=v;else{R.cash+=p.cash!=null?p.cash:(p.method==='card'?0:v);R.card+=p.card||0;}});
   const ex=axAllExp().filter(e=>(e.ts||0)>=from&&(e.ts||0)<to);R.exp=ex.reduce((s,e)=>s+(Number(e.amount)||0),0);
   ex.forEach(e=>{const k=dk(e.ts||0),D=day[k]||(day[k]={n:0,sales:0,salon:0,takeaway:0,delivery:0,exp:0});D.exp+=Number(e.amount)||0;});
   R.days=Object.keys(day).sort((a,b)=>b-a).map(k=>({...day[k],label:new Date(+k).toLocaleDateString('ar-IQ-u-nu-latn',{weekday:'short',year:'numeric',month:'numeric',day:'numeric'})}));
@@ -2415,7 +2417,7 @@ window.axShiftView=id=>{
       ${it('🪑 صالة',fmt(bt.salon&&bt.salon.v))}${it('🥡 سفري',fmt(bt.takeaway&&bt.takeaway.v))}${it('🏍️ دلفري',fmt(bt.delivery&&bt.delivery.v))}
       ${it('💵 نقداً',fmt(r.cash))}${it('💳 بطاقة',fmt(r.card))}${it('الخصومات',fmt(r.disc))}${it('ملغي',toA(r.cancelled||0)+' • '+fmt(r.cancelledV))}
       ${it('المتوقع بالدرج',fmt(x.expectedCash))}${it('النقد الفعلي',x.countedCash!=null?fmt(x.countedCash):'—')}${it('الفرق',x.status==='closed'?`<span class="${(x.diff||0)<0?'ax-neg':'ax-pos'}">${fmt(x.diff||0)}</span>`:'—')}</div>
-    ${(x.cashMoves||[]).length?`<div style="font-weight:800;margin:6px 0">💵 الإيداعات والمسحوبات</div><div class="ax-note">${x.cashMoves.map(m=>(m.type==='in'?'➕ ':'➖ ')+fmt(m.amount)+' — '+esc(m.note||'')+' • '+axFmtD(m.ts)).join('\n')}</div>`:''}
+    ${(x.cashMoves||[]).length?`<div style="font-weight:800;margin:6px 0">💵 الإيداعات والمسحوبات</div><div class="ax-note">${x.cashMoves.map(m=>(m.type==='cap'?'🛵 تسديد كابتن ':m.type==='in'?'➕ ':'➖ ')+fmt(m.amount)+' — '+esc(m.note||'')+' • '+axFmtD(m.ts)).join('\n')}</div>`:''}
     ${x.note?`<div style="font-weight:800;margin:6px 0">📝 ملاحظة الإغلاق</div><div class="ax-note">${esc(x.note)}</div>`:''}
     <div class="modal-btns"><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`);
 };
