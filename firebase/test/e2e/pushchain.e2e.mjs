@@ -157,18 +157,21 @@ test('4) completed order, then a new one → push again', async () => {
   assert.ok(await until(() => sentTo('NATIVE-KARRAR', before + 1)));
 });
 
-test('5) kitchen (held takeaway) order transferred to a captain → push', async () => {
-  const before = fcm.filter((x) => x.message.token === 'WEB-ALI').length;
+test('5) held takeaway is handed over at the counter — no «transfer to captain», no captain push', async () => {
+  const n = fcm.length;
   await write(async (db) => {
     await setDoc(doc(db, 'orders/HOLD0000000001'), { restaurantId: 'RX', restaurantName: 'مطعم السلسلة', orderType: 'takeaway', held: true, holdNum: 1, customer: 'سفري #1', phone: '07700000003', value: 8000, status: 'preparing', createdAtMs: Date.now(), timeline: [] });
   });
-  await until(() => P.evaluate(() => typeof window.holdTransfer === 'function'));
-  await P.waitForTimeout(1500);
-  await P.evaluate(() => window.holdTransfer('HOLD0000000001'));
-  await P.fill('#dName', 'أبو حسن'); await P.fill('#dAddr', 'زيونة');
-  await pickCaptain('علي');
-  assert.ok(await until(() => sentTo('WEB-ALI', before + 1)), 'transfer rings Ali');
-  assert.equal(fcm.filter((x) => x.message.token === 'WEB-ALI').at(-1).message.data.orderId, 'HOLD0000000001');
+  await P.waitForFunction(() => orders.some((o) => o.id === 'HOLD0000000001'));
+  assert.equal(await P.evaluate(() => typeof window.holdTransfer), 'undefined');
+  await P.evaluate(() => holdOpen('HOLD0000000001'));
+  await P.waitForSelector('#viewOv.on');
+  const body = await P.textContent('#viewBody');
+  assert.doesNotMatch(body, /تحويل للكابتن/); assert.match(body, /تسليم للزبون/);
+  assert.doesNotMatch(await P.evaluate(() => orderActions(orders.find((o) => o.id === 'HOLD0000000001'))), /holdTransfer|تحويل للكابتن/);
+  await P.evaluate(() => viewClose());
+  await new Promise((r) => setTimeout(r, 800));
+  assert.equal(fcm.length, n, 'no captain push for takeaway');
 });
 
 test('6) takeaway / hall orders never ring captains', async () => {

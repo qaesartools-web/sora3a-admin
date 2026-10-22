@@ -245,6 +245,11 @@ test('per-cashier order types and pager (from the admin app / Tower) apply live'
   await p.keyboard.press('4');
   await p.waitForSelector('#delivOv.on');
   await p.click('#delivOv', { position: { x: 5, y: 5 } });
+  // طلب الويتر (طاولة) ما يطلع لكاشير الدلفري
+  const web = (id, d) => E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'webOrders/' + id), { restaurantId: 'RC', status: 'new', createdAtMs: Date.now(), customer: 'زبون', phone: '07700000009', items: [{ name: 'كلاسك', variant: 'وحدة', qty: 1 }], ...d }); });
+  await web('WT0', { mode: 'table', table: 4, source: 'waiter', waiter: 'علي' });
+  await p.waitForTimeout(1500);
+  assert.equal(await p.locator('#webBox .web-card').count(), 0, 'delivery cashier: no waiter/table orders');
   // الاتصالات تطلع لكاشير الدلفري
   await postCall('07705550001');
   await p.waitForSelector('#callsBox .call-card', { timeout: 10000 });
@@ -256,17 +261,19 @@ test('per-cashier order types and pager (from the admin app / Tower) apply live'
   await postCall('07705550002');
   await p.waitForTimeout(2500);
   assert.equal(await p.locator('#callsBox .call-card').count(), 0, 'hall cashier gets no calls');
+  // صار كاشير صالة: طلب الويتر اللي إجا قبل يطلع عنده فوراً (بدون تحديث الصفحة)
+  await p.waitForSelector('#webBox .web-card', { timeout: 10000 });
+  assert.match(await p.textContent('#webBox'), /علي/);
   // والطلبات الأونلاين: التوصيل ما يطلع لكاشير الصالة، والطاولة تطلع
-  const web = (id, d) => E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'webOrders/' + id), { restaurantId: 'RC', status: 'new', createdAtMs: Date.now(), customer: 'زبون', phone: '07700000009', items: [{ name: 'كلاسك', variant: 'وحدة', qty: 1 }], ...d }); });
   await web('WD1', { mode: 'delivery', address: 'الكرادة' });
   await web('WT1', { mode: 'table', table: 3 });
-  await p.waitForSelector('#webBox .web-card', { timeout: 10000 });
+  await p.waitForFunction(() => document.querySelectorAll('#webBox .web-card').length === 2, null, { timeout: 10000 });
   await p.waitForTimeout(800);
-  assert.equal(await p.locator('#webBox .web-card').count(), 1);
-  assert.match(await p.textContent('#webBox'), /طاولة/);
+  assert.equal(await p.locator('#webBox .web-card').count(), 2, 'two table orders, no delivery');
+  assert.doesNotMatch(await p.textContent('#webBox'), /الكرادة/);
   // ورفض الكابتن ما يطلع لكاشير الصالة
   assert.equal(await p.isVisible('#rejOverlay.show'), false);
-  await write('webOrders/WD1', { status: 'rejected' }); await write('webOrders/WT1', { status: 'rejected' });
+  for (const id of ['WD1', 'WT1', 'WT0']) await write('webOrders/' + id, { status: 'rejected' });
   await p.click('#sendBtn');
   await p.waitForSelector('#typeOv.on');
   assert.deepEqual(await shown(p), ['salon', 'takeaway']);
