@@ -3,6 +3,7 @@
 //   بدون مكتبات: Firebase Rules API + Firestore REST
 //   node scripts/deploy-rules.mjs            ← ينشر
 //   node scripts/deploy-rules.mjs --check    ← يفحص القواعد على السيرفر بدون ما ينشر
+//   إذا القواعد الشغالة نفسها اللي بـ GitHub: ما ينشر شي (بس يسجّل «آخر فحص») — حتى الفحص الدوري ما يسوي نسخ زايدة
 import { createSign, createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
@@ -14,6 +15,8 @@ const CHECK = process.argv.includes('--check');
 let SA = null;
 try { SA = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || ''); } catch (e) { SA = null; }
 if (!SA || !SA.client_email || !SA.private_key) {
+  // الفحص الدوري قبل ما ينضاف السر: تنبيه بس (حتى ما يطلع أحمر كل ٦ ساعات)
+  if (process.env.EVENT === 'schedule') { console.log('::warning::السر FIREBASE_SERVICE_ACCOUNT مو مضاف بعد — القواعد ما تنتشر تلقائياً'); process.exit(0); }
   console.error('❌ السر FIREBASE_SERVICE_ACCOUNT مو موجود بهذا المستودع (sora3a-admin).');
   console.error('   ضيفه: Settings ← Secrets and variables ← Actions ← New repository secret — نفس ملف المفتاح اللي بمستودع sora3a-backup.');
   process.exit(1);
@@ -43,11 +46,12 @@ async function call(method, url, body) {
     const err = new Error(`${r.status}: ${text.slice(0, 1500)}`); err.status = r.status; throw err;
   }
 }
-// النتيجة تبين ببرج سرعة (النسخ الاحتياطية ← قواعد الحماية)
+// النتيجة تبين ببرج سرعة (النسخ الاحتياطية ← قواعد الحماية) — نحدّث بس الحقول اللي نكتبها
 async function report(fields) {
   const val = (v) => (typeof v === 'boolean' ? { booleanValue: v } : typeof v === 'number' ? { integerValue: String(Math.round(v)) } : { stringValue: String(v) });
   const doc = { fields: Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, val(v)])) };
-  try { await call('PATCH', `${FS}projects/${PROJECT}/databases/(default)/documents/hqMeta/rules`, doc); console.log('📝 انكتبت النتيجة ببرج سرعة'); }
+  const mask = Object.keys(fields).map((k) => 'updateMask.fieldPaths=' + k).join('&');
+  try { await call('PATCH', `${FS}projects/${PROJECT}/databases/(default)/documents/hqMeta/rules?${mask}`, doc); console.log('📝 انكتبت النتيجة ببرج سرعة'); }
   catch (e) { console.warn('⚠️ ما انكتبت النتيجة ببرج سرعة:', e.message.slice(0, 200)); }
 }
 
@@ -55,6 +59,21 @@ const source = await readFile(new URL('../firestore.rules', import.meta.url), 'u
 const hash = createHash('sha256').update(source).digest('hex').slice(0, 12);
 const commit = (process.env.GITHUB_SHA || '').slice(0, 7);
 TOK = await token();
+
+// القواعد الشغالة هسه — إذا نفسها، ماكو داعي ننشر
+if (!CHECK) {
+  let live = null;
+  try {
+    const rel = await call('GET', `${API}${RELEASE}`);
+    const rs = await call('GET', `${API}${rel.rulesetName}`);
+    live = ((rs.source && rs.source.files) || []).map((f) => f.content).join('\n');
+  } catch (e) { if (e.status !== 404) console.warn('⚠️ ما قدرنا نقرا القواعد الشغالة:', e.message.slice(0, 200)); }
+  if (live === source) {
+    console.log('✅ القواعد الشغالة نفسها اللي بـ GitHub — ماكو شي ينتشر', hash);
+    await report({ ok: true, checkedAtMs: Date.now(), hash, commit, error: '' });
+    process.exit(0);
+  }
+}
 
 // ١) نرفع القواعد كنسخة جديدة — Firebase يفحصها (أي خطأ بالكتابة يوقف هنا وما يتغير شي)
 let ruleset;
