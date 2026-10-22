@@ -6,7 +6,8 @@
 // FIREBASE_SERVICE_ACCOUNT قيمته محتوى ملف حساب الخدمة (json) من فايربيس.
 // ═══════════════════════════════════════════════════════════════════════
 
-const ALLOWED_ORIGINS = ['https://qaesartools-web.github.io'];
+// لوحة الإدارة والكاشير (GitHub Pages) + برج سرعة (أندرويد appassets، وويندوز app://)
+const ALLOWED_ORIGINS = ['https://qaesartools-web.github.io', 'https://appassets.androidplatform.net'];
 const CAPTAIN_URL = 'https://qaesartools-web.github.io/sora3a-captain/captain.html';
 
 export default {
@@ -75,6 +76,7 @@ async function handle(req, env, sa, h) {
   if (!uid) return reply({ ok: false, error: 'unauthenticated' }, 401, h);
 
   const body = await req.json().catch(() => ({}));
+  if (body && body.action === 'setPassword') return setPassword(uid, body, sa, pid, emu, h);
   const orderId = body && body.orderId;
   if (typeof orderId !== 'string' || !/^[A-Za-z0-9]{10,40}$/.test(orderId)) return reply({ ok: false, error: 'bad_order' }, 400, h);
 
@@ -144,10 +146,38 @@ async function handle(req, env, sa, h) {
   return reply({ ok: true, sent, failed, targets: targets.length }, 200, h);
 }
 
+// ── كلمة سر جديدة لحساب كاشير أو صاحب مطعم ──
+// فايربيس يحفظ كلمات السر مشفّرة (محد يكدر يقراها)، فالحل: كلمة سر جديدة وتنرسل للشخص.
+//   المالك وفريق البرج اللي عنده «تعديل» المطاعم: أي كاشير أو صاحب مطعم
+//   صاحب المطعم: كاشيرية مطعمه (وفروعه) بس
+async function setPassword(uid, body, sa, pid, emu, h) {
+  const target = body.uid, pass = body.password;
+  if (typeof target !== 'string' || !/^[A-Za-z0-9]{6,128}$/.test(target)) return reply({ ok: false, error: 'bad_user' }, 400, h);
+  if (typeof pass !== 'string' || pass.length < 8 || pass.length > 64 || pass.trim() !== pass) return reply({ ok: false, error: 'bad_password' }, 400, h);
+  const fs = firestore(pid, emu, emu ? null : await accessToken(sa));
+  const [me, t] = await Promise.all([fs.get(`users/${uid}`), fs.get(`users/${target}`)]);
+  if (!me || me.disabled) return reply({ ok: false, error: 'forbidden' }, 403, h);
+  if (!t || !['cashier', 'restaurant'].includes(t.role)) return reply({ ok: false, error: 'bad_target' }, 403, h);
+  let ok = false;
+  if (me.role === 'admin') ok = true;
+  else if (me.role === 'hq') { const team = await fs.get(`hqTeam/${uid}`); ok = !!(team && team.perms && team.perms.rests === 'edit'); }
+  else if (me.role === 'restaurant' && t.role === 'cashier' && t.restaurantId) {
+    ok = [me.restaurantId, ...(me.branches || [])].filter(Boolean).includes(t.restaurantId);
+    if (!ok) { const r = await fs.get(`restaurants/${t.restaurantId}`); ok = !!r && r.userId === uid; }
+  }
+  if (!ok) return reply({ ok: false, error: 'forbidden' }, 403, h);
+  const r = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${pid}/accounts:update`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await accessToken(sa) },
+    body: JSON.stringify({ localId: target, password: pass }),
+  });
+  if (!r.ok) return reply({ ok: false, error: 'auth_failed', detail: (await r.text()).slice(0, 200) }, 502, h);
+  return reply({ ok: true }, 200, h);
+}
+
 // ── أدوات ──
 function cors(req) {
   const origin = req.headers.get('origin') || '';
-  const ok = ALLOWED_ORIGINS.includes(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  const ok = ALLOWED_ORIGINS.includes(origin) || /^app:\/\/[a-z0-9.-]+$/i.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
   return { 'Access-Control-Allow-Origin': ok ? origin : ALLOWED_ORIGINS[0], 'Access-Control-Allow-Headers': 'authorization, content-type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', Vary: 'Origin' };
 }
 function reply(body, status, headers) { return new Response(JSON.stringify(body), { status, headers: { ...headers, 'content-type': 'application/json' } }); }
@@ -184,7 +214,7 @@ async function accessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
   const unsigned = b64uStr(JSON.stringify({ alg: 'RS256', typ: 'JWT' })) + '.' + b64uStr(JSON.stringify({
     iss: sa.client_email, sub: sa.client_email, aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600,
-    scope: 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging',
+    scope: 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/identitytoolkit',
   }));
   const pem = sa.private_key.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
   const key = await crypto.subtle.importKey('pkcs8', fromB64u(pem.replace(/\+/g, '-').replace(/\//g, '_')), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
