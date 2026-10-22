@@ -42,7 +42,7 @@ async function pos(email) {
 
 test('cashier: no reports/profits, daily receipt from shift tab, expenses by single day', async () => {
   const p = await pos('rcash@x.com');
-  assert.equal(await p.evaluate(() => getComputedStyle(document.querySelector('.dnb[data-tab="reports"]')).display), 'none');
+  assert.equal(await p.$('.dnb[data-tab="reports"]'), null, 'no reports button in the cashier');
   await p.evaluate(() => goTab('reports'));
   assert.equal(await p.evaluate(() => document.getElementById('reportsScreen').classList.contains('on')), false);
   // تقرير اليوم: أرقام فقط بدون أسماء زبائن
@@ -144,10 +144,9 @@ test('no duplicates: owner cashier sends reports to the admin panel; stock keeps
   await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
   await p.fill('#inEmail', 'rown@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
   await p.waitForSelector('#prods .prod', { timeout: 15000 });
-  assert.ok((await p.textContent('.dnb[data-tab="reports"]')).includes('↗'));
-  await p.click('.dnb[data-tab="reports"]');
-  assert.equal(await p.evaluate(() => window.__opened), 'http://localhost:5050/sora3a-admin/');
-  assert.equal(await p.evaluate(() => document.getElementById('cashierScreen').classList.contains('on')), true, 'stays on the cashier');
+  // «التقارير ↗» انشالت من الكاشير (التقارير بلوحة الإدارة بس)
+  assert.equal(await p.$('.dnb[data-tab="reports"]'), null);
+  assert.equal(await p.$('#nb3'), null);
   await p.click('.dnb[data-tab="acc"]');
   const tabs = await p.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
   assert.deepEqual(tabs, ['📦 المخزون', '🧾 الوصفات والتكلفة', '💸 المصروفات', '🧰 أدوات', '💰 قائمة الدخل والحركات ↗']);
