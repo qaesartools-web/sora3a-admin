@@ -43,6 +43,19 @@ async function posLogin(p) {
   await p.fill('#inEmail', 'scr@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
   await p.waitForSelector('#prods .prod', { timeout: 15000 });
 }
+// شاشة المطبخ: تفتح ← تطلع رمز ← البرج (أو صاحب المطعم) يربطها — بدون إيميل
+async function openScreen(p, url) {
+  await p.goto(url);
+  await p.waitForSelector('#pairCode', { timeout: 15000 });
+  const code = (await p.textContent('#pairCode')).trim();
+  const pr = await until(() => read('screenPairs/' + code));
+  return { code, uid: pr.uid, pair: pr };
+}
+async function pairScreen(p, url, extra = {}) {
+  const sc = await openScreen(p, url);
+  await put('screens/' + sc.uid, { restaurantId: 'RW', restName: 'مطعم الشاشة', code: sc.code, kind: sc.pair.kind, name: 'شاشة', pairedBy: 'hq', approved: true, atMs: Date.now(), ...extra });
+  return sc;
+}
 const nums = (p, sel) => p.$$eval(sel + ' .n', (els) => els.map((e) => e.textContent.trim()));
 
 test('ready screen: takeaway/pager orders in two columns, new ready number flashes, served ones leave', async () => {
@@ -412,7 +425,7 @@ test('kitchen display (شاشة المجهز): shows new orders, «جاهز» �
   // الخدمة موقوفة افتراضياً ← رسالة
   await put('restaurants/RW', { name: 'مطعم الشاشة', userId: U.owner, active: true, features: {} });
   const p = await page(B, { w: 1280, h: 800 });
-  await login(p, BASE + 'kitchen.html', 'scr@x.com');
+  await pairScreen(p, BASE + 'kitchen.html');
   await p.waitForSelector('#off:not([hidden])', { timeout: 15000 });
   // المدير الأعلى يفعّلها ← تشتغل مباشرة
   await write('restaurants/RW', { features: { kitchen: true } });
@@ -439,10 +452,11 @@ test('kitchen display (شاشة المجهز): shows new orders, «جاهز» �
   await until(async () => await c.evaluate(() => getComputedStyle(document.querySelector('[data-tab="kitchen"]')).display === 'none'));
   assert.equal(await c.evaluate(() => getComputedStyle(document.querySelector('[data-tab="kitchen"]')).display), 'none', 'المطبخ مخفي من الكاشير');
   assert.notEqual(await c.evaluate(() => document.getElementById('kdsLink').style.display), 'none', 'رابط شاشة المطبخ مفعّل');
-  // نطفّي الخدمة ← يرجع تبويب المطبخ
-  await write('restaurants/RW', { features: { kitchen: false } });
+  // صاحب المطعم يوقف شاشة المجهز (svcOff) ← يرجع تبويب المطبخ للكاشير
+  await write('restaurants/RW', { svcOff: { kitchen: true } });
   await until(async () => await c.evaluate(() => getComputedStyle(document.querySelector('[data-tab="kitchen"]')).display !== 'none'));
   assert.notEqual(await c.evaluate(() => getComputedStyle(document.querySelector('[data-tab="kitchen"]')).display), 'none');
+  await write('restaurants/RW', { features: { kitchen: false }, svcOff: {} });
   assert.deepEqual(clean(c), []);
   await c.context().close();
 });
@@ -457,7 +471,7 @@ test('kitchen sections screen (kitchen.html?sec): each device picks its section 
     items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 2, sec: 'grill' }, { name: 'لبن', variant: 'وحدة', qty: 1, sec: 'drinks' }],
     kSec: { grill: { n: 2, readyAt: 0 }, drinks: { n: 1, readyAt: 0 } } });
   const p = await page(B, { w: 1280, h: 800 });
-  await login(p, BASE + 'kitchen.html?sec', 'scr@x.com');
+  await pairScreen(p, BASE + 'kitchen.html?sec');
   // أول ما تنفتح: «اختار قسمك» بأقسام المطبخ
   await p.waitForSelector('#pick:not([hidden]) [data-pick="grill"]', { timeout: 15000 });
   assert.match(await p.textContent('#pick'), /اختار قسمك/);
@@ -503,7 +517,7 @@ test('kitchen sections screen (kitchen.html?sec): each device picks its section 
   assert.deepEqual(errs, [], 'installability errors: ' + JSON.stringify((await cdp.send('Page.getInstallabilityErrors')).installabilityErrors));
   // شاشة المجهز مطفية ← رسالة بروحها، والمطبخ يبقى شغّال
   const x = await page(B, { w: 1280, h: 800 });
-  await login(x, BASE + 'kitchen.html', 'scr@x.com');
+  await pairScreen(x, BASE + 'kitchen.html');
   await x.waitForSelector('#off:not([hidden])', { timeout: 15000 });
   assert.match(await x.textContent('#off'), /المجهز/);
   assert.equal(await x.getAttribute('meta[name="apple-mobile-web-app-title"]', 'content'), 'شاشة المجهز');
@@ -519,35 +533,80 @@ test('kitchen sections screen (kitchen.html?sec): each device picks its section 
   await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: 3 });
 });
 
-test('approved devices: every screen (expediter, kitchen, waiter) needs approval when the service is on — even with the restaurant email', async () => {
-  await write('restaurants/RW', { features: { kitchen: true, kitchenSec: true, devices: true } });
+test('kitchen screens link with a code — no admin email: owner links from the admin panel, Tower approves, owner pauses/resumes, unlinks', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, kitchenSec: true, devices: true, captain: false } });
+  // الشاشة: ماكو إيميل ولا كلمة سر — رمز + QR يفتح لوحة الإدارة على «ربط شاشة»
   const p = await page(B, { w: 1280, h: 800 });
-  await login(p, BASE + 'kitchen.html', 'scr@x.com');
-  await p.waitForSelector('.dev-code', { timeout: 15000 });
-  assert.match(await p.textContent('#gate'), /هذا الجهاز مو معتمد/);
+  const sc = await openScreen(p, BASE + 'kitchen.html');
+  assert.equal(await p.$('#gEmail'), null, 'no email login on the kitchen screen');
+  assert.match(sc.code, /^[A-Z2-9]{6}$/);
+  assert.equal(sc.pair.kind, 'kitchen'); assert.match(sc.pair.platform, /شاشة المجهز/);
+  await p.waitForSelector('#pairQr svg', { timeout: 8000 });
+  await p.screenshot({ path: 'shots/kitchen-pair.png' });
+  // صاحب المطعم يفتح الـQR (لوحة الإدارة ?pair=) ← الرمز جاهز ← «ربط»
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.goto('http://localhost:5050/sora3a-admin/index.html?pair=' + sc.code);
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await a.fill('#lEmail', 'scr@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#scScreens.on #scrCode', { timeout: 15000 });
+  await until(async () => (await a.inputValue('#scrCode')) === sc.code);
+  assert.equal(await a.inputValue('#scrCode'), sc.code);
+  await a.fill('#scrName', 'مجهز الصالة'); await a.click('#scrPairBtn');
+  const s1 = await until(() => read('screens/' + sc.uid));
+  assert.equal(s1.restaurantId, 'RW'); assert.equal(s1.approved, false); assert.equal(s1.pairedBy, 'owner'); assert.equal(s1.name, 'مجهز الصالة');
+  await a.waitForSelector(`[data-paired="${sc.uid}"]`, { timeout: 8000 });
+  assert.match(await a.textContent(`[data-paired="${sc.uid}"]`), /تنتظر اعتماد إدارة سرعة/);
+  // الشاشة: انربطت وتنتظر اعتماد البرج (الأجهزة المعتمدة شغّالة)
+  await p.waitForFunction(() => /بانتظار اعتماد إدارة سرعة/.test(document.getElementById('gate').textContent), null, { timeout: 15000 });
   assert.equal(await p.isVisible('#app'), false);
-  const key = await p.evaluate(() => localStorage.getItem('sora3a_dev_key'));
-  const code = (await p.textContent('.dev-code')).trim();
-  const req = await until(() => read('deviceReqs/' + key));
-  assert.equal(req.restaurantId, 'RW'); assert.equal(req.status, 'pending'); assert.equal(req.code, code);
-  assert.match(req.platform, /شاشة المجهز/);
-  await p.screenshot({ path: 'shots/kitchen-device-block.png' });
-  // المدير الأعلى يعتمده (برج سرعة) ← الشاشة تفتح وحدها
-  await put('restaurants/RW/devices/' + key, { name: 'شاشة المجهز', code, platform: req.platform, approvedAtMs: Date.now() });
-  await write('deviceReqs/' + key, { status: 'approved' });
-  await p.waitForSelector('#app:not([hidden])', { timeout: 15000 });
-  // نفس الجهاز المعتمد يفتح شاشة المطبخ مباشرة
-  await p.goto(BASE + 'kitchen.html?sec'); await p.waitForSelector('#app:not([hidden])', { timeout: 15000 });
-  // تلفون ثاني (مو معتمد) على الويتر بإيميل المطعم ← ينقفل لحد الاعتماد
+  // البرج يعتمدها ← تفتح وحدها
+  await write('screens/' + sc.uid, { approved: true });
+  await p.waitForSelector('#app:not([hidden])', { timeout: 40000 });
+  await a.waitForFunction((u) => /شغّالة/.test(document.querySelector(`[data-paired="${u}"]`).textContent), sc.uid, { timeout: 8000 });
+  // «خدمات مطعمك»: صاحب المطعم يوقف شاشة المجهز ← الشاشة توكف برسالة، ويرجّعها ← ترجع
+  await a.waitForSelector('#scrSvc:not([hidden]) [data-svc="kitchen"] .scr-sw.on', { timeout: 8000 });
+  assert.match(await a.textContent('#scrSvc [data-svc="captain"]'), /تتفعّل من إدارة سرعة/, 'services Tower did not enable cannot be switched');
+  assert.equal(await a.$('#scrSvc [data-svc="captain"] .scr-sw'), null);
+  await a.click('#scrSvc [data-svc="kitchen"] .scr-sw');
+  await until(async () => ((await read('restaurants/RW')).svcOff || {}).kitchen === true);
+  await p.waitForSelector('#off:not([hidden])', { timeout: 10000 });
+  assert.match(await p.textContent('#off'), /موقوفة من صاحب المطعم/);
+  await a.waitForSelector('[data-scr="kitchen"] .scr-tag.warn', { timeout: 8000 });
+  await a.screenshot({ path: 'shots/admin-pair.png', fullPage: true });
+  await a.click('#scrSvc [data-svc="kitchen"] .scr-sw');
+  await p.waitForSelector('#app:not([hidden])', { timeout: 10000 });
+  // البرج يطفي الخدمة ← صاحب المطعم ما يكدر يشغّلها
+  await write('restaurants/RW', { features: { kitchen: false, kitchenSec: true, devices: true } });
+  await a.waitForFunction(() => /تتفعّل من إدارة سرعة/.test(document.querySelector('#scrSvc [data-svc="kitchen"]').textContent), null, { timeout: 8000 });
+  assert.equal(await a.$('#scrSvc [data-svc="kitchen"] .scr-sw'), null);
+  await write('restaurants/RW', { features: { kitchen: true, kitchenSec: true, devices: true } });
+  // صاحب المطعم يفصلها ← ترجع لرمز جديد
+  await a.click(`[data-paired="${sc.uid}"] button:has-text("فصل")`);   // التأكيد يقبله الـharness
+  await p.waitForSelector('#pairCode', { timeout: 15000 });
+  assert.equal(await read('screens/' + sc.uid), null);
+  // البرج يربط شاشة مباشرة ← معتمدة وتفتح بدون انتظار
+  const q = await page(B, { w: 1280, h: 800 });
+  await pairScreen(q, BASE + 'kitchen.html?sec');
+  await q.waitForSelector('#app:not([hidden]), #pick:not([hidden])', { timeout: 15000 });
+  for (const y of [p, a, q]) { assert.deepEqual(clean(y).filter((e) => !/permission/i.test(e)), []); await y.context().close(); }
+  await write('restaurants/RW', { features: { kitchen: false } });
+});
+
+test('kitchen screen signs out an old restaurant-email login on that device once (so nobody opens the cashier as the owner); waiter still needs approval with the restaurant email', async () => {
+  await write('restaurants/RW', { features: {} });
   const w = await page(B);
+  await login(w, BASE + 'waiter.html', 'scr@x.com');
+  await w.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  await openScreen(w, BASE + 'kitchen.html');
+  await w.goto(BASE + 'waiter.html');
+  await w.waitForSelector('#gEmail', { timeout: 15000 });
+  // الويتر بإيميل المطعم + الأجهزة المعتمدة ← ينقفل لحد الاعتماد
+  await write('restaurants/RW', { features: { devices: true } });
   await login(w, BASE + 'waiter.html', 'scr@x.com');
   await w.waitForSelector('.dev-code', { timeout: 15000 });
   const wk = await w.evaluate(() => localStorage.getItem('sora3a_dev_key'));
   assert.match((await until(() => read('deviceReqs/' + wk))).platform, /الويتر/);
-  // الخدمة مطفية ← يدخل عادي
-  await write('restaurants/RW', { features: { devices: false } });
-  await w.reload(); await w.waitForSelector('#app:not([hidden]), #off:not([hidden])', { timeout: 15000 });
-  for (const y of [p, w]) { assert.deepEqual(clean(y).filter((e) => !/permission/i.test(e)), []); await y.context().close(); }
+  assert.deepEqual(clean(w).filter((e) => !/permission/i.test(e)), []); await w.context().close();
   await write('restaurants/RW', { features: { kitchen: false } });
 });
 
@@ -576,7 +635,7 @@ test('admin panel «الشاشات»: every screen link in one place — expedit
   assert.match(await url('screen'), /screen-android\/sora3a-screen\.apk$/);
   assert.match(await url('line'), /line-android\/sora3a-line\.apk$/);
   assert.match(await url('captain'), /sora3a-captain\/captain\.html$/);
-  assert.match(await p.textContent('.scr-intro'), /بإيميل المطعم وكلمة السر/);
+  assert.match(await p.textContent('.scr-intro'), /بدون إيميل/);
   // QR يترسم للمسح بكاميرا التلفون
   await p.click('[data-scr="kitchenSec"] button:has-text("QR")');
   await p.waitForSelector('[data-qr="kitchenSec"]:not([hidden]) svg', { timeout: 8000 });

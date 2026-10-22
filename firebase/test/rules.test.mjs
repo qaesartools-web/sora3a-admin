@@ -754,3 +754,83 @@ test('برنامج المالك: المطاعم والكاشيرية والكب�
   await assertFails(deleteDoc(doc(h2, 'restaurants/T1')));
   await assertSucceeds(setDoc(doc(h2, 'users/trialOwner'), { role: 'restaurant', restaurantId: 'T1', email: 't@x.com' }));
 });
+
+// ── شاشات المطبخ المربوطة برمز (بدون إيميل المطعم) ──
+test('شاشة المطبخ: تطلع رمز، صاحب المطعم يربطها لمطعمه بس، وتشوف طلباته وتعلّم «جاهز» بس', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'orders/K1'), { restaurantId: 'R1', status: 'delivered', kitchen: 'new', value: 9000, kSec: { grill: { n: 1, readyAt: 0 } } });
+    await setDoc(doc(ctx.firestore(), 'orders/K2'), { restaurantId: 'R1', status: 'preparing', kitchen: 'new', value: 5000 });
+    await setDoc(doc(ctx.firestore(), 'restaurants/R1/settings/main'), { sections: [{ id: 'grill', name: 'الشوي' }] });
+    await setDoc(doc(ctx.firestore(), 'restaurants/R1/menu/main'), { cats: [] });
+  });
+  const S = as('scrA');   // جلسة «مجهولة» (ماكو حساب بـ users)
+  const pair = { uid: 'scrA', atMs: Date.now(), platform: 'Android • شاشة المجهز', kind: 'kitchen' };
+  await assertSucceeds(setDoc(doc(S, 'screenPairs/AB12CD'), pair));
+  await assertFails(setDoc(doc(as('scrB'), 'screenPairs/ZZ99ZZ'), { ...pair }), 'only for its own uid');
+  await assertFails(setDoc(doc(as('scrB'), 'screenPairs/AB12CD'), { ...pair, uid: 'scrB' }), 'cannot take another screen code');
+  // قبل الربط: ما تشوف شي
+  await assertSucceeds(getDoc(doc(S, 'screens/scrA')));
+  await assertFails(getDoc(doc(S, 'orders/K1')));
+  await assertFails(getDoc(doc(S, 'restaurants/R1')));
+  // صاحب المطعم يقرا الرمز ويربطها لمطعمه — بدون اعتماد (الاعتماد للبرج)
+  const scr = { restaurantId: 'R1', code: 'AB12CD', kind: 'kitchen', name: 'المطبخ', platform: pair.platform, pairedBy: 'owner', approved: false, atMs: Date.now(), by: 'r1@x.com' };
+  await assertSucceeds(getDoc(doc(as('rest1'), 'screenPairs/AB12CD')));
+  await assertFails(setDoc(doc(as('rest1'), 'screens/scrA'), { ...scr, approved: true }), 'owner cannot approve');
+  await assertFails(setDoc(doc(as('rest1'), 'screens/scrA'), { ...scr, restaurantId: 'R2' }), 'owner pairs only his restaurant');
+  await assertFails(setDoc(doc(as('rest1'), 'screens/scrX'), { ...scr }), 'code must belong to that screen');
+  await assertFails(setDoc(doc(as('cash1'), 'screens/scrA'), { ...scr }), 'cashier cannot pair');
+  await assertSucceeds(setDoc(doc(as('rest1'), 'screens/scrA'), scr));
+  await assertFails(updateDoc(doc(as('rest1'), 'screens/scrA'), { approved: true }), 'owner cannot approve later');
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'screens/scrA'), { name: 'شاشة الشوي' }));
+  await assertFails(updateDoc(doc(S, 'screens/scrA'), { approved: true }), 'screen cannot approve itself');
+  // الأجهزة المعتمدة مطفية: تشتغل مباشرة — طلبات مطعمها وإعداداته بس
+  await assertSucceeds(getDoc(doc(S, 'restaurants/R1')));
+  await assertSucceeds(getDoc(doc(S, 'restaurants/R1/settings/main')));
+  await assertFails(getDoc(doc(S, 'restaurants/R1/menu/main')), 'only settings');
+  await assertSucceeds(getDocs(query(collection(S, 'orders'), where('restaurantId', '==', 'R1'))));
+  await assertFails(getDoc(doc(S, 'orders/O2')), 'other restaurant');
+  await assertFails(getDocs(query(collection(S, 'orders'), where('restaurantId', '==', 'R2'))));
+  await assertFails(getDoc(doc(S, 'users/rest1')));
+  // «جاهز»: قسم، أو الطلب كله، أو أونلاين قيد التحضير ← جاهز
+  await assertSucceeds(updateDoc(doc(S, 'orders/K1'), { kSec: { grill: { n: 1, readyAt: 5 } } }));
+  await assertSucceeds(updateDoc(doc(S, 'orders/K1'), { kitchen: 'ready', kitchenReadyAt: 6 }));
+  await assertSucceeds(updateDoc(doc(S, 'orders/K2'), { kitchen: 'ready', kitchenReadyAt: 6, status: 'ready', readyAt: 6 }));
+  await assertFails(updateDoc(doc(S, 'orders/K1'), { value: 1 }), 'no prices');
+  await assertFails(updateDoc(doc(S, 'orders/K1'), { status: 'cancelled' }), 'no cancel');
+  await assertFails(setDoc(doc(S, 'orders/NEW'), { restaurantId: 'R1', value: 1, status: 'delivered' }), 'no new orders');
+  await assertFails(deleteDoc(doc(S, 'orders/K1')));
+  // الأجهزة المعتمدة شغّالة: اللي ربطها صاحب المطعم توكف لحد ما يعتمدها البرج
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'restaurants/R1'), { features: { devices: true } }); });
+  await assertFails(getDoc(doc(S, 'orders/K1')), 'waits for approval');
+  await assertFails(getDoc(doc(S, 'restaurants/R1')));
+  await assertSucceeds(updateDoc(doc(as('admin1'), 'screens/scrA'), { approved: true }));
+  await assertSucceeds(getDoc(doc(S, 'orders/K1')));
+  // البرج يربط شاشة ثانية معتمدة مباشرة
+  await assertSucceeds(setDoc(doc(as('scrB'), 'screenPairs/QW34ER'), { ...pair, uid: 'scrB' }));
+  await assertSucceeds(setDoc(doc(as('admin1'), 'screens/scrB'), { ...scr, code: 'QW34ER', pairedBy: 'hq', approved: true }));
+  await assertSucceeds(getDoc(doc(as('scrB'), 'orders/K1')));
+  // المطعم منتهي الاشتراك: الشاشة توكف
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'restaurants/R1'), { expiryMs: Date.now() - DAY }); });
+  await assertFails(getDoc(doc(as('scrB'), 'orders/K1')), 'expired restaurant');
+  // صاحب المطعم يشوف شاشاته ويفصلها، وما يشوف شاشات غيره
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'restaurants/R1'), { expiryMs: Date.now() + DAY }); });
+  await assertSucceeds(getDocs(query(collection(as('rest1'), 'screens'), where('restaurantId', '==', 'R1'))));
+  await assertFails(getDocs(query(collection(as('rest2'), 'screens'), where('restaurantId', '==', 'R1'))));
+  await assertFails(deleteDoc(doc(as('rest2'), 'screens/scrA')));
+  await assertSucceeds(deleteDoc(doc(as('rest1'), 'screens/scrA')));
+  await assertFails(getDoc(doc(S, 'orders/K1')), 'unlinked');
+});
+
+test('خدمات المطعم: صاحب المطعم يوقف خدمة شغّلها البرج (svcOff) ويرجّعها — وما يكدر يشغّل خدمة البرج طافيها', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'restaurants/R1'), { features: { captain: true, devices: true } }); });
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'restaurants/R1'), { 'svcOff.captain': true }));
+  // الكابتن يوكف (نفس لما البرج يطفيها)
+  await assertFails(getDoc(doc(as('cap1'), 'orders/O1')), 'captain paused by owner');
+  await assertFails(setDoc(doc(as('rest1'), 'orders/DLV'), { restaurantId: 'R1', value: 1, orderType: 'delivery' }), 'no delivery while paused');
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'restaurants/R1'), { 'svcOff.captain': false }));
+  await assertSucceeds(getDoc(doc(as('cap1'), 'orders/O1')));
+  // تشغيل الخدمة نفسها (features) للبرج بس — وإيقاف «الأجهزة المعتمدة» من صاحب المطعم ما يأثر
+  await assertFails(updateDoc(doc(as('rest1'), 'restaurants/R1'), { 'features.kitchen': true }));
+  await assertFails(updateDoc(doc(as('rest2'), 'restaurants/R1'), { 'svcOff.captain': true }), 'other owner');
+  await assertFails(updateDoc(doc(as('cash1'), 'restaurants/R1'), { 'svcOff.captain': true }), 'cashier');
+});
