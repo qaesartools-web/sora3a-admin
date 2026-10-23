@@ -172,3 +172,54 @@ test('HQ console toggle: the Tower can hide the super-admin from the admin app, 
   await p.waitForSelector('#appPage', { state: 'visible' });
   await p.context().close();
 });
+
+test('super admin «تصفير البيانات»: wipes one restaurant’s orders, web orders, tracking, proofs, shifts, counters, customers and expenses — keeps menu, settings, accounts and other restaurants', async () => {
+  const cnt = async (p, f, v) => { let n; await E.withSecurityRulesDisabled(async (c) => { const col = collection(c.firestore(), p); n = (await getDocs(f ? query(col, where(f, '==', v)) : col)).size; }); return n; };
+  await E.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'restaurants/RZ'), { name: 'مطعم التجربة', active: true, expiry: '2099-01-01' });
+    await setDoc(doc(db, 'restaurants/RZ/menu/main'), { cats: [{ cat: 'برغر', items: [] }] });
+    await setDoc(doc(db, 'restaurants/RZ/settings/main'), { tables: 5 });
+    for (let i = 0; i < 5; i++) {
+      await setDoc(doc(db, 'orders/RZO' + i), { restaurantId: 'RZ', status: 'delivered', value: 1000, createdAtMs: Date.now() });
+      await setDoc(doc(db, 'tracking/RZO' + i), { status: 'delivered' });
+      await setDoc(doc(db, 'deliveryProofs/RZO' + i), { image: 'x' });
+    }
+    await setDoc(doc(db, 'orders/KEEP1'), { restaurantId: 'RL', status: 'delivered', value: 1 });
+    await setDoc(doc(db, 'webOrders/RZW1'), { restaurantId: 'RZ', status: 'new' });
+    await setDoc(doc(db, 'restaurants/RZ/shifts/S1'), { status: 'closed' });
+    await setDoc(doc(db, 'restaurants/RZ/counters/tickets'), { day: 'd', n: 5 });
+    await setDoc(doc(db, 'restaurants/RZ/customers/0770'), { name: 'زبون' });
+    await setDoc(doc(db, 'accounting/RZ/expenses/E1'), { cat: 'x', amount: 1, ts: 1 });
+  });
+  const p = await page(B);
+  await login(p, 'boss@x.com');
+  await p.waitForSelector('#appPage', { state: 'visible' });
+  await p.click('.dnav-btn[data-screen="scRests"]');
+  await p.waitForSelector('#restList .entity');
+  const btn = p.locator('#restList .entity', { hasText: 'مطعم التجربة' }).locator('button', { hasText: 'تصفير البيانات' });
+  // نافذة التأكيد تنقبل وحدها (الـharness)؛ نافذة كتابة الاسم ← الاسم اللي نحدده
+  const typeName = (n) => p.evaluate((x) => { window.prompt = () => x; }, n);
+  // اسم غلط ← ما ينمسح شي
+  await typeName('مطعم ثاني');
+  await btn.click();
+  await p.waitForTimeout(1500);
+  assert.equal(await cnt('orders', 'restaurantId', 'RZ'), 5, 'wrong name keeps everything');
+  // الاسم الصحيح ← ينمسح
+  await typeName('مطعم التجربة');
+  await btn.click();
+  await until(async () => (await cnt('orders', 'restaurantId', 'RZ')) === 0, 15000);
+  // المصروفات آخر خطوة بالتصفير — ننتظرها وبعدين نفحص الباقي
+  await until(async () => (await cnt('accounting/RZ/expenses')) === 0, 15000);
+  assert.equal(await cnt('orders', 'restaurantId', 'RZ'), 0, 'orders');
+  assert.equal(await cnt('webOrders', 'restaurantId', 'RZ'), 0, 'web orders');
+  for (const pth of ['tracking', 'deliveryProofs']) for (let i = 0; i < 5; i++) assert.equal(await read(pth + '/RZO' + i), undefined, pth + ' RZO' + i);
+  for (const c of ['shifts', 'counters', 'customers']) assert.equal(await cnt('restaurants/RZ/' + c), 0, c);
+  assert.equal(await cnt('accounting/RZ/expenses'), 0);
+  // يبقى
+  assert.ok(await read('restaurants/RZ/menu/main'), 'menu kept');
+  assert.ok(await read('restaurants/RZ/settings/main'), 'settings kept');
+  assert.ok(await read('restaurants/RZ'), 'restaurant kept');
+  assert.ok(await read('orders/KEEP1'), 'other restaurant untouched');
+  await p.context().close();
+});
