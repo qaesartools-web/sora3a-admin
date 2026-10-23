@@ -7,7 +7,7 @@
 // تشغيل (من مجلد firebase):
 //   npx firebase emulators:exec --only auth,firestore --project sora3a-system "cd test/e2e && SORA3A_ROOT=/home/user CHROME_PATH=/opt/pw-browsers/chromium node load1000.mjs"
 //   SCALE=0.05 للتجربة السريعة (50 طلب بنفس النسب)
-import { doc, setDoc, getDocs, collection, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDocs, collection, query, where, writeBatch } from 'firebase/firestore';
 import { writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -16,7 +16,9 @@ import { serve, env, signUp, clearAuth, browser, page, ROOTS } from './harness.m
 const SCALE = Number(process.env.SCALE || 1);
 const n = (x) => Math.max(1, Math.round(x * SCALE));
 const N = { delivCash: n(450), delivQR: n(50), salonCash: n(150), salonWaiter: n(70), salonQR: n(30), quick: n(100), hold: n(100), pickupQR: n(50) };
-const TOTAL = Object.values(N).reduce((a, b) => a + b, 0);
+// PRELOAD=850: اليوم يبدي بهالعدد من الطلبات المكتملة (مطعم مزدحم من الصبح) — وبعدين الطلبات الحية فوقها، فكل الشاشات تشتغل بـ1000 طلب باليوم
+const PRELOAD = Math.max(0, Number(process.env.PRELOAD || 0));
+const TOTAL = Object.values(N).reduce((a, b) => a + b, 0) + PRELOAD;
 // INJECT=0.7: هاي النسبة من طلبات الكاشير (دلفري، صالة، سفري فوري) تنكتب بالسيرفر مباشرة مثل كاشيرية إضافية
 //   (جهاز الاختبار 4 معالجات بس) — وكل الشاشات (المجهز، الكباتن، الكاشير، البرج، الإدارة) لازم تستلمها وتعالجها
 const INJECT = Math.min(Math.max(Number(process.env.INJECT || 0), 0), 0.95), INJ_MIN = Number(process.env.INJ_MIN || 40);
@@ -106,7 +108,12 @@ async function posLogin(p, email) {
   await p.goto(BASE + 'index.html');
   await p.waitForSelector('#loginPage', { state: 'visible', timeout: 20000 });
   await p.fill('#inEmail', email); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
-  await p.waitForSelector('#prods .prod', { timeout: 20000 });
+  const t = Date.now();
+  await p.waitForSelector('#prods .prod', { timeout: 120000 });
+  // وقت فتح الكاشير مع طلبات اليوم كلها (PRELOAD) + كم طلب حمّل + تعليق الصفحة
+  const lt = await p.evaluate(() => ({ orders: (window.orders || []).length, lt: window.__lt })).catch(() => ({}));
+  log(`🔑 ${email}: الكاشير فتح خلال ${((Date.now() - t) / 1000).toFixed(1)} ثانية • طلبات محمّلة ${lt.orders} • تعليق ${lt.lt ? Math.round(lt.lt.ms) + 'ms (أطول ' + Math.round(lt.lt.max) + ')' : '-'}`);
+  (S.open = S.open || []).push({ email, sec: (Date.now() - t) / 1000, orders: lt.orders, ltMs: lt.lt && Math.round(lt.lt.ms) });
   await p.waitForTimeout(1500);
   // فتح وردية (رصيد 0) حتى نطابق الدرج بالنهاية
   try {
@@ -302,6 +309,35 @@ async function qrCustomer(p, jobs) {
   return p;
 }
 
+// ── طلبات اليوم من قبل (PRELOAD): مكتملة، أرقامها 1..PRELOAD، موزعة على ساعات اليوم، والدلفري على الكباتن ──
+async function preload() {
+  if (!PRELOAD) return;
+  const all = MENU.flatMap((c) => c.items), now = Date.now();
+  const dayStart = Date.parse(bagDay(now) + 'T00:00:00+03:00'), from = Math.max(dayStart + 30 * 60000, now - 10 * 3600000), to = now - 5 * 60000;
+  const types = Array.from({ length: PRELOAD }, (_, i) => (i % 4 < 2 ? 'delivery' : i % 4 === 2 ? 'salon' : 'takeaway'));
+  await E.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    for (let b = 0; b < PRELOAD; b += 400) {
+      const batch = writeBatch(db);
+      for (let i = b; i < Math.min(PRELOAD, b + 400); i++) {
+        const t = from + Math.round(((to - from) * i) / PRELOAD), type = types[i];
+        const items = Array.from({ length: 1 + rnd(3) }, () => { const it = all[rnd(all.length)]; return { name: it.name, variant: 'وحدة', price: it.variants[0].price, qty: 1 + rnd(2), cost: 0 }; });
+        const sub = items.reduce((a, x) => a + x.price * x.qty, 0);
+        const o = { restaurantId: RID, restaurantName: 'مطعم التحمّل', orderType: type, items, notes: items.map((x) => `${x.name}(وحدة)×${x.qty}`).join(', '),
+          subtotal: sub, discount: 0, service: 0, tax: 0, value: sub, inv: true, kitchen: 'ready', createdAt: new Date(t).toISOString(), createdAtMs: t,
+          shiftId: null, device: 'preload', inject: true, day: bagDay(t), ticketNo: i + 1, status: 'delivered', deliveredAt: t + 20 * 60000, deliveredAtMs: t + 20 * 60000,
+          timeline: [{ status: 'delivered', time: '', text: 'تم إنشاء الطلب' }] };
+        if (type === 'delivery') { const k = 1 + (i % CAPS); Object.assign(o, { customer: 'زبون ' + (i + 1), phone: '0773' + String(1000000 + i).slice(1), address: 'زيونة شارع ' + (1 + rnd(90)), fee: 3000,
+          captainId: 'C' + k, captainName: 'كابتن ' + k, commission: Math.round(sub * 0.1), deliveryProof: null, rejectedBy: [], payment: { method: 'cod' }, capSettled: true, hasProof: true }); }
+        else Object.assign(o, { payment: { method: 'cash', cash: sub, card: 0 }, customer: type === 'salon' ? 'صالة #' + (i + 1) : 'سفري', ...(type === 'salon' ? { salonNum: i + 1 } : {}) });
+        batch.set(doc(db, 'orders/PRE' + String(i).padStart(4, '0')), o);
+      }
+      await batch.commit();
+    }
+  });
+  log(`📦 اليوم يبدي بـ${PRELOAD} طلب مكتمل (من ${new Date(from + 3 * 3600000).toISOString().slice(11, 16)} لهسه بتوقيت بغداد)`);
+}
+
 // ── مولّد الطلبات الإضافية (INJECT): نفس شكل طلب الكاشير — دلفري لكابتن، صالة وسفري فوري مدفوعة — والمجهز يعلّمها جاهز ──
 async function injector() {
   const jobs = [...Array(I.delivCash).fill('delivery'), ...Array(I.salonCash).fill('salon'), ...Array(I.quick).fill('takeaway')].sort(() => Math.random() - 0.5);
@@ -347,7 +383,7 @@ const fmt = (x) => Math.round(x).toLocaleString('en-US');
 async function main() {
   srv = await serve(); E = await (env()); B = await browser();
   log(`تجهيز: ${TOTAL} طلب (SCALE=${SCALE})`, JSON.stringify(N));
-  await seed();
+  await seed(); await preload();
   // ── الأجهزة ──
   await probeWrite('بدون أجهزة');
   const D = await dev({ w: 1280, h: 860 }); await posLogin(D, 'deliv@load.iq');
@@ -363,7 +399,10 @@ async function main() {
   for (let i = 1; i <= CAPS; i++) {
     const p = await dev({ notif: true }); await p.goto('http://localhost:5050/sora3a-captain/captain.html');
     await p.fill('#email', `cap${i}@load.iq`); await p.fill('#password', 'secret123'); await p.click('#loginBtn');
-    await p.waitForSelector('#tab-active', { timeout: 20000 }); C.push(p);
+    const t = Date.now();
+    try { await p.waitForSelector('#tab-active', { timeout: 90000 }); }
+    catch (e) { await p.screenshot({ path: OUT + `_cap${i}_fail.png` }); throw e; }
+    log(`🔑 كابتن ${i}: فتح خلال ${((Date.now() - t) / 1000).toFixed(1)} ثانية`); C.push(p);
   }
   await probeWrite(`+ ${CAPS} كباتن`);
   // لوحة إدارة المطعم
@@ -487,7 +526,9 @@ async function main() {
     delivCash: num(R.cashiers['دلفري 1'].shift['النقد المتوقع بالدرج']) + num(R.cashiers['دلفري 2'].shift['النقد المتوقع بالدرج']), hallCash: num(R.cashiers['صالة 1'].shift['النقد المتوقع بالدرج']) + num(R.cashiers['صالة 2'].shift['النقد المتوقع بالدرج']) };
   const own = (t) => by(t).filter((o) => !o.inject);   // طلبات المولّد ما تنحسب بوردية كاشير
   R.expect = { delivSales: sum(own('delivery')), hallSales: sum([...own('salon'), ...own('takeaway')]), hallCash: sum([...own('salon'), ...own('takeaway')], (o) => (o.payment && o.payment.cash) || 0) };
-  R.firestore.injected = os.filter((o) => o.inject).length;
+  R.firestore.injected = os.filter((o) => o.inject).length; R.cashierOpen = S.open;
+  // كم طلب أخذ رقم من العدّ المحلي (الحجز من السيرفر ما وصل) — هذا مصدر الأرقام المكررة
+  R.ticketLocal = {}; for (const [k, p] of [['دلفري 1', D], ['دلفري 2', D2], ['صالة 1', Sx], ['صالة 2', S2]]) R.ticketLocal[k] = await p.evaluate(() => window.__tkLocal || 0).catch(() => null);
   R.firestore.duplicateTicketsCashier = (() => { const c = os.filter((o) => !o.inject && o.ticketNo); return c.length - new Set(c.map((o) => o.ticketNo)).size; })();
   // الكباتن: «اليوم» و«الأرباح» لكل كابتن مقابل السيرفر
   R.captains = [];
