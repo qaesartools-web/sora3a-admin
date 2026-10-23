@@ -294,6 +294,21 @@ async function qrCustomer(p, jobs) {
   return p;
 }
 
+// وضع القياس (FANOUT=1): نفتح الأجهزة مجموعة مجموعة ونقيس زمن كتابة طلب بالسيرفر بعد كل مجموعة
+const FANOUT = process.env.FANOUT === '1', fan = [];
+async function probeWrite(label) {
+  if (!FANOUT) return;
+  await sleep(4000);
+  const ms = [];
+  for (let i = 0; i < 12; i++) {
+    const id = 'PRB' + Date.now() + i, t = Date.now();
+    await fetch(`http://127.0.0.1:8080/v1/projects/sora3a-system/databases/(default)/documents/orders/${id}`, { method: 'PATCH', headers: { Authorization: 'Bearer owner', 'content-type': 'application/json' },
+      body: JSON.stringify({ fields: { restaurantId: { stringValue: RID }, orderType: { stringValue: 'takeaway' }, status: { stringValue: 'delivered' }, value: { integerValue: '1000' }, kitchen: { stringValue: 'ready' }, day: { stringValue: bagDay() }, createdAtMs: { integerValue: String(Date.now()) } } }) });
+    ms.push(Date.now() - t); await sleep(250);
+  }
+  const avg = Math.round(ms.reduce((a, b) => a + b, 0) / ms.length);
+  fan.push([label, avg, Math.max(...ms)]); log(`📏 ${label}: كتابة طلب ${avg}ms (أقصى ${Math.max(...ms)})`);
+}
 const pct = (a, q) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(q * s.length))]; };
 const dist = (a) => a.length ? { n: a.length, p50: pct(a, 0.5), p95: pct(a, 0.95), max: Math.max(...a) } : { n: 0 };
 const fmt = (x) => Math.round(x).toLocaleString('en-US');
@@ -303,22 +318,28 @@ async function main() {
   log(`تجهيز: ${TOTAL} طلب (SCALE=${SCALE})`, JSON.stringify(N));
   await seed();
   // ── الأجهزة ──
+  await probeWrite('بدون أجهزة');
   const D = await dev({ w: 1280, h: 860 }); await posLogin(D, 'deliv@load.iq');
   const Sx = await dev({ w: 1280, h: 860 }); await posLogin(Sx, 'hall@load.iq');
+  await probeWrite('+ كاشيرين');
   const K = await dev({ w: 1280, h: 800 }); await pairScreen(K, BASE + 'kitchen.html', 'kitchen', 'المجهز'); await K.waitForSelector('#app:not([hidden])', { timeout: 20000 });
+  await probeWrite('+ المجهز');
   const W = await dev({ w: 390, h: 844 }); await pairScreen(W, BASE + 'waiter.html', 'waiter', 'علي'); await W.waitForSelector('.tb', { timeout: 20000 });
+  await probeWrite('+ الويتر');
   const C = [];
   for (let i = 1; i <= CAPS; i++) {
     const p = await dev({ notif: true }); await p.goto('http://localhost:5050/sora3a-captain/captain.html');
     await p.fill('#email', `cap${i}@load.iq`); await p.fill('#password', 'secret123'); await p.click('#loginBtn');
     await p.waitForSelector('#tab-active', { timeout: 20000 }); C.push(p);
   }
+  await probeWrite(`+ ${CAPS} كباتن`);
   // لوحة إدارة المطعم
   const A = await dev({ w: 1280, h: 900 });
   await A.goto('http://localhost:5050/sora3a-admin/index.html');
   await A.waitForSelector('#loginPage', { state: 'visible', timeout: 20000 });
   await A.fill('#lEmail', 'owner@load.iq'); await A.fill('#lPass', 'secret123'); await A.click('#lBtn');
   await A.waitForSelector('#appPage', { state: 'visible', timeout: 20000 });
+  await probeWrite('+ لوحة الإدارة');
   // برج سرعة (مستودع sora3a-owner بنفس المحاكي)
   let Tw = null;
   try {
@@ -329,8 +350,11 @@ async function main() {
     try { await Tw.waitForSelector('[data-boot]', { timeout: 8000 }); await Tw.click('[data-boot]'); } catch (e) {}
     await Tw.waitForSelector('.app .view[data-v="overview"]', { timeout: 20000 });
   } catch (e) { S.err.push('tower: ' + e.message); Tw = null; }
+  await probeWrite('+ البرج');
   const Q1 = await dev({ w: 390, h: 844 }), Q2 = await dev({ w: 390, h: 844 });
   for (const q of [Q1, Q2]) await q.goto(BASE + 'menu.html?r=' + RID);
+  await probeWrite('+ زبونين باركود');
+  if (FANOUT) { console.log('FANOUT ' + JSON.stringify(fan)); await B.close(); if (TB) await TB.close(); process.exit(0); }
   // لوحة عدّادات حيّة (تطلع بالفيديو)
   const Dash = await dev({ w: 960, h: 600 });
   await Dash.setContent(`<html dir="rtl"><body style="margin:0;background:#0b1220;color:#fff;font-family:Tajawal,Arial,sans-serif;display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;gap:18px">
