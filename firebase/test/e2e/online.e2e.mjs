@@ -196,6 +196,13 @@ test('pickup from home: name + phone required, cashier rejects one with a reason
   await c.click('[data-add="1:0"]'); await c.click('#barBtn'); await c.waitForSelector('#cartSh.on');
   assert.equal(await c.inputValue('#cName'), 'أبو حسن');
   assert.equal(await c.inputValue('#cPhone'), '07701112233');
+  // نفس الجهاز خلال 20 ثانية من آخر طلب: يطلب منه يستنى (والسيرفر هم يرفض)
+  await c.evaluate(() => localStorage.setItem('sora3a_web_gap', String(Date.now())));
+  await c.click('#cSend');
+  await c.waitForFunction(() => (document.getElementById('cErr').textContent || '').includes('استنى'));
+  // مرت 20 ثانية
+  await c.evaluate(() => localStorage.setItem('sora3a_web_gap', String(Date.now() - 25000)));
+  await E.withSecurityRulesDisabled(async (x) => { const db = x.firestore(); for (const d of (await getDocs(collection(db, 'webRate'))).docs) await setDoc(d.ref, { at: new Date(Date.now() - 25000) }); });
   await c.click('#cSend'); await c.waitForSelector('#stView .st h2');
   const w2 = await until(async () => (await list('webOrders', 'restaurantId', 'RQ')).find((x) => x.mode === 'pickup' && x.status === 'new'));
   await cashier.waitForSelector('#webBox .web-card');

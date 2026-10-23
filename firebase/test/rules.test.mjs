@@ -47,6 +47,9 @@ beforeEach(async () => {
 
 const as = (uid) => env.authenticatedContext(uid).firestore();
 const anon = () => env.unauthenticatedContext().firestore();
+// طلب باركود مثل المنيو: دخول مجهول (جهاز جديد كل مرة) + ختم الحد webRate بنفس الدفعة
+let qrN = 0;
+const qrOrder = (d, uid = 'qr' + (++qrN)) => { const db = as(uid), b = writeBatch(db); b.set(doc(collection(db, 'webOrders')), d); b.set(doc(db, 'webRate/' + uid), { at: serverTimestamp() }); return b.commit(); };
 
 // ── تصعيد الصلاحيات ──
 test('مستخدم جديد لا يستطيع منح نفسه دور مدير', async () => {
@@ -491,41 +494,41 @@ test('publicMenus: أي زائر يقرأ بالمعرّف، والمطعم وك
 
 test('webOrders: الزبون يطلب بدون تسجيل دخول إذا المنيو مفعّل ونوع الطلب مسموح', async () => {
   await seedPM();
-  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB()));
-  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'table', table: '5', phone: '' })));
-  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'delivery', address: 'المنصور شارع 14' })));
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ status: 'accepted' })), 'must start new');
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ phone: '12' })), 'pickup needs a phone');
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'table', table: '' })), 'table needs a number');
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'delivery', address: '' })), 'delivery needs an address');
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ items: [] })));
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ source: 'waiter' })), 'waiter needs a staff login');
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ price: 1 })), 'no extra fields');
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ restaurantId: 'R2' })), 'no public menu');
+  await assertSucceeds(qrOrder(WEB()));
+  await assertSucceeds(qrOrder(WEB({ mode: 'table', table: '5', phone: '' })));
+  await assertSucceeds(qrOrder(WEB({ mode: 'delivery', address: 'المنصور شارع 14' })));
+  await assertFails(qrOrder(WEB({ status: 'accepted' })), 'must start new');
+  await assertFails(qrOrder(WEB({ phone: '12' })), 'pickup needs a phone');
+  await assertFails(qrOrder(WEB({ mode: 'table', table: '' })), 'table needs a number');
+  await assertFails(qrOrder(WEB({ mode: 'delivery', address: '' })), 'delivery needs an address');
+  await assertFails(qrOrder(WEB({ items: [] })));
+  await assertFails(qrOrder(WEB({ source: 'waiter' })), 'waiter needs a staff login');
+  await assertFails(qrOrder(WEB({ price: 1 })), 'no extra fields');
+  await assertFails(qrOrder(WEB({ restaurantId: 'R2' })), 'no public menu');
   await seedPM({ ...PM, modes: { table: true, pickup: false, delivery: false } });
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB()), 'pickup turned off');
+  await assertFails(qrOrder(WEB()), 'pickup turned off');
   await seedPM({ ...PM, on: false });
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'table', table: '1' })), 'menu off');
+  await assertFails(qrOrder(WEB({ mode: 'table', table: '1' })), 'menu off');
   await seedPM();
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ day: 'x'.repeat(11) })), 'day too long');
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ extra: 1 })), 'unknown field');
+  await assertFails(qrOrder(WEB({ day: 'x'.repeat(11) })), 'day too long');
+  await assertFails(qrOrder(WEB({ extra: 1 })), 'unknown field');
 });
 
 test('webOrders: خدمة «online» أو «captain» مطفية، أو المطعم منتهي ← مرفوض', async () => {
   await seedPM();
   await seedPM(PM, 'R3');
   await env.withSecurityRulesDisabled(async (c) => updateDoc(doc(c.firestore(), 'restaurants/R1'), { features: { captain: false } }));
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ mode: 'delivery', address: 'المنصور' })));
-  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB()));
+  await assertFails(qrOrder(WEB({ mode: 'delivery', address: 'المنصور' })));
+  await assertSucceeds(qrOrder(WEB()));
   await env.withSecurityRulesDisabled(async (c) => updateDoc(doc(c.firestore(), 'restaurants/R1'), { features: { online: false } }));
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB()));
-  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB({ restaurantId: 'R3' })), 'expired restaurant');
+  await assertFails(qrOrder(WEB()));
+  await assertFails(qrOrder(WEB({ restaurantId: 'R3' })), 'expired restaurant');
   // كل خدمة لوحدها: الباركود مطفي والويتر شغّال ← الويتر يطلب عادي؛ الويتر مطفي ← مرفوض
   const W = (id) => setDoc(doc(as('cash1'), 'webOrders/' + id), WEB({ source: 'waiter', mode: 'table', table: '2', phone: '', waiterUid: 'cash1' }));
   await assertSucceeds(W('SV1'));
   await env.withSecurityRulesDisabled(async (c) => updateDoc(doc(c.firestore(), 'restaurants/R1'), { features: { online: true, waiter: false } }));
   await assertFails(W('SV2'), 'waiter service off');
-  await assertSucceeds(addDoc(collection(anon(), 'webOrders'), WEB()));
+  await assertSucceeds(qrOrder(WEB()));
 });
 
 test('webOrders: الويتر (موظف) يطلب لطاولة باسمه، والزبون يتابع بالمعرّف بس', async () => {
@@ -890,4 +893,18 @@ test('صورة التسليم: الكابتن يعيد «تم التسليم» �
   // بعد التسليم: الصورة ثابتة
   await assertSucceeds(updateDoc(doc(as('cap2'), 'orders/O3'), { status: 'delivered', deliveredAt: 1, deliveredAtMs: Date.now(), hasProof: true }));
   await assertFails(setDoc(doc(as('cap2'), 'deliveryProofs/O3'), img('EEEE')), 'proof is fixed once delivered');
+});
+
+test('منيو الباركود: طلب واحد لكل جهاز كل 20 ثانية — بدون ختم الحد أو بدون دخول ← مرفوض', async () => {
+  await seedPM();
+  await assertSucceeds(qrOrder(WEB(), 'dev1'));
+  await assertFails(qrOrder(WEB(), 'dev1'), 'same device again within 20s');
+  await assertSucceeds(qrOrder(WEB(), 'dev2'), 'another device is fine');
+  await assertFails(addDoc(collection(anon(), 'webOrders'), WEB()), 'no login');
+  await assertFails(addDoc(collection(as('dev3'), 'webOrders'), WEB()), 'order without the rate stamp');
+  await assertFails(setDoc(doc(as('dev3'), 'webRate/dev4'), { at: serverTimestamp() }), 'only its own stamp');
+  await assertFails(setDoc(doc(as('dev3'), 'webRate/dev3'), { at: 5 }), 'stamp is the server time');
+  // بعد 20 ثانية: الختم القديم يسمح بطلب جديد
+  await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'webRate/dev1'), { at: new Date(Date.now() - 25000) }));
+  await assertSucceeds(qrOrder(WEB(), 'dev1'));
 });
