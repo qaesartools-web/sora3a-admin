@@ -108,7 +108,12 @@ async function posLogin(p, email) {
   await p.goto(BASE + 'index.html');
   await p.waitForSelector('#loginPage', { state: 'visible', timeout: 20000 });
   await p.fill('#inEmail', email); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
-  await p.waitForSelector('#prods .prod', { timeout: 20000 });
+  const t = Date.now();
+  await p.waitForSelector('#prods .prod', { timeout: 120000 });
+  // وقت فتح الكاشير مع طلبات اليوم كلها (PRELOAD) + كم طلب حمّل + تعليق الصفحة
+  const lt = await p.evaluate(() => ({ orders: (window.orders || []).length, lt: window.__lt })).catch(() => ({}));
+  log(`🔑 ${email}: الكاشير فتح خلال ${((Date.now() - t) / 1000).toFixed(1)} ثانية • طلبات محمّلة ${lt.orders} • تعليق ${lt.lt ? Math.round(lt.lt.ms) + 'ms (أطول ' + Math.round(lt.lt.max) + ')' : '-'}`);
+  (S.open = S.open || []).push({ email, sec: (Date.now() - t) / 1000, orders: lt.orders, ltMs: lt.lt && Math.round(lt.lt.ms) });
   await p.waitForTimeout(1500);
   // فتح وردية (رصيد 0) حتى نطابق الدرج بالنهاية
   try {
@@ -518,7 +523,7 @@ async function main() {
     delivCash: num(R.cashiers['دلفري 1'].shift['النقد المتوقع بالدرج']) + num(R.cashiers['دلفري 2'].shift['النقد المتوقع بالدرج']), hallCash: num(R.cashiers['صالة 1'].shift['النقد المتوقع بالدرج']) + num(R.cashiers['صالة 2'].shift['النقد المتوقع بالدرج']) };
   const own = (t) => by(t).filter((o) => !o.inject);   // طلبات المولّد ما تنحسب بوردية كاشير
   R.expect = { delivSales: sum(own('delivery')), hallSales: sum([...own('salon'), ...own('takeaway')]), hallCash: sum([...own('salon'), ...own('takeaway')], (o) => (o.payment && o.payment.cash) || 0) };
-  R.firestore.injected = os.filter((o) => o.inject).length;
+  R.firestore.injected = os.filter((o) => o.inject).length; R.cashierOpen = S.open;
   R.firestore.duplicateTicketsCashier = (() => { const c = os.filter((o) => !o.inject && o.ticketNo); return c.length - new Set(c.map((o) => o.ticketNo)).size; })();
   // الكباتن: «اليوم» و«الأرباح» لكل كابتن مقابل السيرفر
   R.captains = [];
