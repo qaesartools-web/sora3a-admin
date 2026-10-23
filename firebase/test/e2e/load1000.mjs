@@ -239,6 +239,8 @@ async function kitchen(p) {
 // ── الكابتن: يقبل، يستلم، ينطلق، يصوّر، يسلّم ──
 async function captain(p) {
   while (Date.now() < DEADLINE && S.phase === 'run') {
+    // نافذة «أرسل رابط التتبع» ممكن تطلع متأخرة (السيرفر بطيء) ← نتخطاها
+    if (await p.$('#waSheet.show')) { await tap(p, '#waSkip', 3000); continue; }
     if (await p.$('#incoming.show')) { await safe('C.accept', async () => { await p.click('#acceptBtn'); const wa = await p.waitForSelector('#waSheet.show', { timeout: 2500 }).catch(() => null); if (wa) await p.click('#waSkip'); }); continue; }
     if (await tap(p, '#tab-active [data-act="pickup"], #tab-active [data-act="deliver"], #tab-active [data-act="done"]')) { await sleep(250); continue; }
     const ph = await p.$('#tab-active input[data-photo]');
