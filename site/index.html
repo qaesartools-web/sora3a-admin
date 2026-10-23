@@ -392,6 +392,48 @@ footer a.try{color:var(--neon);font-weight:700}
 .rv.d1{transition-delay:.08s}.rv.d2{transition-delay:.16s}.rv.d3{transition-delay:.24s}.rv.d4{transition-delay:.32s}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.rv{opacity:1;transform:none}html{scroll-behavior:auto}}
 @media(max-width:620px){section{padding:84px 0}body{font-size:16.5px}}
+
+/* ═════ الجديد — زجاج على شفق أخضر/زعفراني ═════ */
+.new{overflow:hidden;isolation:isolate}
+.aurora{position:absolute;inset:-20% -10%;z-index:-1;pointer-events:none;filter:blur(70px);opacity:.55}
+.aurora i{position:absolute;border-radius:50%;mix-blend-mode:screen;animation:aur 18s ease-in-out infinite alternate}
+.aurora i:nth-child(1){width:46vw;height:46vw;left:-6%;top:6%;background:radial-gradient(circle,#1FC66B 0,transparent 65%)}
+.aurora i:nth-child(2){width:38vw;height:38vw;right:-4%;top:22%;background:radial-gradient(circle,#FFB627 0,transparent 62%);animation-delay:-6s}
+.aurora i:nth-child(3){width:34vw;height:34vw;left:34%;bottom:-8%;background:radial-gradient(circle,#60A5FA 0,transparent 60%);animation-delay:-12s}
+@keyframes aur{0%{transform:translate(0,0) scale(1)}100%{transform:translate(6%,-8%) scale(1.15)}}
+.nw-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.nw{position:relative;padding:24px 22px 22px;border-radius:24px;background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.02));
+  border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);transition:transform .35s,box-shadow .35s}
+.nw::after{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;background:linear-gradient(140deg,var(--c,#3DF08B),transparent 45%,transparent 70%,var(--c2,#FFB627));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:.35;transition:opacity .35s;pointer-events:none}
+.nw:hover{transform:translateY(-6px);box-shadow:0 30px 60px -30px rgba(0,0,0,.7)}
+.nw:hover::after{opacity:1}
+.nw .ic{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;font-size:26px;background:linear-gradient(140deg,var(--c,#3DF08B),var(--c2,#0E7A3B));box-shadow:0 14px 30px -12px var(--c,#3DF08B);margin-bottom:16px}
+.nw h3{font-size:19px;line-height:1.35;color:#fff;margin-bottom:8px}
+html[lang=ar] .nw h3{font-family:var(--body);font-weight:700}
+.nw p{font-size:14.8px;line-height:1.75;color:var(--muted-d)}
+.nw .tag{position:absolute;top:18px;inset-inline-end:18px;font-size:11.5px;font-weight:700;color:var(--ink);background:var(--neon);padding:3px 10px;border-radius:999px}
+.nw-proof{margin:34px auto 0;display:grid;grid-template-columns:repeat(4,1fr);border-radius:24px;overflow:hidden;border:1px solid rgba(61,240,139,.25);
+  background:linear-gradient(90deg,rgba(61,240,139,.08),rgba(255,182,39,.07))}
+.nw-proof div{padding:22px 16px;text-align:center;border-inline-start:1px solid rgba(255,255,255,.08)}
+.nw-proof div:first-child{border-inline-start:0}
+.nw-proof b{display:block;font-family:var(--mono);font-size:clamp(26px,3vw,38px);color:var(--neon);line-height:1.1}
+.nw-proof span{font-size:13.5px;color:var(--muted-d);font-weight:600}
+@media(max-width:1100px){.nw-grid{grid-template-columns:repeat(2,1fr)}.nw-proof{grid-template-columns:repeat(2,1fr)}.nw-proof div:nth-child(3){border-inline-start:0}}
+@media(max-width:620px){.nw-grid{grid-template-columns:1fr}}
+/* بطاقات كل التطبيقات: أيقونة متدرجة + أزرار فتح/تنزيل */
+.apps.all{grid-template-columns:repeat(3,1fr)}
+.app .ico{position:relative;width:62px;height:62px;border-radius:18px;display:grid;place-items:center;font-size:30px;background:var(--grad);box-shadow:0 14px 26px -12px var(--acc);margin-bottom:16px}
+.a5{--grad:linear-gradient(135deg,#F472B6,#9D174D);--acc:#DB2777}
+.a6{--grad:linear-gradient(135deg,#A78BFA,#5B21B6);--acc:#7C3AED}
+.a7{--grad:linear-gradient(135deg,#38BDF8,#0C4A6E);--acc:#0284C7}
+.a8{--grad:linear-gradient(135deg,#FACC15,#A16207);--acc:#CA8A04}
+.a9{--grad:linear-gradient(135deg,#94A3B8,#334155);--acc:#475569}
+.app .go{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.app .go a{flex:1 1 auto;text-align:center;font-size:13.5px;font-weight:700;padding:9px 12px;border-radius:12px;background:color-mix(in srgb,var(--acc) 12%,transparent);color:var(--acc);border:1px solid color-mix(in srgb,var(--acc) 30%,transparent);text-decoration:none;transition:background .2s,color .2s}
+.app .go a:hover{background:var(--acc);color:#fff}
+@media(max-width:1100px){.apps.all{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.apps.all{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -412,7 +454,7 @@ footer a.try{color:var(--neon);font-weight:700}
       <span data-en="Sora3a">سرعة</span>
     </a>
     <nav class="nav-links" aria-label="القائمة" data-en-aria-label="Menu">
-      <a href="#flow" data-en="How it works">شلون يشتغل</a><a href="#features" data-en="Features">المزايا</a><a href="#apps" data-en="Apps">التطبيقات</a><a href="#plans" data-en="Plans">الباقات</a><a href="#faq" data-en="FAQ">الأسئلة</a><a href="#contact" data-en="Contact">تواصل</a>
+      <a href="#new" data-en="What's new">الجديد</a><a href="#flow" data-en="How it works">شلون يشتغل</a><a href="#features" data-en="Features">المزايا</a><a href="#apps" data-en="Apps">التطبيقات</a><a href="#plans" data-en="Plans">الباقات</a><a href="#faq" data-en="FAQ">الأسئلة</a><a href="#contact" data-en="Contact">تواصل</a>
     </nav>
     <button type="button" class="lang" id="langBtn" aria-label="Switch to English" title="English">EN</button>
     <a class="btn btn-go cta" href="#trial" data-en="🎁 Try it free">🎁 جرّب مجاناً</a>
@@ -420,7 +462,7 @@ footer a.try{color:var(--neon);font-weight:700}
   </div>
 </header>
 <div class="mmenu" id="mmenu">
-  <a href="#flow" data-en="How it works">شلون يشتغل</a><a href="#features" data-en="Features">المزايا</a><a href="#apps" data-en="Apps">التطبيقات</a><a href="#plans" data-en="Plans">الباقات</a><a href="#faq" data-en="FAQ">الأسئلة</a><a href="#contact" data-en="Contact">تواصل</a>
+  <a href="#new" data-en="What's new">الجديد</a><a href="#flow" data-en="How it works">شلون يشتغل</a><a href="#features" data-en="Features">المزايا</a><a href="#apps" data-en="Apps">التطبيقات</a><a href="#plans" data-en="Plans">الباقات</a><a href="#faq" data-en="FAQ">الأسئلة</a><a href="#contact" data-en="Contact">تواصل</a>
   <a class="btn btn-go" href="#trial" data-en="🎁 Try it free for 15 days">🎁 جرّب مجاناً 15 يوم</a>
 </div>
 
@@ -478,7 +520,7 @@ footer a.try{color:var(--neon);font-weight:700}
     <div class="stat rv"><b><em data-count="10">10</em></b><span data-en="phone lines per restaurant">خطوط اتصال لكل مطعم</span></div>
     <div class="stat rv d1"><b><em data-count="6">6</em></b><span data-en="kitchen stations, each with a printer">أقسام مطبخ بطابعاتها</span></div>
     <div class="stat rv d2"><b data-en-html="0 <em>net</em>">0 <em>نت</em></b><span data-en="and the cashier keeps selling">والكاشير يكمل بيع</span></div>
-    <div class="stat rv d3"><b><em data-count="4">4</em></b><span data-en="apps, one live database">تطبيقات بقاعدة بيانات وحدة</span></div>
+    <div class="stat rv d3"><b><em data-count="9">9</em></b><span data-en="apps, one live database">تطبيقات بقاعدة بيانات وحدة</span></div>
   </div>
 </section>
 
@@ -486,6 +528,50 @@ footer a.try{color:var(--neon);font-weight:700}
   <span data-en="📞 Calls become orders">📞 المكالمة تصير طلب</span><span data-en="💬 WhatsApp calls">💬 مكالمات واتساب</span><span data-en="🖨️ A printer per station">🖨️ طابعة لكل قسم</span><span data-en="📶 Works offline">📶 يشتغل بدون نت</span><span data-en="🛵 The captain's phone rings">🛵 تلفون الكابتن يرن</span><span data-en="📍 Live tracking link">📍 رابط تتبع مباشر</span><span data-en="🎁 Loyalty discounts">🎁 خصم الزبون الدائم</span><span data-en="📊 Profit per item">📊 ربح كل صنف</span><span data-en="💻 Windows · Mac · Linux · Android">💻 ويندوز · ماك · لينكس · أندرويد</span><span data-en="📱 QR menu ordering">📱 منيو QR والطلب أونلاين</span><span data-en="📺 “Order ready” screen">📺 شاشة «طلبك جاهز»</span><span data-en="🧑‍🍳 Waiter app">🧑‍🍳 تطبيق الويتر</span><span data-en="🏢 Multiple branches">🏢 فروع متعددة</span>
   <span data-en="📞 Calls become orders">📞 المكالمة تصير طلب</span><span data-en="💬 WhatsApp calls">💬 مكالمات واتساب</span><span data-en="🖨️ A printer per station">🖨️ طابعة لكل قسم</span><span data-en="📶 Works offline">📶 يشتغل بدون نت</span><span data-en="🛵 The captain's phone rings">🛵 تلفون الكابتن يرن</span><span data-en="📍 Live tracking link">📍 رابط تتبع مباشر</span><span data-en="🎁 Loyalty discounts">🎁 خصم الزبون الدائم</span><span data-en="📊 Profit per item">📊 ربح كل صنف</span><span data-en="💻 Windows · Mac · Linux · Android">💻 ويندوز · ماك · لينكس · أندرويد</span><span data-en="📱 QR menu ordering">📱 منيو QR والطلب أونلاين</span><span data-en="📺 “Order ready” screen">📺 شاشة «طلبك جاهز»</span><span data-en="🧑‍🍳 Waiter app">🧑‍🍳 تطبيق الويتر</span><span data-en="🏢 Multiple branches">🏢 فروع متعددة</span>
 </div></div>
+
+<!-- ═════ الجديد ═════ -->
+<section class="new dark grain" id="new">
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="wrap">
+    <div class="head">
+      <span class="eyebrow rv" data-en="✨ What's new">✨ الجديد بسرعة</span>
+      <h2 class="sec rv d1" data-en="Stronger, faster — ready for your busiest day">أقوى، أسرع، وجاهز لأزحم يوم</h2>
+      <p class="sub rv d2" data-en="The latest updates reached every app on their own — nothing to download.">آخر التحديثات وصلت لكل التطبيقات وحدها، بدون ما تنزّل شي.</p>
+    </div>
+    <div class="nw-grid">
+      <div class="nw rv" style="--c:#3DF08B;--c2:#0E7A3B"><span class="tag" data-en="New">جديد</span><div class="ic">👥</div>
+        <h3 data-en="Several cashiers at once">أكثر من كاشير بنفس الوقت</h3>
+        <p data-en="Each cashier has their own shift and drawer, and order numbers never repeat between them — even when the internet drops.">كل كاشير إله ورديته ودرجه، وأرقام الطلبات ما تتكرر بينهم حتى لو انقطع النت.</p></div>
+      <div class="nw rv d1" style="--c:#FFB627;--c2:#A85E05"><span class="tag" data-en="New">جديد</span><div class="ic">📊</div>
+        <h3 data-en="Your menu from Excel">منيوك من ملف إكسل</h3>
+        <p data-en="Send us your menu as an Excel sheet: items, sizes and prices go live on the cashier and the QR menu in a minute.">أرسل منيوك كملف إكسل: الأصناف والأحجام والأسعار تنزل عالكاشير ومنيو الباركود خلال دقيقة.</p></div>
+      <div class="nw rv d2" style="--c:#60A5FA;--c2:#1E3A8A"><div class="ic">🍳</div>
+        <h3 data-en="Kitchen screen by station">شاشة المجهز بالأقسام</h3>
+        <p data-en="Grill, pizza and drinks each see only their own orders and tap “Ready”. The screen pairs with a code — no email needed.">المشويات والبيتزا والمشروبات، كل قسم يشوف طلباته بس ويعلّم «جاهز». الشاشة تنربط برمز بدون إيميل.</p></div>
+      <div class="nw rv d3" style="--c:#F472B6;--c2:#9D174D"><div class="ic">🧑‍🍳</div>
+        <h3 data-en="Waiter app">تطبيق الويتر</h3>
+        <p data-en="The waiter picks the table and sends the order from their phone; it stays “preparing” until it’s paid at the cashier.">الويتر يختار الطاولة ويرسل الطلب من تلفونه، والطلب يبقى «قيد التحضير» لحد ما يتحاسب بالكاشير.</p></div>
+      <div class="nw rv" style="--c:#FB923C;--c2:#C2410C"><div class="ic">🛵</div>
+        <h3 data-en="Captains on weak internet">الكابتن بالنت الضعيف</h3>
+        <p data-en="Loads only today’s active orders, never loses a tap, and finishes the delivery even if the signal drops at the door.">يحمّل طلبات اليوم الشغّالة بس، ضغطاته ما تضيع، ويكمل التسليم حتى لو انقطع النت عند الباب.</p></div>
+      <div class="nw rv d1" style="--c:#A78BFA;--c2:#5B21B6"><div class="ic">📺</div>
+        <h3 data-en="“Order ready” on the TV">«طلبك جاهز» عالتلفزيون</h3>
+        <p data-en="The screen opens by itself when the TV turns on and shows each order number as soon as the kitchen marks it ready.">الشاشة تفتح وحدها أول ما يشتغل التلفزيون، وتطلّع رقم الطلب أول ما المطبخ يعلّمه جاهز.</p></div>
+      <div class="nw rv d2" style="--c:#2DD4BF;--c2:#0F766E"><div class="ic">🔐</div>
+        <h3 data-en="Approved devices + nightly backup">أجهزة معتمدة ونسخة كل ليلة</h3>
+        <p data-en="A cashier account works only on approved devices, and your data is backed up every night — free.">حساب الكاشير يشتغل بس على الأجهزة المعتمدة، وبياناتك تنحفظ نسخة احتياطية كل ليلة مجاناً.</p></div>
+      <div class="nw rv d3" style="--c:#FACC15;--c2:#A16207"><div class="ic">🔄</div>
+        <h3 data-en="Updates itself">يتحدث وحده</h3>
+        <p data-en="Every app — even the TV screen — updates itself in the background. No buttons, no reinstalling.">كل التطبيقات، حتى شاشة التلفزيون، تتحدث وحدها بالخلفية. بدون ضغط وبدون تنصيب من جديد.</p></div>
+    </div>
+    <div class="nw-proof rv">
+      <div><b>875</b><span data-en="orders in one test day">طلب بيوم اختبار واحد</span></div>
+      <div><b>16</b><span data-en="screens running together">شاشة شغّالة سوا</span></div>
+      <div><b>4</b><span data-en="cashiers at the same time">كاشيرية بنفس الوقت</span></div>
+      <div><b>9</b><span data-en="apps in one system">تطبيقات بنظام واحد</span></div>
+    </div>
+  </div>
+</section>
 
 <!-- ═════ رحلة الطلب ═════ -->
 <section id="flow">
@@ -653,38 +739,74 @@ footer a.try{color:var(--neon);font-weight:700}
 <section id="apps">
   <div class="wrap">
     <div class="head">
-      <span class="eyebrow rv" data-en="Four apps">أربعة تطبيقات</span>
+      <span class="eyebrow rv" data-en="9 apps · one system">9 تطبيقات · نظام واحد</span>
       <h2 class="sec rv d1" data-en="Everyone in the restaurant gets their own app">كل واحد بالمطعم عنده تطبيقه</h2>
-      <p class="sub rv d2" data-en="Runs on any device — laptop, POS terminal, tablet or phone. No complicated setup, and they update themselves.">تشتغل على أي جهاز: لابتوب، جهاز كاشير، تابلت أو موبايل. بدون تنصيب معقّد، وتتحدث لوحدها.</p>
+      <p class="sub rv d2" data-en="Runs on any device — laptop, POS terminal, tablet, TV or phone. No complicated setup, and they update themselves.">تشتغل على أي جهاز: لابتوب، جهاز كاشير، تابلت، تلفزيون أو تلفون. بدون تنصيب معقّد، وتتحدث وحدها.</p>
     </div>
-    <div class="apps">
+    <div class="apps all">
       <div class="app a1 rv">
-        <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgB)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#F5C451" stroke-width="7" stroke-linecap="round"/></svg>
+        <div class="ico" aria-hidden="true">🛠️</div>
         <h3 data-en="Admin panel">لوحة الإدارة</h3><div class="who" data-en="For the owner">لصاحب المطعم</div>
-        <ul><li data-en="Cashiers & their hours">الكاشيرية ودواماتهم</li><li data-en="Phone lines & services">خطوط الاتصال والخدمات</li><li data-en="Cost & profit per item">الكلفة وربح كل صنف</li><li data-en="Analytics & reports">التحليلات والتقارير</li><li data-en="All branches in one place">كل الفروع بمكان واحد</li></ul>
+        <ul><li data-en="Cashiers, hours & permissions">الكاشيرية ودواماتهم وصلاحياتهم</li><li data-en="Item sales & full invoices">مبيعات الأصناف والفواتير الكاملة</li><li data-en="Cost & profit per item">الكلفة والربح لكل صنف</li></ul>
         <div class="plat" data-en="🌐 Any browser">🌐 أي متصفح</div>
+        <div class="go"><a href="https://qaesartools-web.github.io/sora3a-admin/" target="_blank" rel="noopener" data-en="Open">افتح</a></div>
       </div>
       <div class="app a2 rv d1">
-        <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgG)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#D9F99D" stroke-width="7" stroke-linecap="round"/></svg>
-        <h3 data-en="Cashier & kitchen">الكاشير والمطبخ</h3><div class="who" data-en="For cashiers & the kitchen">للكاشير والمطبخ</div>
-        <ul><li data-en="Fast selling, a printer per station">بيع سريع وطابعة لكل قسم</li><li data-en="Windows, Mac, Linux, Android">ويندوز، ماك، لينكس، أندرويد</li><li data-en="Calls & pagers">المكالمات والبيجر</li><li data-en="Shifts & daily report">الورديات وتقرير اليوم</li><li data-en="QR & online orders">طلبات QR والأونلاين</li></ul>
-        <div class="plat" data-en="🪟 🍎 🐧 🤖 + browser">🪟 🍎 🐧 🤖 + المتصفح</div>
+        <div class="ico" aria-hidden="true">🧾</div>
+        <h3 data-en="Cashier">الكاشير</h3><div class="who" data-en="For cashiers">للكاشيرية</div>
+        <ul><li data-en="Fast selling, a printer per station">بيع سريع وطابعة لكل قسم</li><li data-en="Several cashiers, separate shifts">أكثر من كاشير، كل واحد ورديته</li><li data-en="Works offline">يشتغل بدون نت</li></ul>
+        <div class="plat" data-en="🪟 🤖 + browser">🪟 🤖 + المتصفح</div>
+        <div class="go"><a href="https://qaesartools-web.github.io/sora3a-rest2/" target="_blank" rel="noopener" data-en="Open">افتح</a><a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/cashier-android/sora3a-cashier.apk" target="_blank" rel="noopener" data-en="Android">أندرويد</a><a href="https://github.com/qaesartools-web/sora3a-rest2/releases/latest" target="_blank" rel="noopener" data-en="Windows">ويندوز</a></div>
+      </div>
+      <div class="app a7 rv d2">
+        <div class="ico" aria-hidden="true">🍳</div>
+        <h3 data-en="Kitchen screen">شاشة المجهز</h3><div class="who" data-en="For the kitchen">للمطبخ</div>
+        <ul><li data-en="Each station sees its own orders">كل قسم يشوف طلباته</li><li data-en="One tap: “Ready”">ضغطة وحدة: «جاهز»</li><li data-en="Pairs with a code">تنربط برمز</li></ul>
+        <div class="plat" data-en="🌐 Any screen or tablet">🌐 أي شاشة أو تابلت</div>
+        <div class="go"><a href="https://qaesartools-web.github.io/sora3a-rest2/kitchen.html" target="_blank" rel="noopener" data-en="Open">افتح</a></div>
+      </div>
+      <div class="app a5 rv">
+        <div class="ico" aria-hidden="true">🧑‍🍳</div>
+        <h3 data-en="Waiter">الويتر</h3><div class="who" data-en="For waiters">للويترية</div>
+        <ul><li data-en="Pick the table, send the order">يختار الطاولة ويرسل الطلب</li><li data-en="Straight to the kitchen">يوصل للمطبخ فوراً</li><li data-en="Pairs with a code">ينربط برمز</li></ul>
+        <div class="plat" data-en="📱 Any phone">📱 أي تلفون</div>
+        <div class="go"><a href="https://qaesartools-web.github.io/sora3a-rest2/waiter.html" target="_blank" rel="noopener" data-en="Open">افتح</a></div>
+      </div>
+      <div class="app a6 rv d1">
+        <div class="ico" aria-hidden="true">📺</div>
+        <h3 data-en="“Order ready” screen">شاشة «طلبك جاهز»</h3><div class="who" data-en="For customers in the hall">للزبائن بالصالة</div>
+        <ul><li data-en="Shows ready order numbers">تطلّع أرقام الطلبات الجاهزة</li><li data-en="Opens when the TV turns on">تفتح وحدها مع التلفزيون</li><li data-en="Android TV app">تطبيق للتلفزيون</li></ul>
+        <div class="plat" data-en="📺 TV · 🌐 browser">📺 تلفزيون · 🌐 متصفح</div>
+        <div class="go"><a href="https://qaesartools-web.github.io/sora3a-rest2/screen.html" target="_blank" rel="noopener" data-en="Open">افتح</a><a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/screen-android/sora3a-screen.apk" target="_blank" rel="noopener" data-en="TV app">تطبيق التلفزيون</a></div>
       </div>
       <div class="app a3 rv d2">
-        <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgO)"/><use href="#sin"/><path d="M30 88 H64 M44 100 H84" stroke="#FFF1C2" stroke-width="7" stroke-linecap="round"/></svg>
+        <div class="ico" aria-hidden="true">🛵</div>
         <h3 data-en="Captain & tracking">الكابتن والتتبع</h3><div class="who" data-en="For captains & customers">للكباتن والزبائن</div>
-        <ul><li data-en="Rings like a call, even when locked">يرن مثل المكالمة حتى والتلفون مقفول</li><li data-en="Android app + iPhone version">تطبيق أندرويد + نسخة آيفون</li><li data-en="Delivery photo">صورة التسليم بالكاميرا</li><li data-en="Customer tracking link">رابط تتبع للزبون</li></ul>
+        <ul><li data-en="Rings like a call, even when locked">يرن مثل المكالمة حتى والتلفون مقفول</li><li data-en="Live tracking link for the customer">رابط تتبع مباشر للزبون</li><li data-en="Works on weak internet">يشتغل بالنت الضعيف</li></ul>
         <div class="plat" data-en="🤖 Android · 🍎 iPhone (browser)">🤖 أندرويد · 🍎 آيفون (متصفح)</div>
+        <div class="go"><a href="https://qaesartools-web.github.io/sora3a-captain/captain.html" target="_blank" rel="noopener" data-en="Open">افتح</a><a href="https://github.com/qaesartools-web/sora3a-captain/releases/latest/download/sora3a-captain.apk" target="_blank" rel="noopener" data-en="Android">أندرويد</a></div>
       </div>
-      <div class="app a4 rv d3">
-        <svg viewBox="0 0 120 120" aria-hidden="true"><rect width="120" height="120" rx="28" fill="url(#lgT)"/><g transform="translate(30,26) scale(2.6)"><path fill="#fff" d="M20,15.5c-1.25,0 -2.45,-0.2 -3.57,-0.57 -0.35,-0.11 -0.74,-0.03 -1.02,0.24l-2.2,2.2c-2.83,-1.44 -5.15,-3.75 -6.59,-6.59l2.2,-2.21c0.28,-0.26 0.36,-0.65 0.25,-1C8.7,6.45 8.5,5.25 8.5,4c0,-0.55 -0.45,-1 -1,-1H4c-0.55,0 -1,0.45 -1,1 0,9.39 7.61,17 17,17 0.55,0 1,-0.45 1,-1v-3.5c0,-0.55 -0.45,-1 -1,-1zM19,12h2c0,-4.97 -4.03,-9 -9,-9v2c3.87,0 7,3.13 7,7zM15,12h2c0,-2.76 -2.24,-5 -5,-5v2c1.66,0 3,1.34 3,3z"/></g></svg>
-        <h3 data-en="Restaurant line">خط المطعم</h3><div class="who" data-en="For the restaurant's phone">لتلفون رقم المطعم</div>
-        <ul><li data-en="Caller shows on the cashier">رقم المتصل يطلع بالكاشير</li><li data-en="SIM & WhatsApp">الشريحة والواتساب</li><li data-en="Just type the number">تكتب الرقم وبس</li><li data-en="Runs in the background">يشتغل بالخلفية</li></ul>
+      <div class="app a8 rv">
+        <div class="ico" aria-hidden="true">📱</div>
+        <h3 data-en="QR menu">منيو الباركود</h3><div class="who" data-en="For customers">للزبائن</div>
+        <ul><li data-en="Order from the table or home">يطلب من الطاولة أو البيت</li><li data-en="Pickup or delivery">استلام أو توصيل</li><li data-en="Installs with your restaurant’s name">يتنصب باسم مطعمك</li></ul>
+        <div class="plat" data-en="🌐 Opens from the QR code">🌐 ينفتح من رمز الـQR</div>
+      </div>
+      <div class="app a4 rv d1">
+        <div class="ico" aria-hidden="true">☎️</div>
+        <h3 data-en="Restaurant line">خط المطعم</h3><div class="who" data-en="For the restaurant’s phone">لتلفون رقم المطعم</div>
+        <ul><li data-en="Caller shows on the cashier">رقم المتصل يطلع بالكاشير</li><li data-en="SIM & WhatsApp">الشريحة والواتساب</li><li data-en="Up to 10 lines">لحد 10 خطوط</li></ul>
         <div class="plat" data-en="🤖 Android">🤖 أندرويد</div>
+        <div class="go"><a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/line-android/sora3a-line.apk" target="_blank" rel="noopener" data-en="Download">تنزيل</a></div>
+      </div>
+      <div class="app a9 rv d2">
+        <div class="ico" aria-hidden="true">📦</div>
+        <h3 data-en="All apps in one file">كل التطبيقات بملف واحد</h3><div class="who" data-en="For a quick setup">للتجهيز السريع</div>
+        <ul><li data-en="Cashier, TV screen & line">الكاشير وشاشة التلفزيون والخط</li><li data-en="One download">تنزيل واحد</li><li data-en="They update themselves after">وبعدها تتحدث وحدها</li></ul>
+        <div class="plat" data-en="🤖 Android">🤖 أندرويد</div>
+        <div class="go"><a href="https://github.com/qaesartools-web/sora3a-rest2/releases/download/flash-kit/sora3a-apps.zip" target="_blank" rel="noopener" data-en="Download">تنزيل</a></div>
       </div>
     </div>
-    <p class="apps-more rv" data-en-html="<b>+ no install needed:</b> the customer's QR menu, the “order ready” screen and the waiter app all open in any browser.">
-      <b>+ بدون تنصيب:</b> منيو الزبون بالـQR، شاشة «طلبك جاهز»، وتطبيق الويتر، كلها تنفتح من أي متصفح.</p>
   </div>
 </section>
 
