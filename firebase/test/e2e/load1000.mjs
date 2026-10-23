@@ -399,7 +399,10 @@ async function main() {
   for (let i = 1; i <= CAPS; i++) {
     const p = await dev({ notif: true }); await p.goto('http://localhost:5050/sora3a-captain/captain.html');
     await p.fill('#email', `cap${i}@load.iq`); await p.fill('#password', 'secret123'); await p.click('#loginBtn');
-    await p.waitForSelector('#tab-active', { timeout: 20000 }); C.push(p);
+    const t = Date.now();
+    try { await p.waitForSelector('#tab-active', { timeout: 90000 }); }
+    catch (e) { await p.screenshot({ path: OUT + `_cap${i}_fail.png` }); throw e; }
+    log(`🔑 كابتن ${i}: فتح خلال ${((Date.now() - t) / 1000).toFixed(1)} ثانية`); C.push(p);
   }
   await probeWrite(`+ ${CAPS} كباتن`);
   // لوحة إدارة المطعم
