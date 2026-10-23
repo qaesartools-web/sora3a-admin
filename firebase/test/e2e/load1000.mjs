@@ -19,7 +19,7 @@ const N = { delivCash: n(450), delivQR: n(50), salonCash: n(150), salonWaiter: n
 const TOTAL = Object.values(N).reduce((a, b) => a + b, 0);
 const CAPS = 8, RID = 'RL', DEADLINE = Date.now() + 120 * 60000;
 const OUT = process.env.OUT || '/tmp/load1000';
-const FRAME_MS = Number(process.env.FRAME_MS || 8000);   // صورة لكل شاشة كل 8 ثواني ← فيديو «كل الشاشات سوا»
+const FRAME_MS = Number(process.env.FRAME_MS || 10000);   // صورة لكل شاشة كل 10 ثواني ← فيديو «كل الشاشات سوا»
 const BASE = 'http://localhost:5050/sora3a-rest2/';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const bagDay = (ms = Date.now()) => new Date(ms + 3 * 3600000).toISOString().slice(0, 10);
@@ -264,8 +264,9 @@ async function qrCustomer(p, jobs) {
   for (const [mode, k] of jobs) {
     if (Date.now() > DEADLINE) break;
     await safe('QR.' + mode, async () => {
-      if (first || mode === 'table') { await p.goto(BASE + 'menu.html?r=' + RID + (mode === 'table' ? '&t=' + (1 + rnd(30)) : '')); first = false; }
-      else { await p.click('#again'); }
+      // كل طلب = زبون جديد يفتح رابط الباركود (طاولة أو المنيو العام)
+      await p.evaluate(() => { try { localStorage.clear(); sessionStorage.clear(); } catch (e) {} }).catch(() => {});
+      await p.goto(BASE + 'menu.html?r=' + RID + (mode === 'table' ? '&t=' + (1 + rnd(30)) : '')); first = false;
       await p.waitForSelector('.it [data-add]', { timeout: 15000 });
       await addItems(p, '[data-add]', 1 + rnd(3));
       await p.click('#barBtn'); await p.waitForSelector('#cartSh.on');
@@ -356,7 +357,7 @@ async function main() {
     const f = String(++frame).padStart(5, '0');
     await Promise.all(TILES.map(async ([, p], i) => {
       const out = `${FR}/t${i}/${f}.jpg`;
-      try { await p.screenshot({ type: 'jpeg', quality: 55, path: out, timeout: 6000 }); }
+      try { await p.screenshot({ type: 'jpeg', quality: 50, path: out, timeout: 6000, scale: 'css' }); }
       catch (e) { const prev = `${FR}/t${i}/${String(frame - 1).padStart(5, '0')}.jpg`; copyFileSync(existsSync(prev) ? prev : BLACK, out); }
     }));
     shooting = false;
