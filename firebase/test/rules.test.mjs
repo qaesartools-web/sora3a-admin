@@ -878,3 +878,16 @@ test('تلفون الويتر المربوط برمز: يشوف المنيو و�
   await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'restaurants/R1'), { svcOff: { waiter: true } }); });
   await assertFails(setDoc(doc(W, 'webOrders/W3'), wo('wA')), 'waiter paused by owner');
 });
+
+test('صورة التسليم: الكابتن يعيد «تم التسليم» إذا انقطع بالنص (الصورة انحفظت والطلب ما تحدّث) — بس قبل ما يتسلّم الطلب، وبس كابتن الطلب', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'orders/O3'), { status: 'delivering' }); });
+  const img = (s) => ({ image: 'data:image/jpeg;base64,' + s, capturedAtMs: Date.now(), captainId: 'C2', captainName: 'c2' });
+  await assertSucceeds(setDoc(doc(as('cap2'), 'deliveryProofs/O3'), img('AAAA')));
+  // المحاولة الثانية بعد ما انقطع النت: نفس الصورة تنكتب من جديد
+  await assertSucceeds(setDoc(doc(as('cap2'), 'deliveryProofs/O3'), img('BBBB')));
+  await assertFails(setDoc(doc(as('cap1'), 'deliveryProofs/O3'), img('CCCC')), 'another captain cannot replace it');
+  await assertFails(setDoc(doc(as('cap2'), 'deliveryProofs/O3'), { ...img('D'), image: 5 }), 'image must be text');
+  // بعد التسليم: الصورة ثابتة
+  await assertSucceeds(updateDoc(doc(as('cap2'), 'orders/O3'), { status: 'delivered', deliveredAt: 1, deliveredAtMs: Date.now(), hasProof: true }));
+  await assertFails(setDoc(doc(as('cap2'), 'deliveryProofs/O3'), img('EEEE')), 'proof is fixed once delivered');
+});
