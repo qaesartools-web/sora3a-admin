@@ -7,7 +7,7 @@
 // تشغيل (من مجلد firebase):
 //   npx firebase emulators:exec --only auth,firestore --project sora3a-system "cd test/e2e && SORA3A_ROOT=/home/user CHROME_PATH=/opt/pw-browsers/chromium node load1000.mjs"
 //   SCALE=0.05 للتجربة السريعة (50 طلب بنفس النسب)
-import { doc, setDoc, getDocs, collection, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDocs, collection, query, where, writeBatch } from 'firebase/firestore';
 import { writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
@@ -16,7 +16,9 @@ import { serve, env, signUp, clearAuth, browser, page, ROOTS } from './harness.m
 const SCALE = Number(process.env.SCALE || 1);
 const n = (x) => Math.max(1, Math.round(x * SCALE));
 const N = { delivCash: n(450), delivQR: n(50), salonCash: n(150), salonWaiter: n(70), salonQR: n(30), quick: n(100), hold: n(100), pickupQR: n(50) };
-const TOTAL = Object.values(N).reduce((a, b) => a + b, 0);
+// PRELOAD=850: اليوم يبدي بهالعدد من الطلبات المكتملة (مطعم مزدحم من الصبح) — وبعدين الطلبات الحية فوقها، فكل الشاشات تشتغل بـ1000 طلب باليوم
+const PRELOAD = Math.max(0, Number(process.env.PRELOAD || 0));
+const TOTAL = Object.values(N).reduce((a, b) => a + b, 0) + PRELOAD;
 // INJECT=0.7: هاي النسبة من طلبات الكاشير (دلفري، صالة، سفري فوري) تنكتب بالسيرفر مباشرة مثل كاشيرية إضافية
 //   (جهاز الاختبار 4 معالجات بس) — وكل الشاشات (المجهز، الكباتن، الكاشير، البرج، الإدارة) لازم تستلمها وتعالجها
 const INJECT = Math.min(Math.max(Number(process.env.INJECT || 0), 0), 0.95), INJ_MIN = Number(process.env.INJ_MIN || 40);
@@ -302,6 +304,35 @@ async function qrCustomer(p, jobs) {
   return p;
 }
 
+// ── طلبات اليوم من قبل (PRELOAD): مكتملة، أرقامها 1..PRELOAD، موزعة على ساعات اليوم، والدلفري على الكباتن ──
+async function preload() {
+  if (!PRELOAD) return;
+  const all = MENU.flatMap((c) => c.items), now = Date.now();
+  const dayStart = Date.parse(bagDay(now) + 'T00:00:00+03:00'), from = Math.max(dayStart + 30 * 60000, now - 10 * 3600000), to = now - 5 * 60000;
+  const types = Array.from({ length: PRELOAD }, (_, i) => (i % 4 < 2 ? 'delivery' : i % 4 === 2 ? 'salon' : 'takeaway'));
+  await E.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    for (let b = 0; b < PRELOAD; b += 400) {
+      const batch = writeBatch(db);
+      for (let i = b; i < Math.min(PRELOAD, b + 400); i++) {
+        const t = from + Math.round(((to - from) * i) / PRELOAD), type = types[i];
+        const items = Array.from({ length: 1 + rnd(3) }, () => { const it = all[rnd(all.length)]; return { name: it.name, variant: 'وحدة', price: it.variants[0].price, qty: 1 + rnd(2), cost: 0 }; });
+        const sub = items.reduce((a, x) => a + x.price * x.qty, 0);
+        const o = { restaurantId: RID, restaurantName: 'مطعم التحمّل', orderType: type, items, notes: items.map((x) => `${x.name}(وحدة)×${x.qty}`).join(', '),
+          subtotal: sub, discount: 0, service: 0, tax: 0, value: sub, inv: true, kitchen: 'ready', createdAt: new Date(t).toISOString(), createdAtMs: t,
+          shiftId: null, device: 'preload', inject: true, day: bagDay(t), ticketNo: i + 1, status: 'delivered', deliveredAt: t + 20 * 60000, deliveredAtMs: t + 20 * 60000,
+          timeline: [{ status: 'delivered', time: '', text: 'تم إنشاء الطلب' }] };
+        if (type === 'delivery') { const k = 1 + (i % CAPS); Object.assign(o, { customer: 'زبون ' + (i + 1), phone: '0773' + String(1000000 + i).slice(1), address: 'زيونة شارع ' + (1 + rnd(90)), fee: 3000,
+          captainId: 'C' + k, captainName: 'كابتن ' + k, commission: Math.round(sub * 0.1), deliveryProof: null, rejectedBy: [], payment: { method: 'cod' }, capSettled: true, hasProof: true }); }
+        else Object.assign(o, { payment: { method: 'cash', cash: sub, card: 0 }, customer: type === 'salon' ? 'صالة #' + (i + 1) : 'سفري', ...(type === 'salon' ? { salonNum: i + 1 } : {}) });
+        batch.set(doc(db, 'orders/PRE' + String(i).padStart(4, '0')), o);
+      }
+      await batch.commit();
+    }
+  });
+  log(`📦 اليوم يبدي بـ${PRELOAD} طلب مكتمل (من ${new Date(from + 3 * 3600000).toISOString().slice(11, 16)} لهسه بتوقيت بغداد)`);
+}
+
 // ── مولّد الطلبات الإضافية (INJECT): نفس شكل طلب الكاشير — دلفري لكابتن، صالة وسفري فوري مدفوعة — والمجهز يعلّمها جاهز ──
 async function injector() {
   const jobs = [...Array(I.delivCash).fill('delivery'), ...Array(I.salonCash).fill('salon'), ...Array(I.quick).fill('takeaway')].sort(() => Math.random() - 0.5);
@@ -347,7 +378,7 @@ const fmt = (x) => Math.round(x).toLocaleString('en-US');
 async function main() {
   srv = await serve(); E = await (env()); B = await browser();
   log(`تجهيز: ${TOTAL} طلب (SCALE=${SCALE})`, JSON.stringify(N));
-  await seed();
+  await seed(); await preload();
   // ── الأجهزة ──
   await probeWrite('بدون أجهزة');
   const D = await dev({ w: 1280, h: 860 }); await posLogin(D, 'deliv@load.iq');
