@@ -246,7 +246,7 @@ service cloud.firestore {
         allow write: if isAdmin() || hqEdit('rests') || (coll == 'devices' && hqEdit('devices'))
           || (coll != 'devices' && (ownsRest(rid)
           // الكاشير: البيع يحدّث المخزون الجاهز بالمنيو + الورديات + سجل الزبائن
-          || (cashierOf(rid) && (coll in ['menu', 'shifts', 'customers']
+          || (cashierOf(rid) && (coll in ['menu', 'shifts', 'customers', 'counters']
               || (coll == 'settings' && perm('settings'))
               || (coll == 'menuImages' && perm('menu'))))));
       }

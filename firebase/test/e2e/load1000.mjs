@@ -55,7 +55,7 @@ const PROBE = () => {
   new MutationObserver((ms) => ms.forEach((m) => { if (m.type === 'attributes') scan(m.target); else m.addedNodes.forEach(scan); }))
     .observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-oid', 'data-done'] });
 };
-async function dev(opts) { const p = await page(B, opts); await p.context().addInitScript(PROBE); return p; }
+async function dev(opts) { const p = await page(B, opts); p.setDefaultTimeout(12000); await p.context().addInitScript(PROBE); return p; }
 const metrics = (p) => p.evaluate(() => ({ heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, dom: document.getElementsByTagName('*').length, lt: window.__lt })).catch(() => null);
 
 // ── التجهيز ──
@@ -138,6 +138,10 @@ async function cashierD(p) {
     await p.waitForFunction(() => !document.getElementById('delivOv').classList.contains('on'), null, { timeout: 10000 });
   };
   while (Date.now() < DEADLINE && S.phase === 'run') {
+    // نافذة بقت مفتوحة من محاولة فاشلة ← نسدها حتى ما تغطي الشاشة
+    if (await p.evaluate(() => document.getElementById('delivOv').classList.contains('on') || document.getElementById('payOv').classList.contains('on'))) {
+      S.err.push('D.leftOpen'); await p.evaluate(() => { closeDeliv(); if (window.payClose) payClose(); }); continue;
+    }
     // 1) طلب باركود دلفري جديد ← قبول
     const web = await p.$('#webBox .web-card .call-go:not([disabled])');
     if (web) { await safe('D.webAccept', () => web.click()); await sleep(300); continue; }
@@ -178,6 +182,9 @@ async function cashierD(p) {
 async function cashierS(p) {
   const queue = [...Array(N.salonCash).fill('salon'), ...Array(N.quick).fill('quick'), ...Array(N.hold).fill('takeaway')].sort(() => Math.random() - 0.5);
   while (Date.now() < DEADLINE && S.phase === 'run') {
+    if (await p.evaluate(() => ['payOv', 'acOv', 'viewOv'].some((id) => { const e = document.getElementById(id); return e && e.classList.contains('on'); }))) {
+      S.err.push('S.leftOpen'); await p.evaluate(() => { if (window.payClose) payClose(); if (window.acClose) acClose(); if (window.viewClose) viewClose(); }); continue;
+    }
     const web = await p.$('#webBox .web-card .call-go:not([disabled])');
     if (web) { await safe('S.webAccept', () => web.click()); await sleep(300); continue; }
     // جاهز من المطبخ وما مدفوع (سفري قيد التحضير، طاولة ويتر/باركود، استلام باركود) ← تسليم + استلام المبلغ
