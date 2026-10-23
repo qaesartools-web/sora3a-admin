@@ -17,6 +17,10 @@ const SCALE = Number(process.env.SCALE || 1);
 const n = (x) => Math.max(1, Math.round(x * SCALE));
 const N = { delivCash: n(450), delivQR: n(50), salonCash: n(150), salonWaiter: n(70), salonQR: n(30), quick: n(100), hold: n(100), pickupQR: n(50) };
 const TOTAL = Object.values(N).reduce((a, b) => a + b, 0);
+// INJECT=0.7: هاي النسبة من طلبات الكاشير (دلفري، صالة، سفري فوري) تنكتب بالسيرفر مباشرة مثل كاشيرية إضافية
+//   (جهاز الاختبار 4 معالجات بس) — وكل الشاشات (المجهز، الكباتن، الكاشير، البرج، الإدارة) لازم تستلمها وتعالجها
+const INJECT = Math.min(Math.max(Number(process.env.INJECT || 0), 0), 0.95), INJ_MIN = Number(process.env.INJ_MIN || 40);
+const I = { delivCash: Math.round(N.delivCash * INJECT), salonCash: Math.round(N.salonCash * INJECT), quick: Math.round(N.quick * INJECT) };
 const CAPS = Number(process.env.CAPS || 5), RID = 'RL', DEADLINE = Date.now() + Number(process.env.MAX_MIN || 150) * 60000;
 const OUT = process.env.OUT || '/tmp/load1000';
 const FRAME_MS = Number(process.env.FRAME_MS || 10000);
@@ -136,7 +140,7 @@ async function addItems(p, sel, k, catSel) {
 }
 
 let TILES = [];
-const S = { made: { D: 0, S: 0, W: 0, QR: 0 }, err: [], phase: 'run', capIdx: 0 };
+const S = { made: { D: 0, S: 0, W: 0, QR: 0, I: 0 }, err: [], phase: 'run', capIdx: 0 };
 const nextCap = () => 'C' + ((S.capIdx++ % CAPS) + 1);
 const safe = (name, fn) => fn().catch((e) => { S.err.push(name + ': ' + String(e.message || e).split('\n')[0]); });
 
@@ -298,6 +302,29 @@ async function qrCustomer(p, jobs) {
   return p;
 }
 
+// ── مولّد الطلبات الإضافية (INJECT): نفس شكل طلب الكاشير — دلفري لكابتن، صالة وسفري فوري مدفوعة — والمجهز يعلّمها جاهز ──
+async function injector() {
+  const jobs = [...Array(I.delivCash).fill('delivery'), ...Array(I.salonCash).fill('salon'), ...Array(I.quick).fill('takeaway')].sort(() => Math.random() - 0.5);
+  if (!jobs.length) return;
+  log(`➕ مولّد: ${jobs.length} طلب خلال ${INJ_MIN} دقيقة (${I.delivCash} دلفري • ${I.salonCash} صالة • ${I.quick} سفري فوري)`);
+  const gap = (INJ_MIN * 60000) / jobs.length, t0 = Date.now(), all = MENU.flatMap((c) => c.items);
+  for (let i = 0; i < jobs.length && Date.now() < DEADLINE && S.phase === 'run'; i++) {
+    await sleep(Math.max(0, t0 + i * gap - Date.now()));
+    const type = jobs[i], items = Array.from({ length: 1 + rnd(3) }, () => { const it = all[rnd(all.length)]; return { name: it.name, variant: 'وحدة', price: it.variants[0].price, qty: 1 + rnd(2), cost: 0 }; });
+    const sub = items.reduce((a, x) => a + x.price * x.qty, 0), now = Date.now(), tk = 5001 + i;
+    const o = { restaurantId: RID, restaurantName: 'مطعم التحمّل', orderType: type, items, notes: items.map((c) => `${c.name}(وحدة)×${c.qty}`).join(', '),
+      subtotal: sub, discount: 0, service: 0, tax: 0, value: sub, inv: true, kitchen: 'new', createdAt: new Date(now).toISOString(), createdAtMs: now,
+      shiftId: null, device: 'inject', inject: true, day: bagDay(now), ticketNo: tk };
+    if (type === 'delivery') {
+      const k = 1 + rnd(CAPS);
+      Object.assign(o, { status: 'pending', customer: 'زبون ' + tk, phone: '0772' + String(1000000 + i).slice(1), address: 'المنصور شارع ' + (1 + rnd(90)), fee: 3000,
+        captainId: 'C' + k, captainName: 'كابتن ' + k, commission: Math.round(sub * 0.1), deliveryProof: null, rejectedBy: [], payment: { method: 'cod' }, capSettled: false });
+    } else Object.assign(o, { status: 'delivered', deliveredAt: now, payment: { method: 'cash', cash: sub, card: 0 }, customer: type === 'salon' ? 'صالة #' + tk : 'سفري', ...(type === 'salon' ? { salonNum: tk } : {}) });
+    o.timeline = [{ status: o.status, time: '', text: 'تم إنشاء الطلب' }];
+    try { await put('orders/INJ' + String(i).padStart(4, '0') + Math.random().toString(36).slice(2, 8), o); S.made.I++; } catch (e) { S.err.push('I.put: ' + String(e.message).slice(0, 80)); }
+  }
+}
+
 // وضع القياس (FANOUT=1): نفتح الأجهزة مجموعة مجموعة ونقيس زمن كتابة طلب بالسيرفر بعد كل مجموعة
 const FANOUT = process.env.FANOUT === '1', fan = [];
 async function probeWrite(label) {
@@ -385,9 +412,9 @@ async function main() {
   const tRun = Date.now();
   const qrJobs = [...Array(N.salonQR).fill('table'), ...Array(N.pickupQR).fill('pickup'), ...Array(N.delivQR).fill('delivery')].sort(() => Math.random() - 0.5).map((m, i) => [m, i + 1]);
   const half = Math.ceil(qrJobs.length / 2);
-  const hallQ = [...Array(N.salonCash).fill('salon'), ...Array(N.quick).fill('quick'), ...Array(N.hold).fill('takeaway')].sort(() => Math.random() - 0.5);
-  const dHalf = Math.ceil(N.delivCash / 2);
-  const runners = [cashierD(D, dHalf, true, 1), cashierD(D2, N.delivCash - dHalf, false, 2), cashierS(Sx, hallQ.slice(0, Math.ceil(hallQ.length / 2))), cashierS(S2, hallQ.slice(Math.ceil(hallQ.length / 2))), kitchen(K), ...C.map(captain), waiter(W), qrCustomer(Q1, qrJobs.slice(0, half)), qrCustomer(Q2, qrJobs.slice(half))];
+  const hallQ = [...Array(N.salonCash - I.salonCash).fill('salon'), ...Array(N.quick - I.quick).fill('quick'), ...Array(N.hold).fill('takeaway')].sort(() => Math.random() - 0.5);
+  const dUI = N.delivCash - I.delivCash, dHalf = Math.ceil(dUI / 2);
+  const runners = [cashierD(D, dHalf, true, 1), cashierD(D2, dUI - dHalf, false, 2), cashierS(Sx, hallQ.slice(0, Math.ceil(hallQ.length / 2))), cashierS(S2, hallQ.slice(Math.ceil(hallQ.length / 2))), kitchen(K), ...C.map(captain), waiter(W), qrCustomer(Q1, qrJobs.slice(0, half)), qrCustomer(Q2, qrJobs.slice(half)), injector()];
   // ── تصوير كل الشاشات كل FRAME_MS ←  فيديو واحد بالنهاية ──
   const FR = OUT + '_frames', BLACK = FR + '/black.jpg';
   mkdirSync(FR, { recursive: true });
@@ -421,7 +448,7 @@ async function main() {
     globalThis.dashUpdate && dashUpdate(os);
     if (S.err.length > (S.errShown || 0)) { S.err.slice(S.errShown || 0).slice(-5).forEach((e) => log('  ⚠️', e)); S.errShown = S.err.length; }
     if (row.t % 60 < 15) log('  📡 طلبات السيرفر (أكثر 5):', Object.entries(reqs).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => k + ' ' + v).join(' • '));
-    log(`طلبات ${os.length}/${TOTAL} • مكتملة ${done} • بالمطبخ ${kNew} • كاشير د ${S.made.D} ص ${S.made.S} • ويتر ${S.made.W} • باركود ${S.made.QR} • أخطاء ${S.err.length}`);
+    log(`طلبات ${os.length}/${TOTAL} • مكتملة ${done} • بالمطبخ ${kNew} • كاشير د ${S.made.D} ص ${S.made.S} • ويتر ${S.made.W} • باركود ${S.made.QR} • مولّد ${S.made.I} • أخطاء ${S.err.length}`);
     if (done >= TOTAL) S.phase = 'done';
   }, 15000);
   await Promise.all(runners);
@@ -458,7 +485,10 @@ async function main() {
   const num = (v) => Number(String(v || '0').replace(/[^\d]/g, '')) || 0;
   R.shiftTotals = { delivSales: num(R.cashiers['دلفري 1'].shift['صافي المبيعات']) + num(R.cashiers['دلفري 2'].shift['صافي المبيعات']), hallSales: num(R.cashiers['صالة 1'].shift['صافي المبيعات']) + num(R.cashiers['صالة 2'].shift['صافي المبيعات']),
     delivCash: num(R.cashiers['دلفري 1'].shift['النقد المتوقع بالدرج']) + num(R.cashiers['دلفري 2'].shift['النقد المتوقع بالدرج']), hallCash: num(R.cashiers['صالة 1'].shift['النقد المتوقع بالدرج']) + num(R.cashiers['صالة 2'].shift['النقد المتوقع بالدرج']) };
-  R.expect = { delivSales: sum(by('delivery')), hallSales: sum([...by('salon'), ...by('takeaway')]), hallCash: sum([...by('salon'), ...by('takeaway')], (o) => (o.payment && o.payment.cash) || 0) };
+  const own = (t) => by(t).filter((o) => !o.inject);   // طلبات المولّد ما تنحسب بوردية كاشير
+  R.expect = { delivSales: sum(own('delivery')), hallSales: sum([...own('salon'), ...own('takeaway')]), hallCash: sum([...own('salon'), ...own('takeaway')], (o) => (o.payment && o.payment.cash) || 0) };
+  R.firestore.injected = os.filter((o) => o.inject).length;
+  R.firestore.duplicateTicketsCashier = (() => { const c = os.filter((o) => !o.inject && o.ticketNo); return c.length - new Set(c.map((o) => o.ticketNo)).size; })();
   // الكباتن: «اليوم» و«الأرباح» لكل كابتن مقابل السيرفر
   R.captains = [];
   for (let i = 0; i < C.length; i++) {

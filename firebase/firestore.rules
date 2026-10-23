@@ -423,6 +423,10 @@ service cloud.firestore {
         || (isCaptain() && ord().get('captainId', null) == myCap());
       allow create: if isCaptain() && ord().get('captainId', null) == myCap()
         && request.resource.data.image is string && request.resource.data.image.size() < 400000;
+      // «تم التسليم» انقطع بالنص (الصورة انحفظت والطلب ما تحدّث): الكابتن يعيد ويكتب الصورة من جديد — بس قبل ما يتسلّم الطلب
+      allow update: if isCaptain() && ord().get('captainId', null) == myCap()
+        && ord().get('status', '') in ['accepted', 'pickup', 'delivering']
+        && request.resource.data.image is string && request.resource.data.image.size() < 400000;
       allow delete: if isAdmin();
     }
 
