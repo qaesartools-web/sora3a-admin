@@ -598,8 +598,10 @@ service cloud.firestore {
           && (d.mode == 'table' || d.get('phone', '').matches('^[0-9+ ]{7,20}$'))
           && (d.mode != 'delivery' || (d.get('address', '').size() >= 3 && feat(d.restaurantId, 'captain')));
       }
+      // طلب الباركود: الزبون يدخل «مجهول» تلقائياً، والطلب لازم يجي ويّا ختم الحد (webRate) بنفس الدفعة — يعني طلب واحد لكل جهاز كل 20 ثانية
+      function rateOk() { return signedIn() && getAfter(/databases/$(database)/documents/webRate/$(request.auth.uid)).data.get('at', null) == request.time; }
       allow create: if okNew(request.resource.data) && (
-          (request.resource.data.source == 'qr' && feat(request.resource.data.restaurantId, 'online')
+          (request.resource.data.source == 'qr' && rateOk() && feat(request.resource.data.restaurantId, 'online')
             && exists(/databases/$(database)/documents/publicMenus/$(request.resource.data.restaurantId))
             && pm(request.resource.data.restaurantId).get('on', false) == true
             && pm(request.resource.data.restaurantId).get('modes', {}).get(request.resource.data.mode, false) == true)
@@ -617,6 +619,14 @@ service cloud.firestore {
             && onlyChanged(['status','orderId','acceptedBy','acceptedAtMs','reason','stage','stageAtMs','ticket','trackId']))
           || (resource.data.status == 'accepted' && onlyChanged(['stage','stageAtMs','orderId','ticket','trackId'])));
       allow delete: if isAdmin() || ownsRest(resource.data.restaurantId);
+    }
+
+    // ── حد طلبات منيو الباركود: ختم وقت آخر طلب لكل جهاز (دخول مجهول) — ما يتجدد قبل 20 ثانية ──
+    match /webRate/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['at']) && request.resource.data.at == request.time
+        && (resource == null || resource.data.at < request.time - duration.value(20, 's'));
     }
 
     // ── config (إعدادات عامة يقرأها كل حساب فعّال، ويكتبها المدير الأعلى فقط — مثل رابط سيرفر الإشعارات) ──
