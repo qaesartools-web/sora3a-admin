@@ -1830,6 +1830,7 @@ function renderRests(){
       <div class="entity-actions">
         <button class="btn-sm btn-edit" onclick="openEditRest('${esc(r.id)}')">✏️ تعديل</button>
         ${r.userId?`<button class="btn-sm btn-cap" onclick="openBranches('${esc(r.id)}')">🏢 الفروع</button>`:''}
+        <button class="btn-sm btn-edit" onclick="resetRest('${esc(r.id)}')" title="يمسح الطلبات والورديات والحسابات التجريبية — المنيو والإعدادات والحسابات تبقى">🧹 تصفير البيانات</button>
         <button class="btn-sm btn-del" onclick="deleteRest('${esc(r.id)}')">🗑️ حذف</button>
       </div>
     </div>`;
@@ -2105,6 +2106,43 @@ window.deleteRest=async function(id){
     audit('restaurant.delete',{restaurantId:id,name:r.name,captains:caps.size});
     toast('🗑️ تم حذف المطعم');
   }catch(e){toast('❌ تعذّر الحذف','error');}
+};
+
+// ── تصفير البيانات التجريبية لمطعم: الطلبات وكل شي مربوط بيها + الورديات والعدّادات وسجل الزبائن والمصروفات ──
+//    يبقى: المنيو، الإعدادات، الحسابات (صاحب المطعم، الكاشيرية، الكباتن)، الأجهزة، المنيو الأونلاين
+window.resetRest=async function(id){
+  const r=allRestaurants.find(x=>x.id===id);
+  if(!r)return;
+  if(!confirm(`🧹 تصفير بيانات «${r.name}»؟\n\nينمسح: كل الطلبات وطلبات الباركود والويتر، التتبع وصور التسليم، الورديات وأرقام الطلبات، سجل الزبائن والمكالمات، والمصروفات.\nيبقى: المنيو والإعدادات والحسابات والكباتن والأجهزة.\n\n⚠️ ما يرجع بعد المسح.`))return;
+  const typed=prompt(`للتأكيد اكتب اسم المطعم بالضبط:\n${r.name}`);
+  if(typed==null)return;
+  if(typed.trim()!==String(r.name||'').trim()){toast('❌ الاسم ما يطابق — ما انمسح شي','error');return;}
+  const fb=window._fb, n={};
+  // يمسح دفعات (400 بالمرة) لحد ما يخلص
+  const wipe=async(key,q,extra)=>{
+    n[key]=0;
+    for(;;){
+      const snap=await fb.getDocs(fb.query(q,fb.limit(400)));
+      if(snap.empty)break;
+      const b=fb.writeBatch(fb.db);
+      snap.docs.forEach(d=>{b.delete(d.ref);if(extra)extra(b,d);});
+      await b.commit();
+      n[key]+=snap.size;
+      toast(`🧹 ${key}: ${toA(n[key])}…`);
+      if(snap.size<400)break;
+    }
+  };
+  try{
+    const col=(...p)=>fb.collection(fb.db,...p), byRest=(c)=>fb.query(col(c),fb.where('restaurantId','==',id));
+    // صور التسليم والتتبع مربوطة برقم الطلب نفسه
+    await wipe('الطلبات',byRest('orders'),(b,d)=>{b.delete(fb.doc(fb.db,'tracking',d.id));b.delete(fb.doc(fb.db,'deliveryProofs',d.id));});
+    await wipe('طلبات الباركود والويتر',byRest('webOrders'));
+    await wipe('المكالمات',byRest('incomingCalls')).catch(()=>{});
+    for(const c of ['shifts','counters','customers'])await wipe(c,col('restaurants',id,c));
+    await wipe('المصروفات',col('accounting',id,'expenses'));
+    audit('restaurant.reset',{restaurantId:id,name:r.name,...n});
+    toast(`✅ تصفّر «${r.name}»: ${toA(n['الطلبات']||0)} طلب و${toA(n['طلبات الباركود والويتر']||0)} طلب أونلاين`);
+  }catch(e){console.error(e);toast('❌ ما كمل التصفير — جرّب مرة ثانية (اللي انمسح ما يرجع)','error');}
 };
 
 // ANALYTICS
