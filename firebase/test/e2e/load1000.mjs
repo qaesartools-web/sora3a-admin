@@ -19,7 +19,9 @@ const N = { delivCash: n(450), delivQR: n(50), salonCash: n(150), salonWaiter: n
 const TOTAL = Object.values(N).reduce((a, b) => a + b, 0);
 const CAPS = 8, RID = 'RL', DEADLINE = Date.now() + 120 * 60000;
 const OUT = process.env.OUT || '/tmp/load1000';
-const FRAME_MS = Number(process.env.FRAME_MS || 10000);   // صورة لكل شاشة كل 10 ثواني ← فيديو «كل الشاشات سوا»
+const FRAME_MS = Number(process.env.FRAME_MS || 10000);
+// إيقاع الطلبات: كل كاشير طلب كل PACE_MS تقريباً (المحاكي عملية وحدة ما تتحمل سرعة غير واقعية؛ مطعم مزدحم ≈ طلب كل دقيقة لكل كاشير)
+const PACE_MS = Number(process.env.PACE_MS || 3500);   // صورة لكل شاشة كل 10 ثواني ← فيديو «كل الشاشات سوا»
 const BASE = 'http://localhost:5050/sora3a-rest2/';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const bagDay = (ms = Date.now()) => new Date(ms + 3 * 3600000).toISOString().slice(0, 10);
@@ -55,7 +57,12 @@ const PROBE = () => {
   new MutationObserver((ms) => ms.forEach((m) => { if (m.type === 'attributes') scan(m.target); else m.addedNodes.forEach(scan); }))
     .observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-oid', 'data-done'] });
 };
-async function dev(opts) { const p = await page(B, opts); p.setDefaultTimeout(12000); await p.context().addInitScript(PROBE); return p; }
+async function dev(opts) { const p = await page(B, opts); p.setDefaultTimeout(12000); await p.context().addInitScript(PROBE); countReqs(p); return p; }
+// كم طلب يرسل كل جهاز للسيرفر (قراءة/استماع/كتابة) — تطبيق «يلح» على السيرفر يكلّف قراءات بالـFirebase الحقيقي
+function countReqs(p) {
+  p.reqs = { listen: 0, write: 0, other: 0 };
+  p.on('request', (r) => { const u = r.url(); if (!/127\.0\.0\.1:8080|localhost:8080/.test(u)) return; if (/Listen\/channel/.test(u)) p.reqs.listen++; else if (/Write\/channel|:commit|:batchWrite/.test(u)) p.reqs.write++; else p.reqs.other++; });
+}
 const metrics = (p) => p.evaluate(() => ({ heapMB: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null, dom: document.getElementsByTagName('*').length, lt: window.__lt })).catch(() => null);
 
 // ── التجهيز ──
@@ -171,6 +178,7 @@ async function cashierD(p) {
         await assign(await h.jsonValue());
         made++; S.made.D = made;
       });
+      await sleep(PACE_MS * (0.6 + Math.random() * 0.8));
       continue;
     }
     if (S.allIn) { const left = await p.evaluate(() => orders.filter((o) => o.orderType === 'delivery' && o.capSettled === false && o.status !== 'cancelled').length); if (!left) break; }
@@ -211,6 +219,7 @@ async function cashierS(p) {
         }
         S.made.S++;
       });
+      await sleep(PACE_MS * (0.6 + Math.random() * 0.8));
       continue;
     }
     if (S.allIn) { const left = await p.evaluate(() => orders.filter((o) => o.orderType !== 'delivery' && o.status !== 'delivered' && o.status !== 'cancelled').length); if (!left) break; }
@@ -254,7 +263,7 @@ async function waiter(p) {
       await p.waitForSelector('#vOrders:not([hidden])', { timeout: 10000 });
       S.made.W++;
     });
-    await sleep(400 + rnd(800));
+    await sleep(PACE_MS * 3 * (0.6 + Math.random() * 0.8));
   }
 }
 
@@ -280,7 +289,7 @@ async function qrCustomer(p, jobs) {
       await p.waitForSelector('#stView .st h2', { timeout: 15000 });
       S.made.QR++;
     });
-    await sleep(300 + rnd(900));
+    await sleep(PACE_MS * 2 * (0.6 + Math.random() * 0.8));
   }
   return p;
 }
@@ -315,7 +324,7 @@ async function main() {
   try {
     const kit = await import(path.join(path.dirname(ROOTS['sora3a-admin']), 'sora3a-owner/test/kit.mjs'));
     towerSrv = await kit.serve(); TB = await kit.browser();
-    Tw = await kit.device(TB, { key: 'LOADTESTLAPTOPKEY_xxxxxxxxxxxxxxxxxxx' }); await Tw.context().addInitScript(PROBE);
+    Tw = await kit.device(TB, { key: 'LOADTESTLAPTOPKEY_xxxxxxxxxxxxxxxxxxx' }); await Tw.context().addInitScript(PROBE); countReqs(Tw);
     await kit.login(Tw, 'boss@load.iq');
     try { await Tw.waitForSelector('[data-boot]', { timeout: 8000 }); await Tw.click('[data-boot]'); } catch (e) {}
     await Tw.waitForSelector('.app .view[data-v="overview"]', { timeout: 20000 });
@@ -336,6 +345,7 @@ async function main() {
       [`${os.length} / ${TOTAL}`, `🏍️ دلفري ${c('delivery')} • 🪑 صالة ${c('salon')} • 🥡 سفري ${c('takeaway')}<br>✅ مكتملة ${done} • 🍳 بالمطبخ ${os.filter((o) => o.kitchen !== 'ready').length}<br>⏱️ ${mm}:${ss}${end ? ' — خلص ✅' : ''}`]).catch(() => {});
   };
   const devices = { 'كاشير الدلفري': D, 'كاشير الصالة': Sx, 'المجهز': K, 'الويتر': W, 'لوحة الإدارة': A, ...(Tw ? { 'البرج': Tw } : {}), ...Object.fromEntries(C.map((p, i) => ['كابتن ' + (i + 1), p])) };
+  S.devices = { ...devices, 'زبون باركود 1': Q1, 'زبون باركود 2': Q2 };
   const m0 = {}; for (const [k, p] of Object.entries(devices)) m0[k] = await metrics(p);
   TILES = [['Cashier - Delivery', D], ['Cashier - Hall & Takeaway', Sx], ['Kitchen display', K], ['Tower', Tw || Dash], ['Admin panel', A], ['Live counters', Dash], ['Waiter app', W], ['QR menu customer 1', Q1],
     ['QR menu customer 2', Q2], ...C.slice(0, 7).map((p, i) => ['Captain ' + (i + 1), p])];
@@ -373,10 +383,12 @@ async function main() {
     S.allIn = os.length >= TOTAL && web.every((w) => w.status !== 'new');
     S.kitchenIdle = S.allIn && kNew === 0;
     S.capIdle = S.allIn && !os.some((o) => o.orderType === 'delivery' && o.status !== 'delivered' && o.status !== 'cancelled');
-    const row = { t: secs(), orders: os.length, done, kitchenWaiting: kNew, made: { ...S.made }, errors: S.err.length };
+    const reqs = Object.fromEntries(Object.entries(S.devices || {}).map(([k, p]) => [k, p.reqs ? p.reqs.listen + p.reqs.write + p.reqs.other : 0]));
+    const row = { t: secs(), orders: os.length, done, kitchenWaiting: kNew, made: { ...S.made }, errors: S.err.length, reqs };
     progress.push(row);
     globalThis.dashUpdate && dashUpdate(os);
     if (S.err.length > (S.errShown || 0)) { S.err.slice(S.errShown || 0).slice(-5).forEach((e) => log('  ⚠️', e)); S.errShown = S.err.length; }
+    if (row.t % 60 < 15) log('  📡 طلبات السيرفر (أكثر 5):', Object.entries(reqs).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, v]) => k + ' ' + v).join(' • '));
     log(`طلبات ${os.length}/${TOTAL} • مكتملة ${done} • بالمطبخ ${kNew} • كاشير د ${S.made.D} ص ${S.made.S} • ويتر ${S.made.W} • باركود ${S.made.QR} • أخطاء ${S.err.length}`);
     if (done >= TOTAL) S.phase = 'done';
   }, 15000);
@@ -442,7 +454,7 @@ async function main() {
   R.latencyMs = { 'كاشير ← المطبخ': dist(lat.kitchen), 'كاشير ← الكابتن': dist(lat.captain), 'زبون/ويتر ← الكاشير': dist(lat.cashierWeb) };
   // ذاكرة وتعليق الصفحات (قبل ← بعد)
   R.pages = {};
-  for (const [k, p] of Object.entries(devices)) { const m1 = await metrics(p); R.pages[k] = { heapMB: [m0[k] && m0[k].heapMB, m1 && m1.heapMB], dom: [m0[k] && m0[k].dom, m1 && m1.dom], longTasks: m1 && m1.lt && { n: m1.lt.n, totalMs: Math.round(m1.lt.ms), maxMs: Math.round(m1.lt.max) }, pageErrors: p.errors.filter((e) => !/favicon|Failed to load resource|vibrate|AudioContext|serviceWorker|ServiceWorker|messaging|integrity|digest|net::ERR|WebChannel/i.test(e)).slice(0, 5) }; }
+  for (const [k, p] of Object.entries(devices)) { const m1 = await metrics(p); R.pages[k] = { heapMB: [m0[k] && m0[k].heapMB, m1 && m1.heapMB], dom: [m0[k] && m0[k].dom, m1 && m1.dom], longTasks: m1 && m1.lt && { n: m1.lt.n, totalMs: Math.round(m1.lt.ms), maxMs: Math.round(m1.lt.max) }, serverRequests: p.reqs, pageErrors: p.errors.filter((e) => !/favicon|Failed to load resource|vibrate|AudioContext|serviceWorker|ServiceWorker|messaging|integrity|digest|net::ERR|WebChannel/i.test(e)).slice(0, 5) }; }
   // صور نهائية لكل تطبيق وهو عليه كل الطلبات
   const SH = OUT + '_shots'; mkdirSync(SH, { recursive: true });
   await D.evaluate(() => goTab('orders')); await Sx.evaluate(() => goTab('orders')); await C[0].click('.nav button[data-tab="history"]').catch(() => {});
