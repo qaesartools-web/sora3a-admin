@@ -53,6 +53,10 @@ test('cashier keeps selling without internet and syncs when it returns', async (
   const synced = await until(async () => { const o = await all(); return o.length === 2 && o.find((x) => x.held && x.status === 'ready') ? o : null; }, 30000);
   assert.ok(synced, 'orders synced after reconnect');
   assert.ok(synced.some((o) => o.orderType === 'salon' && o.status === 'delivered'));
+  // الرقم اللي انعدّ بدون إنترنت ياخذ حرف الجهاز («#12ب») حتى ما يتكرر ويه كاشير ثاني عدّ بدون إنترنت هم
+  const held = synced.find((x) => x.held);
+  assert.match(String(held.ticketNo), /^\d+[؀-ۿ]$/, 'offline number carries the device letter: ' + held.ticketNo);
+  assert.equal(held.customer, 'سفري #' + held.ticketNo);
   await p.context().close();
 });
 
