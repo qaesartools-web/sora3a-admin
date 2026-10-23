@@ -198,6 +198,10 @@ test('الإعدادات حسب الصلاحية، والورديات والمن
   await assertSucceeds(setDoc(doc(as('cash1'), 'restaurants/R1/customers/0770'), { name: 'x' }));
   await assertFails(setDoc(doc(as('cash1'), 'restaurants/R1/menuImages/i1'), { data: 'x' }));
   await assertFails(setDoc(doc(as('cash1'), 'restaurants/R2/shifts/s1'), { status: 'open' }));
+  // عدّاد أرقام الطلبات اليومي (رقم واحد لكل المطعم حتى مع أكثر من كاشير)
+  await assertSucceeds(setDoc(doc(as('cash1'), 'restaurants/R1/counters/tickets'), { day: '2026-10-23', n: 3 }));
+  await assertSucceeds(getDoc(doc(as('cash2'), 'restaurants/R1/counters/tickets')));
+  await assertFails(setDoc(doc(as('cash1'), 'restaurants/R2/counters/tickets'), { day: '2026-10-23', n: 3 }));
 });
 test('كاشير مطعم منتهي الاشتراك ممنوع', async () => {
   await assertFails(setDoc(doc(as('cashExp'), 'orders/NX'), { restaurantId: 'R3', status: 'delivered', value: 1 }));

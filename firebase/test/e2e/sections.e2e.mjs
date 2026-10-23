@@ -72,11 +72,11 @@ test('order splits by section, one printer: receipt + one ticket per section', a
   const o = await until(async () => (await all()).find((x) => x.orderType === 'salon' && x.kSec));
   assert.deepEqual(Object.keys(o.kSec).sort(), ['k1', 'k2', 'k3', 'k4']);
   assert.equal(o.items.find((i) => i.name === 'بيبسي').sec, undefined);
-  assert.equal(o.ticketNo, 9);   // يكمل بعد أعلى رقم اليوم
+  assert.ok(o.ticketNo > 8, 'ticket ' + o.ticketNo);   // يكمل بعد أعلى رقم اليوم (رقم محجوز مقدماً لجهاز انسد ممكن يتخطى)
   const doc_ = await p.evaluate(() => document.getElementById('prtFr').srcdoc);
   for (const n of ['قسم الشاورما', 'قسم الكنتاكي', 'قسم البرغر', 'قسم البيتزا']) assert.ok(doc_.includes(n), n);
   assert.equal((doc_.match(/page-break-before:always/g) || []).length >= 4, true);
-  assert.ok(doc_.includes('#9') && doc_.includes('بيجر 3'));
+  assert.ok(doc_.includes('#' + o.ticketNo) && doc_.includes('بيجر 3'));
   // تذكرة الشاورما فيها أصنافها فقط
   const sh = await p.evaluate((id) => secTicketBody(orders.find((x) => x.id === id), 'k1'), o.id);
   assert.ok(sh.includes('ساندويش شاورما') && !sh.includes('بيتزا خضار') && sh.includes('يكتمل مع'));

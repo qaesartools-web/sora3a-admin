@@ -547,3 +547,52 @@ test('approved devices: a new device locks with a code, the super admin approves
   await a.context().close(); await one.c.context().close(); await two.c.context().close();
   await write('restaurants/RC', { 'features.devices': false });
 });
+
+test('two cashiers at the same time (delivery + hall): each opens and closes their own shift — orders and cash never mix', async () => {
+  const ua = await signUp('shift-a@x.com', 'secret123'), ub = await signUp('shift-b@x.com', 'secret123');
+  await E.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'users', ua), { role: 'cashier', restaurantId: 'RC', email: 'shift-a@x.com', name: 'أحمد', perms: { discount: true } });
+    await setDoc(doc(db, 'users', ub), { role: 'cashier', restaurantId: 'RC', email: 'shift-b@x.com', name: 'زينب', perms: { discount: true } });
+  });
+  const openShift = async (p, cash) => {
+    await p.evaluate(() => goTab('shift'));
+    await p.waitForSelector('#shOpenCash', { timeout: 10000 });
+    await p.fill('#shOpenCash', String(cash)); await p.click('button:has-text("فتح الوردية")');
+    await p.waitForSelector('#shiftBody .sh-status.open');
+  };
+  const quickSale = async (p) => {
+    await p.evaluate(() => goTab('cashier'));
+    await p.click('#prods .prod >> nth=0'); await p.click('#sendBtn'); await p.click('#typeOv .otype[data-t="quick"]');
+    await p.waitForSelector('#payOv.on'); await p.click('#payOk');
+  };
+  const a = await page(B, { w: 1280, h: 860 }); await posLogin(a, 'shift-a@x.com');
+  await openShift(a, 10000); await quickSale(a);
+  // الكاشير الثاني بجهاز ثاني: ما يشوف وردية الأول — يفتح ورديته
+  const b = await page(B, { w: 1280, h: 860 }); await posLogin(b, 'shift-b@x.com');
+  await b.evaluate(() => goTab('shift'));
+  await b.waitForSelector('#shOpenCash', { timeout: 10000 });
+  await openShift(b, 0); await quickSale(b); await quickSale(b);
+  // الاثنين يبيعون بنفس اللحظة ← أرقام الطلبات ما تتكرر (رقم يومي واحد للمطعم)
+  for (let i = 0; i < 3; i++) await Promise.all([quickSale(a), quickSale(b)]);
+  const shifts = await all('restaurants/RC/shifts');
+  const sa = shifts.find((s) => s.uid === ua && s.status === 'open'), sb = shifts.find((s) => s.uid === ub && s.status === 'open');
+  assert.ok(sa && sb && sa.id !== sb.id, 'two separate open shifts');
+  const os = await until(async () => { const l = (await all('orders', 'restaurantId', 'RC')).filter((o) => o.shiftId === sa.id || o.shiftId === sb.id); return l.length === 9 ? l : null; });
+  assert.equal(os.filter((o) => o.shiftId === sa.id).length, 4, "A's sales are in A's shift");
+  assert.equal(os.filter((o) => o.shiftId === sb.id).length, 5, "B's sales are in B's shift");
+  const nums = os.map((o) => o.ticketNo);
+  assert.equal(new Set(nums).size, nums.length, 'order numbers never repeat: ' + nums.join(','));
+  // كل واحد يشوف مبيعاته بس بالوردية
+  const ordersIn = (p) => p.evaluate(async () => { goTab('shift'); await new Promise((r) => setTimeout(r, 300)); return [...document.querySelectorAll('#shiftBody .sh-stat')].find((x) => x.textContent.includes('طلب')).querySelector('b').textContent.trim(); });
+  assert.equal(await ordersIn(a), '4'); assert.equal(await ordersIn(b), '5');
+  // الأول يسكّر ورديته ← وردية الثاني تبقى مفتوحة
+  await a.click('button:has-text("إغلاق الوردية")'); await a.waitForSelector('#acOv.on');
+  await a.fill('#acf_c', '22000'); await a.click('#acDlgOk');
+  await until(async () => (await all('restaurants/RC/shifts')).find((s) => s.id === sa.id).status === 'closed');
+  await new Promise((r) => setTimeout(r, 800));
+  assert.equal((await all('restaurants/RC/shifts')).find((s) => s.id === sb.id).status, 'open');
+  assert.equal(await b.locator('#shiftBody .sh-status.open').count(), 1, "B's shift is still open on B's screen");
+  assert.deepEqual(clean(a), []); assert.deepEqual(clean(b), []);
+  await a.context().close(); await b.context().close();
+});
