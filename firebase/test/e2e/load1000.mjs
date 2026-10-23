@@ -59,7 +59,9 @@ const PROBE = () => {
   new MutationObserver((ms) => ms.forEach((m) => { if (m.type === 'attributes') scan(m.target); else m.addedNodes.forEach(scan); }))
     .observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-oid', 'data-done'] });
 };
-async function dev(opts) { const p = await page(B, opts); p.setDefaultTimeout(12000); await p.context().addInitScript(PROBE); countReqs(p); return p; }
+// أجهزة الاختبار كلها على 4 معالجات بس: الحركات (animation) تنعرض بسرعة حتى ما تاكل المعالج — منطق التطبيق ما يتغير
+const CALM = () => document.addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = '*,*::before,*::after{animation-duration:1ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:0s!important}'; document.head.appendChild(s); });
+async function dev(opts) { const p = await page(B, opts); p.setDefaultTimeout(12000); await p.context().addInitScript(PROBE); await p.context().addInitScript(CALM); countReqs(p); return p; }
 // كم طلب يرسل كل جهاز للسيرفر (قراءة/استماع/كتابة) — تطبيق «يلح» على السيرفر يكلّف قراءات بالـFirebase الحقيقي
 function countReqs(p) {
   p.reqs = { listen: 0, write: 0, other: 0 };
@@ -70,7 +72,8 @@ const metrics = (p) => p.evaluate(() => ({ heapMB: performance.memory ? Math.rou
 // ── التجهيز ──
 async function seed() {
   await E.clearFirestore(); await clearAuth();
-  const U = { owner: await signUp('owner@load.iq', 'secret123'), cashD: await signUp('deliv@load.iq', 'secret123'), cashS: await signUp('hall@load.iq', 'secret123'), admin: await signUp('boss@load.iq', 'secret123') };
+  const U = { owner: await signUp('owner@load.iq', 'secret123'), cashD: await signUp('deliv@load.iq', 'secret123'), cashS: await signUp('hall@load.iq', 'secret123'), admin: await signUp('boss@load.iq', 'secret123'),
+    cashD2: await signUp('deliv2@load.iq', 'secret123'), cashS2: await signUp('hall2@load.iq', 'secret123') };
   for (let i = 1; i <= CAPS; i++) U['c' + i] = await signUp(`cap${i}@load.iq`, 'secret123');
   await E.withSecurityRulesDisabled(async (c) => {
     const db = c.firestore(), S = (p, d) => setDoc(doc(db, p), d);
@@ -79,6 +82,8 @@ async function seed() {
     const base = { discount: true, cancel: true, inventory: false, menu: false, settings: false, pager: false };
     await S('users/' + U.cashD, { role: 'cashier', restaurantId: RID, email: 'deliv@load.iq', name: 'كاشير الدلفري', perms: { ...base, oDeliv: true, oSalon: false, oTake: false, oHold: false } });
     await S('users/' + U.cashS, { role: 'cashier', restaurantId: RID, email: 'hall@load.iq', name: 'كاشير الصالة', perms: { ...base, oDeliv: false, oSalon: true, oTake: true, oHold: true } });
+    await S('users/' + U.cashD2, { role: 'cashier', restaurantId: RID, email: 'deliv2@load.iq', name: 'كاشير الدلفري 2', perms: { ...base, oDeliv: true, oSalon: false, oTake: false, oHold: false } });
+    await S('users/' + U.cashS2, { role: 'cashier', restaurantId: RID, email: 'hall2@load.iq', name: 'كاشير الصالة 2', perms: { ...base, oDeliv: false, oSalon: true, oTake: true, oHold: true } });
     await S('restaurants/' + RID, { name: 'مطعم التحمّل', area: 'الكرادة', phone: '07701112233', userId: U.owner, active: true, subscription: 100000, expiry: bagDay(Date.now() + 30 * 86400000), expiryMs: Date.now() + 30 * 86400000,
       features: { captain: true, kitchen: true, waiter: true, online: true } });
     await S(`restaurants/${RID}/settings/main`, { tables: 30, defaultFee: 3000, receiptTitle: 'مطعم التحمّل', online: { on: true, table: true, pickup: true, delivery: true }, updatedAtMs: 1 });
@@ -136,8 +141,8 @@ const nextCap = () => 'C' + ((S.capIdx++ % CAPS) + 1);
 const safe = (name, fn) => fn().catch((e) => { S.err.push(name + ': ' + String(e.message || e).split('\n')[0]); });
 
 // ── كاشير الدلفري: يقبل طلبات الباركود، يحوّل الجاهز للكابتن، يسوي طلبات التلفون، ويستلم فلوس الكباتن ──
-async function cashierD(p) {
-  let made = 0, phoneN = 0;
+async function cashierD(p, quota, settles, tag) {
+  let made = 0, phoneN = tag * 100000;
   const assign = async (id) => {
     await p.evaluate((id) => openChangeCapForOrder(id), id);
     await p.waitForSelector('#delivOv.on #capList .capcard', { timeout: 10000 });
@@ -158,7 +163,7 @@ async function cashierD(p) {
     if (wait) { await safe('D.assignQR', () => assign(wait)); continue; }
     // 3) فلوس الكباتن: كل 15 طلب واصل
     const due = await p.evaluate(() => orders.filter((o) => o.orderType === 'delivery' && o.status === 'delivered' && o.capSettled === false).map((o) => o.id));
-    if (due.length >= 15 || (due.length && made >= N.delivCash)) {
+    if (settles && (due.length >= 15 || (due.length && made >= quota))) {
       await safe('D.settle', async () => {
         await p.evaluate(() => goTab('capPay'));
         for (const id of due.slice(0, 30)) await tap(p, `[data-cap-order="${id}"] button`, 3000);
@@ -167,7 +172,7 @@ async function cashierD(p) {
       continue;
     }
     // 4) طلب دلفري بالتلفون
-    if (made < N.delivCash) {
+    if (made < quota) {
       const phone = '0771' + String(1000000 + phoneN++).slice(1);
       await safe('D.create', async () => {
         await addItems(p, '#prods .prod', 1 + rnd(3), '.cb');
@@ -177,7 +182,7 @@ async function cashierD(p) {
         await p.click('#confCapBtn');
         const h = await p.waitForFunction((ph) => { const o = orders.find((x) => x.phone === ph && x.awaitCap && !x.captainId); return o && o.id; }, phone, { timeout: 15000 });
         await assign(await h.jsonValue());
-        made++; S.made.D = made;
+        made++; S.made.D++;
       });
       await sleep(PACE_MS * (0.6 + Math.random() * 0.8));
       continue;
@@ -188,8 +193,7 @@ async function cashierD(p) {
 }
 
 // ── كاشير الصالة والسفري: يقبل طلبات الويتر والباركود، يسلّم الجاهز ويستلم المبلغ، ويسوي طلبات صالة/سفري ──
-async function cashierS(p) {
-  const queue = [...Array(N.salonCash).fill('salon'), ...Array(N.quick).fill('quick'), ...Array(N.hold).fill('takeaway')].sort(() => Math.random() - 0.5);
+async function cashierS(p, queue) {
   while (Date.now() < DEADLINE && S.phase === 'run') {
     if (await p.evaluate(() => ['payOv', 'acOv', 'viewOv'].some((id) => { const e = document.getElementById(id); return e && e.classList.contains('on'); }))) {
       S.err.push('S.leftOpen'); await p.evaluate(() => { if (window.payClose) payClose(); if (window.acClose) acClose(); if (window.viewClose) viewClose(); }); continue;
@@ -321,6 +325,8 @@ async function main() {
   await probeWrite('بدون أجهزة');
   const D = await dev({ w: 1280, h: 860 }); await posLogin(D, 'deliv@load.iq');
   const Sx = await dev({ w: 1280, h: 860 }); await posLogin(Sx, 'hall@load.iq');
+  const D2 = await dev({ w: 1280, h: 860 }); await posLogin(D2, 'deliv2@load.iq');
+  const S2 = await dev({ w: 1280, h: 860 }); await posLogin(S2, 'hall2@load.iq');
   await probeWrite('+ كاشيرين');
   const K = await dev({ w: 1280, h: 800 }); await pairScreen(K, BASE + 'kitchen.html', 'kitchen', 'المجهز'); await K.waitForSelector('#app:not([hidden])', { timeout: 20000 });
   await probeWrite('+ المجهز');
@@ -368,18 +374,20 @@ async function main() {
     await Dash.evaluate(([a, b]) => { document.getElementById('big').textContent = a; document.getElementById('rows').innerHTML = b; },
       [`${os.length} / ${TOTAL}`, `🏍️ دلفري ${c('delivery')} • 🪑 صالة ${c('salon')} • 🥡 سفري ${c('takeaway')}<br>✅ مكتملة ${done} • 🍳 بالمطبخ ${os.filter((o) => o.kitchen !== 'ready').length}<br>⏱️ ${mm}:${ss}${end ? ' — خلص ✅' : ''}`]).catch(() => {});
   };
-  const devices = { 'كاشير الدلفري': D, 'كاشير الصالة': Sx, 'المجهز': K, 'الويتر': W, 'لوحة الإدارة': A, ...(Tw ? { 'البرج': Tw } : {}), ...Object.fromEntries(C.map((p, i) => ['كابتن ' + (i + 1), p])) };
+  const devices = { 'كاشير الدلفري': D, 'كاشير الدلفري 2': D2, 'كاشير الصالة': Sx, 'كاشير الصالة 2': S2, 'المجهز': K, 'الويتر': W, 'لوحة الإدارة': A, ...(Tw ? { 'البرج': Tw } : {}), ...Object.fromEntries(C.map((p, i) => ['كابتن ' + (i + 1), p])) };
   S.devices = { ...devices, 'زبون باركود 1': Q1, 'زبون باركود 2': Q2 };
   const m0 = {}; for (const [k, p] of Object.entries(devices)) m0[k] = await metrics(p);
-  TILES = [['Cashier - Delivery', D], ['Cashier - Hall & Takeaway', Sx], ['Kitchen display', K], ['Tower', Tw || Dash], ['Admin panel', A], ['Live counters', Dash], ['Waiter app', W], ['QR menu customer 1', Q1],
-    ['QR menu customer 2', Q2], ...C.slice(0, 7).map((p, i) => ['Captain ' + (i + 1), p])].filter(([, p]) => p);
+  TILES = [['Cashier - Delivery 1', D], ['Cashier - Delivery 2', D2], ['Cashier - Hall 1', Sx], ['Cashier - Hall 2', S2], ['Kitchen display', K], ['Tower', Tw || Dash], ['Admin panel', A], ['Live counters', Dash], ['Waiter app', W], ['QR menu customer 1', Q1],
+    ['QR menu customer 2', Q2], ...C.slice(0, 5).map((p, i) => ['Captain ' + (i + 1), p])].filter(([, p]) => p).slice(0, 16);
   log('كل الأجهزة جاهزة:', Object.keys(devices).length, 'جهاز');
 
   // ── التشغيل ──
   const tRun = Date.now();
   const qrJobs = [...Array(N.salonQR).fill('table'), ...Array(N.pickupQR).fill('pickup'), ...Array(N.delivQR).fill('delivery')].sort(() => Math.random() - 0.5).map((m, i) => [m, i + 1]);
   const half = Math.ceil(qrJobs.length / 2);
-  const runners = [cashierD(D), cashierS(Sx), kitchen(K), ...C.map(captain), waiter(W), qrCustomer(Q1, qrJobs.slice(0, half)), qrCustomer(Q2, qrJobs.slice(half))];
+  const hallQ = [...Array(N.salonCash).fill('salon'), ...Array(N.quick).fill('quick'), ...Array(N.hold).fill('takeaway')].sort(() => Math.random() - 0.5);
+  const dHalf = Math.ceil(N.delivCash / 2);
+  const runners = [cashierD(D, dHalf, true, 1), cashierD(D2, N.delivCash - dHalf, false, 2), cashierS(Sx, hallQ.slice(0, Math.ceil(hallQ.length / 2))), cashierS(S2, hallQ.slice(Math.ceil(hallQ.length / 2))), kitchen(K), ...C.map(captain), waiter(W), qrCustomer(Q1, qrJobs.slice(0, half)), qrCustomer(Q2, qrJobs.slice(half))];
   // ── تصوير كل الشاشات كل FRAME_MS ←  فيديو واحد بالنهاية ──
   const FR = OUT + '_frames', BLACK = FR + '/black.jpg';
   mkdirSync(FR, { recursive: true });
@@ -445,8 +453,11 @@ async function main() {
   // الكاشيرين: الوردية والتقرير اليومي
   const shiftOf = (p) => p.evaluate(async () => { goTab('shift'); await new Promise((r) => setTimeout(r, 400)); const v = [...document.querySelectorAll('#shiftBody .sh-stat')].map((s) => [s.querySelector('span').textContent.trim(), s.querySelector('b').textContent.trim()]); goTab('cashier'); return Object.fromEntries(v); });
   const day = (p) => p.evaluate(() => { const d = new Date(); d.setHours(0, 0, 0, 0); const t = performance.now(); const r = dailyCalc(d.getTime(), d.getTime() + 86400000); return { n: r.n, sales: r.sales, cash: r.cash, cod: r.cod, later: r.later, ms: Math.round(performance.now() - t), loaded: orders.length }; });
-  R.cashierDeliv = { shift: await shiftOf(D), day: await day(D) };
-  R.cashierHall = { shift: await shiftOf(Sx), day: await day(Sx) };
+  R.cashiers = {};
+  for (const [k, p] of [['دلفري 1', D], ['دلفري 2', D2], ['صالة 1', Sx], ['صالة 2', S2]]) R.cashiers[k] = { shift: await shiftOf(p), day: await day(p) };
+  const num = (v) => Number(String(v || '0').replace(/[^\d]/g, '')) || 0;
+  R.shiftTotals = { delivSales: num(R.cashiers['دلفري 1'].shift['صافي المبيعات']) + num(R.cashiers['دلفري 2'].shift['صافي المبيعات']), hallSales: num(R.cashiers['صالة 1'].shift['صافي المبيعات']) + num(R.cashiers['صالة 2'].shift['صافي المبيعات']),
+    delivCash: num(R.cashiers['دلفري 1'].shift['النقد المتوقع بالدرج']) + num(R.cashiers['دلفري 2'].shift['النقد المتوقع بالدرج']), hallCash: num(R.cashiers['صالة 1'].shift['النقد المتوقع بالدرج']) + num(R.cashiers['صالة 2'].shift['النقد المتوقع بالدرج']) };
   R.expect = { delivSales: sum(by('delivery')), hallSales: sum([...by('salon'), ...by('takeaway')]), hallCash: sum([...by('salon'), ...by('takeaway')], (o) => (o.payment && o.payment.cash) || 0) };
   // الكباتن: «اليوم» و«الأرباح» لكل كابتن مقابل السيرفر
   R.captains = [];
@@ -473,7 +484,7 @@ async function main() {
   const kSeen = await seen(K), lat = { kitchen: [], captain: [], cashierWeb: [] };
   os.forEach((o) => { if (kSeen[o.id] && o.createdAtMs) lat.kitchen.push(kSeen[o.id] - o.createdAtMs); });
   for (const p of C) { const s = await seen(p); os.forEach((o) => { if (s[o.id] && o.assignedAtMs) lat.captain.push(s[o.id] - o.assignedAtMs); }); }
-  const sS = { ...(await seen(Sx)), ...(await seen(D)) };
+  const sS = { ...(await seen(Sx)), ...(await seen(S2)), ...(await seen(D)), ...(await seen(D2)) };
   web.forEach((w) => { if (sS[w.id] && w.createdAtMs) lat.cashierWeb.push(sS[w.id] - w.createdAtMs); });
   R.latencyMs = { 'كاشير ← المطبخ': dist(lat.kitchen), 'كاشير ← الكابتن': dist(lat.captain), 'زبون/ويتر ← الكاشير': dist(lat.cashierWeb) };
   // ذاكرة وتعليق الصفحات (قبل ← بعد)
@@ -481,7 +492,7 @@ async function main() {
   for (const [k, p] of Object.entries(devices)) { const m1 = await metrics(p); R.pages[k] = { heapMB: [m0[k] && m0[k].heapMB, m1 && m1.heapMB], dom: [m0[k] && m0[k].dom, m1 && m1.dom], longTasks: m1 && m1.lt && { n: m1.lt.n, totalMs: Math.round(m1.lt.ms), maxMs: Math.round(m1.lt.max) }, serverRequests: p.reqs, pageErrors: p.errors.filter((e) => !/favicon|Failed to load resource|vibrate|AudioContext|serviceWorker|ServiceWorker|messaging|integrity|digest|net::ERR|WebChannel/i.test(e)).slice(0, 5) }; }
   // صور نهائية لكل تطبيق وهو عليه كل الطلبات
   const SH = OUT + '_shots'; mkdirSync(SH, { recursive: true });
-  await D.evaluate(() => goTab('orders')); await Sx.evaluate(() => goTab('orders')); await C[0].click('.nav button[data-tab="history"]').catch(() => {});
+  for (const p of [D, D2, Sx, S2]) await p.evaluate(() => goTab('orders')); await C[0].click('.nav button[data-tab="history"]').catch(() => {});
   if (Tw) await Tw.click('[data-go="overview"]').catch(() => {});
   await sleep(1500);
   for (const [k, p] of TILES) await p.screenshot({ path: `${SH}/${k.replace(/[^A-Za-z0-9]+/g, '-')}.png` }).catch(() => {});
@@ -497,7 +508,7 @@ async function main() {
   } catch (e) { S.err.push('video: ' + e.message); }
   writeFileSync(OUT + '.json', JSON.stringify(R, null, 1));
   log('النتيجة:', OUT + '.json');
-  console.log(JSON.stringify({ firestore: R.firestore, cashierDeliv: R.cashierDeliv, cashierHall: R.cashierHall, expect: R.expect, captains: R.captains, admin: R.admin, tower: R.tower, render: R.render, latencyMs: R.latencyMs, errors: S.err.slice(0, 15) }, null, 1));
+  console.log(JSON.stringify({ firestore: R.firestore, shiftTotals: R.shiftTotals, expect: R.expect, captains: R.captains, admin: R.admin, tower: R.tower, render: R.render, latencyMs: R.latencyMs, errors: S.err.slice(0, 15) }, null, 1));
   await B.close(); if (TB) await TB.close(); srv.close(); if (towerSrv) towerSrv.close(); await E.cleanup();
   process.exit(0);
 }
