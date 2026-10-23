@@ -17,7 +17,7 @@ const SCALE = Number(process.env.SCALE || 1);
 const n = (x) => Math.max(1, Math.round(x * SCALE));
 const N = { delivCash: n(450), delivQR: n(50), salonCash: n(150), salonWaiter: n(70), salonQR: n(30), quick: n(100), hold: n(100), pickupQR: n(50) };
 const TOTAL = Object.values(N).reduce((a, b) => a + b, 0);
-const CAPS = 8, RID = 'RL', DEADLINE = Date.now() + 120 * 60000;
+const CAPS = Number(process.env.CAPS || 5), RID = 'RL', DEADLINE = Date.now() + Number(process.env.MAX_MIN || 150) * 60000;
 const OUT = process.env.OUT || '/tmp/load1000';
 const FRAME_MS = Number(process.env.FRAME_MS || 10000);
 // إيقاع الطلبات: كل كاشير طلب كل PACE_MS تقريباً (المحاكي عملية وحدة ما تتحمل سرعة غير واقعية؛ مطعم مزدحم ≈ طلب كل دقيقة لكل كاشير)
@@ -348,7 +348,7 @@ async function main() {
   S.devices = { ...devices, 'زبون باركود 1': Q1, 'زبون باركود 2': Q2 };
   const m0 = {}; for (const [k, p] of Object.entries(devices)) m0[k] = await metrics(p);
   TILES = [['Cashier - Delivery', D], ['Cashier - Hall & Takeaway', Sx], ['Kitchen display', K], ['Tower', Tw || Dash], ['Admin panel', A], ['Live counters', Dash], ['Waiter app', W], ['QR menu customer 1', Q1],
-    ['QR menu customer 2', Q2], ...C.slice(0, 7).map((p, i) => ['Captain ' + (i + 1), p])];
+    ['QR menu customer 2', Q2], ...C.slice(0, 7).map((p, i) => ['Captain ' + (i + 1), p])].filter(([, p]) => p);
   log('كل الأجهزة جاهزة:', Object.keys(devices).length, 'جهاز');
 
   // ── التشغيل ──
@@ -466,7 +466,7 @@ async function main() {
     const W0 = 480, H0 = 300, args = ['-y', '-loglevel', 'error'];
     TILES.forEach((_, i) => args.push('-framerate', '6', '-i', `${FR}/t${i}/%05d.jpg`));
     const f = TILES.map(([label], i) => `[${i}:v]scale=${W0}:${H0}:force_original_aspect_ratio=decrease,pad=${W0}:${H0}:(ow-iw)/2:(oh-ih)/2:color=0x0b1220,drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:text='${label.replace(/'/g, '')}':x=6:y=6:fontsize=15:fontcolor=white:box=1:boxcolor=black@0.65:boxborderw=4[v${i}]`);
-    f.push(TILES.map((_, i) => `[v${i}]`).join('') + `xstack=inputs=${TILES.length}:layout=${TILES.map((_, i) => `${(i % 4) * W0}_${Math.floor(i / 4) * H0}`).join('|')}[out]`);
+    f.push(TILES.map((_, i) => `[v${i}]`).join('') + `xstack=inputs=${TILES.length}:layout=${TILES.map((_, i) => `${(i % 4) * W0}_${Math.floor(i / 4) * H0}`).join('|')}:fill=0x0b1220[out]`);
     args.push('-filter_complex', f.join(';'), '-map', '[out]', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '30', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', OUT + '_wall.mp4');
     execFileSync('ffmpeg', args, { stdio: 'inherit' });
     R.video = OUT + '_wall.mp4'; R.frames = frame;
