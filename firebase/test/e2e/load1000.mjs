@@ -527,6 +527,8 @@ async function main() {
   const own = (t) => by(t).filter((o) => !o.inject);   // طلبات المولّد ما تنحسب بوردية كاشير
   R.expect = { delivSales: sum(own('delivery')), hallSales: sum([...own('salon'), ...own('takeaway')]), hallCash: sum([...own('salon'), ...own('takeaway')], (o) => (o.payment && o.payment.cash) || 0) };
   R.firestore.injected = os.filter((o) => o.inject).length; R.cashierOpen = S.open;
+  // كم طلب أخذ رقم من العدّ المحلي (الحجز من السيرفر ما وصل) — هذا مصدر الأرقام المكررة
+  R.ticketLocal = {}; for (const [k, p] of [['دلفري 1', D], ['دلفري 2', D2], ['صالة 1', Sx], ['صالة 2', S2]]) R.ticketLocal[k] = await p.evaluate(() => window.__tkLocal || 0).catch(() => null);
   R.firestore.duplicateTicketsCashier = (() => { const c = os.filter((o) => !o.inject && o.ticketNo); return c.length - new Set(c.map((o) => o.ticketNo)).size; })();
   // الكباتن: «اليوم» و«الأرباح» لكل كابتن مقابل السيرفر
   R.captains = [];
