@@ -4,6 +4,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { serve, env, signUp, clearAuth, browser, page } from './harness.mjs';
 
 let srv, E, B, uid;
+const DAY = 86400000, bagDay = (ms) => new Date(ms + 3 * 3600000).toISOString().slice(0, 10), today = bagDay(Date.now());
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 
 before(async () => {
@@ -18,9 +19,9 @@ before(async () => {
     await setDoc(doc(db, 'captains/C1'), { restaurantId: 'R1', userId: uid, name: 'علي', available: true });
     await setDoc(doc(db, 'restaurants/R1'), { name: 'برغر <b>X</b>', userId: 'r', active: true });
     await setDoc(doc(db, 'orders/O1AAAAAAAAAAAA'), { restaurantId: 'R1', restaurantName: 'برغر <b>X</b>', status: 'pending', captainId: 'C1', rejectedBy: [],
-      customer: '<img src=x onerror=window.__xss=1>', phone: '07701234567', address: 'الحسينية', value: 10000, fee: 5000, notes: 'برغر×2', createdAtMs: Date.now(), timeline: [] });
-    await setDoc(doc(db, 'orders/O2BBBBBBBBBBBB'), { restaurantId: 'R1', status: 'pending', rejectedBy: [], value: 7000, fee: 3000, address: 'المنصور', createdAtMs: Date.now() + 1, timeline: [] });
-    await setDoc(doc(db, 'orders/O3CCCCCCCCCCCC'), { restaurantId: 'R1', status: 'accepted', captainId: 'C9', value: 1, fee: 1, phone: 'secret', timeline: [] });
+      customer: '<img src=x onerror=window.__xss=1>', phone: '07701234567', address: 'الحسينية', value: 10000, fee: 5000, notes: 'برغر×2', createdAtMs: Date.now(), day: today, timeline: [] });
+    await setDoc(doc(db, 'orders/O2BBBBBBBBBBBB'), { restaurantId: 'R1', status: 'pending', rejectedBy: [], value: 7000, fee: 3000, address: 'المنصور', createdAtMs: Date.now() + 1, day: today, timeline: [] });
+    await setDoc(doc(db, 'orders/O3CCCCCCCCCCCC'), { restaurantId: 'R1', status: 'accepted', captainId: 'C9', value: 1, fee: 1, phone: 'secret', day: today, timeline: [] });
   });
 });
 after(async () => { await B?.close(); srv?.close(); await E?.cleanup(); setTimeout(() => process.exit(0), 200).unref(); });
@@ -83,6 +84,31 @@ test('captain full delivery flow', async () => {
   assert.equal((await until(async () => { const d = await read('captains/C1'); return d.available === false ? d : null; })).available, false);
   assert.deepEqual(p.errors.filter((e) => !/favicon|Failed to load resource|navigator.vibrate/.test(e)), []);
   await p.screenshot({ path: 'shots/captain-history.png', fullPage: true });
+  await p.context().close();
+});
+
+test('captain loads only his live orders + the last 30 days — not every order since day one', async () => {
+  const ago = (d) => Date.now() - d * DAY;
+  await E.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'orders/OLD40DONE'), { restaurantId: 'R1', captainId: 'C1', status: 'delivered', fee: 9000, value: 1, address: 'عنوان-40-يوم', day: bagDay(ago(40)), createdAtMs: ago(40), deliveredAtMs: ago(40) });
+    await setDoc(doc(db, 'orders/RECENT3DONE'), { restaurantId: 'R1', captainId: 'C1', status: 'delivered', fee: 2000, value: 1, address: 'عنوان-3-أيام', day: bagDay(ago(3)), createdAtMs: ago(3), deliveredAtMs: ago(3) });
+    await setDoc(doc(db, 'orders/OLDACTIVE'), { restaurantId: 'R1', captainId: 'C1', status: 'delivering', fee: 1000, value: 4000, address: 'بالطريق-من-زمان', customer: 'سامر', phone: '07700000000', day: bagDay(ago(40)), createdAtMs: ago(40), acceptedAtMs: ago(40), timeline: [] });
+  });
+  const p = await page(B, { notif: true });
+  await p.goto('http://localhost:5050/sora3a-captain/captain.html');
+  await p.fill('#email', 'cap@x.com'); await p.fill('#password', 'secret123'); await p.click('#loginBtn');
+  // الطلب الشغّال يطلع حتى لو قديم
+  await p.waitForFunction(() => document.getElementById('tab-active').textContent.includes('بالطريق-من-زمان'), null, { timeout: 15000 });
+  await p.click('.nav button[data-tab="history"]');
+  await p.waitForFunction(() => document.getElementById('tab-history').textContent.includes('عنوان-3-أيام'), null, { timeout: 10000 });
+  const h = await p.textContent('#tab-history');
+  assert.match(h, /آخر 30 يوم/);
+  assert.match(h, /الحسينية/, 'delivered today (previous test) is in the history');
+  assert.doesNotMatch(h, /عنوان-40-يوم/, 'a delivery from 40 days ago is not downloaded');
+  assert.match(h, /7,000/, '5,000 today + 2,000 three days ago');
+  assert.equal(await p.textContent('#sEarn'), '5,000', "today's earnings unchanged");
+  assert.deepEqual(p.errors.filter((e) => !/favicon|Failed to load resource|navigator.vibrate/.test(e)), []);
   await p.context().close();
 });
 
