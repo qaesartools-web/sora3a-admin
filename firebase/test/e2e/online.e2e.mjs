@@ -329,6 +329,24 @@ test('opening hours from the owner app: outside them the menu says closed (12-ho
   await c.context().close();
 });
 
+test('menu uploaded from the Tower (Excel) reaches the open cashier and the QR menu — photos and stock kept, not pushed back', async () => {
+  const cur = await read('restaurants/RQ/menu/main');
+  const cats = JSON.parse(JSON.stringify(cur.cats));
+  cats[0].items[0].variants[1].price = 5500;
+  cats[1].items.push({ name: 'لبن', variants: [{ name: 'وحدة', price: 750 }] });
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RQ/menu/main'), { cats, updatedAtMs: Date.now(), device: 'hq' }); });
+  assert.ok(await until(() => cashier.evaluate(() => menu.some((c) => c.items.some((p) => p.name === 'لبن')))), 'cashier got the new menu');
+  assert.ok(await until(() => cashier.evaluate(() => menu[0].items[0].img && menu[0].items[0].variants[1].price === 5500)), 'photo still on the item');
+  const pm = await until(async () => { const d = await read('publicMenus/RQ'); return d && d.cats[1].items.some((p) => p.name === 'لبن') ? d : null; });
+  assert.ok(pm, 'QR menu republished by the cashier');
+  assert.equal(pm.cats[0].items[0].variants[1].price, 5500);
+  assert.equal(pm.cats[0].items[0].imgId, 'img1');
+  assert.equal(pm.cats[1].items[1].out, true, 'stock kept');
+  await new Promise((r) => setTimeout(r, 1800));
+  assert.equal((await read('restaurants/RQ/menu/main')).device, 'hq', 'cashier did not write it back');
+  assert.deepEqual(clean(cashier), []);
+});
+
 test('owner pauses online orders / super admin turns the service off → customers can only browse', async () => {
   await openOnlineSettings(cashier);
   await cashier.uncheck('#stOnOn');
