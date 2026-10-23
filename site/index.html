@@ -456,16 +456,7 @@ html[lang=ar] .nw h3{font-family:var(--body);font-weight:700}
 .vs-new li b{color:#fff;font-weight:700}
 .vs-mid{display:grid;place-items:center}
 .vs-mid span{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:16px;color:var(--ink);background:var(--saf);box-shadow:0 14px 30px -10px rgba(255,182,39,.8)}
-.cloud{margin-top:30px;border-radius:24px;background:var(--ink);color:#DCE7E0;padding:22px 26px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:center;position:relative;overflow:hidden}
-.cloud .nd{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);padding:9px 14px;border-radius:14px}
-.cloud .nd.hub{background:linear-gradient(140deg,rgba(61,240,139,.18),rgba(96,165,250,.14));border-color:rgba(61,240,139,.45);color:#fff}
-.cloud .ln{width:56px;height:2px;background:linear-gradient(90deg,transparent,rgba(61,240,139,.6),transparent);position:relative;overflow:hidden}
-.cloud .ln::after{content:"";position:absolute;top:-2px;width:10px;height:6px;border-radius:6px;background:var(--neon);box-shadow:0 0 12px var(--neon);animation:pkt 1.8s linear infinite}
-html[dir=rtl] .cloud .ln::after{animation-name:pktr}
-@keyframes pkt{from{left:-10px}to{left:100%}}
-@keyframes pktr{from{right:-10px}to{right:100%}}
-.cloud small{flex-basis:100%;text-align:center;color:var(--muted-d);font-size:13.5px}
-@media(max-width:900px){.vs{grid-template-columns:1fr}.vs-mid span{width:48px;height:48px;margin:-6px 0}.cloud .ln{width:28px}}
+html[dir=rtl] @media(max-width:900px){.vs{grid-template-columns:1fr}.vs-mid span{width:48px;height:48px;margin:-6px 0}}
 /* ═════ لمسات أنعم لكل الصفحة ═════ */
 .rv{filter:blur(6px);transition:opacity 1s cubic-bezier(.16,1,.3,1),transform 1s cubic-bezier(.16,1,.3,1),filter 1s cubic-bezier(.16,1,.3,1)}
 .rv.in{filter:none}
@@ -478,7 +469,7 @@ html[dir=rtl] .cloud .ln::after{animation-name:pktr}
 .tile:hover{transform:translateY(-5px);border-color:rgba(61,240,139,.35);box-shadow:0 30px 60px -34px rgba(61,240,139,.45)}
 .nav.solid{background:rgba(10,16,13,.72)}
 ::selection{background:var(--neon);color:var(--ink)}
-@media(prefers-reduced-motion:reduce){.rv{filter:none}.cloud .ln::after{display:none}}
+@media(prefers-reduced-motion:reduce){.rv{filter:none}}
 </style>
 </head>
 <body>
@@ -637,12 +628,6 @@ html[dir=rtl] .cloud .ln::after{animation-name:pktr}
         <div class="vs-h"><i>⚡</i><b data-en="Sora3a">سرعة</b></div>
         <ul><li data-en-html="Orders are saved to the cloud the moment they are made"><b>الطلب ينحفظ بالسحابة</b> بنفس لحظة ما ينعمل</li><li data-en-html="The cashier loads only recent orders, so it stays light — on day one and a year later"><b>الكاشير يحمّل الطلبات الحديثة بس</b> فيبقى خفيف بأول يوم وبعد سنة</li><li data-en-html="Device broke? Open another one and carry on — not one order is lost"><b>خرب الجهاز؟</b> افتح من جهاز ثاني وكمّل، ولا طلب يضيع</li><li data-en-html="Every device and branch sees the same numbers, live"><b>كل الأجهزة والفروع</b> تشوف نفس الأرقام لحظة بلحظة</li><li data-en-html="Internet down? Keep selling — orders upload as soon as it is back"><b>انقطع النت؟</b> يكمل بيع، ويرفع الطلبات أول ما يرجع</li><li data-en-html="A backup every night and automatic updates — no technician"><b>نسخة احتياطية كل ليلة</b> وتحديث تلقائي، بدون فني</li></ul>
       </div>
-    </div>
-    <div class="cloud rv" aria-hidden="true">
-      <span class="nd" data-en="🧾 Cashier">🧾 الكاشير</span><span class="ln"></span>
-      <span class="nd hub" data-en="☁️ Cloud (Google Firebase)">☁️ السحابة (Firebase من Google)</span><span class="ln"></span>
-      <span class="nd" data-en="🍳 Kitchen">🍳 المطبخ</span><span class="nd" data-en="🛵 Captain">🛵 الكابتن</span><span class="nd" data-en="🛡️ Admin">🛡️ الإدارة</span><span class="nd" data-en="🏬 Branches">🏬 الفروع</span>
-      <small data-en="Every order goes to the cloud first, then reaches every screen in a moment.">كل طلب يروح للسحابة أول، ومنها يوصل لكل الشاشات بلحظة.</small>
     </div>
   </div>
 </section>
