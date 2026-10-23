@@ -26,6 +26,8 @@ const BASE = 'http://localhost:5050/sora3a-rest2/';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
 const bagDay = (ms = Date.now()) => new Date(ms + 3 * 3600000).toISOString().slice(0, 10);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// ضغطة على أول عنصر يطابق، ويتلقّى من جديد إذا انرسم (مثل الإنسان) — ترجع false إذا ماكو أو ما انضغط
+const tap = async (p, sel, timeout = 5000) => { const l = p.locator(sel).first(); if (!(await l.count())) return false; try { await l.click({ timeout }); return true; } catch (e) { return false; } };
 const T0 = Date.now(), secs = () => Math.round((Date.now() - T0) / 1000);
 const log = (...a) => console.log(`[${String(secs()).padStart(4)}s]`, ...a);
 const rnd = (k) => Math.floor(Math.random() * k);
@@ -150,8 +152,7 @@ async function cashierD(p) {
       S.err.push('D.leftOpen'); await p.evaluate(() => { closeDeliv(); if (window.payClose) payClose(); }); continue;
     }
     // 1) طلب باركود دلفري جديد ← قبول
-    const web = await p.$('#webBox .web-card .call-go:not([disabled])');
-    if (web) { await safe('D.webAccept', () => web.click()); await sleep(300); continue; }
+    if (await tap(p, '#webBox .web-card .call-go:not([disabled])')) { await sleep(300); continue; }
     // 2) دلفري جهز بالمطبخ وينتظر كابتن (باركود)
     const wait = await p.evaluate(() => { const o = orders.find((x) => x.awaitCap && !x.captainId && x.orderType === 'delivery' && x.status !== 'cancelled' && (x.kitchen === 'ready' || x.status === 'ready')); return o && o.id; });
     if (wait) { await safe('D.assignQR', () => assign(wait)); continue; }
@@ -160,7 +161,7 @@ async function cashierD(p) {
     if (due.length >= 15 || (due.length && made >= N.delivCash)) {
       await safe('D.settle', async () => {
         await p.evaluate(() => goTab('capPay'));
-        for (const id of due.slice(0, 30)) { const b = await p.$(`[data-cap-order="${id}"] button`); if (b) await b.click(); }
+        for (const id of due.slice(0, 30)) await tap(p, `[data-cap-order="${id}"] button`, 3000);
         await p.evaluate(() => goTab('cashier'));
       });
       continue;
@@ -193,8 +194,7 @@ async function cashierS(p) {
     if (await p.evaluate(() => ['payOv', 'acOv', 'viewOv'].some((id) => { const e = document.getElementById(id); return e && e.classList.contains('on'); }))) {
       S.err.push('S.leftOpen'); await p.evaluate(() => { if (window.payClose) payClose(); if (window.acClose) acClose(); if (window.viewClose) viewClose(); }); continue;
     }
-    const web = await p.$('#webBox .web-card .call-go:not([disabled])');
-    if (web) { await safe('S.webAccept', () => web.click()); await sleep(300); continue; }
+    if (await tap(p, '#webBox .web-card .call-go:not([disabled])')) { await sleep(300); continue; }
     // جاهز من المطبخ وما مدفوع (سفري قيد التحضير، طاولة ويتر/باركود، استلام باركود) ← تسليم + استلام المبلغ
     const rd = await p.evaluate(() => { const o = orders.find((x) => x.held && x.status === 'ready' && x.orderType !== 'delivery'); return o && o.id; });
     if (rd) {
@@ -230,8 +230,7 @@ async function cashierS(p) {
 // ── شاشة المجهز: «جاهز» لأقدم طلب ──
 async function kitchen(p) {
   while (Date.now() < DEADLINE && S.phase === 'run') {
-    const b = await p.$('.card [data-done]');
-    if (b) { await safe('K.done', () => b.click()); await sleep(120); continue; }
+    if (await tap(p, '.card [data-done]')) { await sleep(120); continue; }
     if (S.allIn && S.kitchenIdle) break;
     await sleep(400);
   }
@@ -241,8 +240,7 @@ async function kitchen(p) {
 async function captain(p) {
   while (Date.now() < DEADLINE && S.phase === 'run') {
     if (await p.$('#incoming.show')) { await safe('C.accept', async () => { await p.click('#acceptBtn'); const wa = await p.waitForSelector('#waSheet.show', { timeout: 2500 }).catch(() => null); if (wa) await p.click('#waSkip'); }); continue; }
-    const b = await p.$('#tab-active [data-act="pickup"], #tab-active [data-act="deliver"], #tab-active [data-act="done"]');
-    if (b) { await safe('C.step', () => b.click()); await sleep(250); continue; }
+    if (await tap(p, '#tab-active [data-act="pickup"], #tab-active [data-act="deliver"], #tab-active [data-act="done"]')) { await sleep(250); continue; }
     const ph = await p.$('#tab-active input[data-photo]');
     if (ph) { await safe('C.photo', () => ph.setInputFiles({ name: 'p.png', mimeType: 'image/png', buffer: PNG })); await sleep(250); continue; }
     if (S.allIn && S.capIdle) break;
