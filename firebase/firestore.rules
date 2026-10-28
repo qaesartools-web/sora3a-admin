@@ -473,6 +473,41 @@ service cloud.firestore {
           && request.resource.data.amount is number && request.resource.data.amount > 0;
         allow delete: if isAdmin() || ownsRest(rid);
       }
+
+      // الموردين: الكاشير يضيف مورد؛ التعديل والحذف للمطعم والإدارة
+      match /suppliers/{sid} {
+        allow read: if isOffice() || staffOf(rid);
+        allow create: if (isAdmin() || staffOf(rid))
+          && request.resource.data.keys().hasOnly(['name','phone','note','by','byUid','createdAtMs'])
+          && str(request.resource.data.name, 60) && request.resource.data.name.size() > 0
+          && optStr(request.resource.data, 'phone', 20) && optStr(request.resource.data, 'note', 200) && optStr(request.resource.data, 'by', 60)
+          && request.resource.data.byUid == request.auth.uid && request.resource.data.createdAtMs is int;
+        allow update: if (isAdmin() || ownsRest(rid))
+          && request.resource.data.keys().hasOnly(['name','phone','note','by','byUid','createdAtMs','editedBy','editedAtMs'])
+          && str(request.resource.data.name, 60) && request.resource.data.name.size() > 0;
+        allow delete: if isAdmin() || ownsRest(rid);
+      }
+
+      // دفتر الموردين والزبائن: فواتير الموردين وتسديدها، ودين الزبائن وتحصيله
+      //  الكاشير يسجّل فقط (باسمه)؛ التعديل والحذف للمطعم والإدارة
+      match /ledger/{lid} {
+        function ledgerOk(d) {
+          return d.keys().hasOnly(['kind','type','party','partyName','phone','amount','paid','method','cat','note','orderId','ref','shiftId','ts','by','byUid','createdAtMs','editedBy','editedAtMs'])
+            && ((d.kind == 'sup' && d.type in ['invoice','pay']) || (d.kind == 'cust' && d.type in ['charge','collect','void']))
+            && str(d.party, 80) && d.party.size() > 0 && str(d.partyName, 80)
+            && d.amount is number && d.amount > 0 && d.amount < 10000000000
+            && (!('paid' in d) || (d.paid is number && d.paid >= 0 && d.paid <= d.amount))
+            && (!('method' in d) || d.method in ['cash','drawer','bank','card'])
+            && optStr(d, 'phone', 20) && optStr(d, 'cat', 40) && optStr(d, 'note', 300) && optStr(d, 'orderId', 60) && optStr(d, 'ref', 80)
+            && optStr(d, 'shiftId', 60) && optStr(d, 'by', 60) && d.ts is int;
+        }
+        allow read: if isOffice() || staffOf(rid);
+        allow create: if (isAdmin() || staffOf(rid)) && ledgerOk(request.resource.data)
+          && request.resource.data.byUid == request.auth.uid && !('editedBy' in request.resource.data);
+        allow update: if (isAdmin() || ownsRest(rid)) && ledgerOk(request.resource.data)
+          && request.resource.data.kind == resource.data.kind && request.resource.data.byUid == resource.data.byUid;
+        allow delete: if isAdmin() || ownsRest(rid);
+      }
     }
 
     // ── lineTokens (توكن جوكر لكل خط اتصال — حتى 10 خطوط للمطعم) ──

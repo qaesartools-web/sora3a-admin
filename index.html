@@ -1425,7 +1425,7 @@ window.viewProof=async function(id){
 // ── تفاصيل الطلب كاملة: الأصناف والملاحظات والخصم والدفع والمراحل — وفاتورة كاملة للطباعة ──
 const OD_TYPE={salon:'🪑 صالة',takeaway:'🥡 سفري',delivery:'🏍️ دلفري'};
 const OD_ST={pending:'🟡 ينتظر الكابتن',accepted:'🔵 مقبول',pickup:'🟠 استلام',delivering:'🛵 بالطريق',delivered:'✅ مسلّم',cancelled:'❌ ملغي',preparing:'🍳 بالمطبخ',ready:'✅ جاهز'};
-const OD_PAY={cash:'نقداً',card:'بطاقة',mixed:'نقد + بطاقة',later:'آجل',cod:'كاش عند الكابتن'};
+const OD_PAY={cash:'نقداً',card:'بطاقة',mixed:'نقد + بطاقة',later:'آجل',cod:'كاش عند الكابتن',credit:'دين على زبون'};
 // الأصناف: من items، وللطلبات القديمة من نص notes «اسم(حجم)×عدد [ملاحظة]»
 function odItems(o){
   if(Array.isArray(o.items)&&o.items.length)return o.items.map(i=>({name:String(i.name||''),variant:String(i.variant||''),qty:Number(i.qty)||1,price:Number(i.price)||0,note:String(i.note||'')}));
@@ -2240,7 +2240,7 @@ window.renderTimes=async function(){
 // ── المخزون والحسابات: قراءة كاملة لكل الأرقام + الإدارة فقط تعدّل وتحذف المصروفات ──
 const AX_MV={open:'رصيد افتتاحي',purchase:'وارد — مشتريات',sale:'صادر — منصرف للمبيعات',sale_return:'وارد — مردود مبيعات',waste:'صادر — تالف / هالك',count:'تسوية جرد',purchase_return:'صادر — مرتجع للمورد'};
 const AX_CATS=['رواتب','إيجار','كهرباء وماء','غاز / وقود','صيانة','تغليف','تسويق وإعلان','مشتريات أخرى','أخرى'];
-let axRid=null,axDoc=null,axExp=[],axTab='rep',axUnsubs=[],axView=null,axShifts=[],axMenu=[];
+let axRid=null,axDoc=null,axExp=[],axTab='rep',axUnsubs=[],axView=null,axShifts=[],axMenu=[],axSup=[],axLed=[];
 const axFmtD=ms=>ms?new Date(ms).toLocaleString('ar-IQ-u-nu-latn',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}):'—';
 const axQ=n=>Number(Math.round((Number(n)||0)*1000)/1000).toLocaleString('ar-IQ-u-nu-latn');
 window.axRangeCh=()=>{const c=document.getElementById('axRange').value==='custom';['axFrom','axTo'].forEach(id=>{const e=document.getElementById(id);e.style.display=c?'':'none';if(c&&!e.value){const d=new Date();e.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}});accRender();};
@@ -2257,23 +2257,126 @@ window.accInit=function(){
   if(isAdmin()){const cur=sel.value;sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur||(allRestaurants[0]&&allRestaurants[0].id)||'';}
   const rid=isRest()?currentUser.restaurantId:sel.value;
   if(rid===axRid&&axUnsubs.length){accRender();return;}
-  axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=rid;axDoc=null;axExp=[];axShifts=[];axMenu=[];
+  axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=rid;axDoc=null;axExp=[];axShifts=[];axMenu=[];axSup=[];axLed=[];
   if(!rid){accRender();return;}
   const fb=window._fb;
   axUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'accounting',rid),s=>{axDoc=s.exists()?s.data():{};accRender(true);},()=>{axDoc={};accRender(true);}));
   axUnsubs.push(fb.onSnapshot(fb.collection(fb.db,'accounting',rid,'expenses'),s=>{axExp=s.docs.map(d=>({id:d.id,...d.data(),_sub:true}));accRender(true);},()=>{}));
   axUnsubs.push(fb.onSnapshot(fb.collection(fb.db,'restaurants',rid,'shifts'),s=>{axShifts=s.docs.map(d=>({id:d.id,...d.data()}));accRender(true);},()=>{}));
   axUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',rid,'menu','main'),s=>{axMenu=(s.exists()&&s.data().cats)||[];accRender(true);},()=>{}));
+  axUnsubs.push(fb.onSnapshot(fb.collection(fb.db,'accounting',rid,'suppliers'),s=>{axSup=s.docs.map(d=>({id:d.id,...d.data()}));accRender(true);},()=>{}));
+  axUnsubs.push(fb.onSnapshot(fb.collection(fb.db,'accounting',rid,'ledger'),s=>{axLed=s.docs.map(d=>({id:d.id,...d.data()}));accRender(true);},()=>{}));
   unsubs.push(()=>{axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=null;});
   accRender();
 };
 const axAllExp=()=>{const ids=new Set(axExp.map(e=>e.id));return axExp.concat(((axDoc&&axDoc.expenses)||[]).filter(e=>!ids.has(e.id)).map(e=>({...e,_legacy:true})));};
+// فواتير الموردين اللي مو للمخزون (مواد تنظيف، غاز…) تنحسب مصروف بنوعها — مع المصروفات بقائمة الدخل والتقارير
+const axSupExp=()=>axLed.filter(e=>e.kind==='sup'&&e.type==='invoice'&&!e.ref).map(e=>({id:e.id,cat:e.cat||'مشتريات أخرى',amount:Number(e.amount)||0,
+  note:'فاتورة مورد: '+(e.partyName||'')+(e.note?' — '+e.note:''),ts:e.ts,by:e.by,createdAtMs:e.createdAtMs,_led:true}));
+const axExpAll=()=>axAllExp().concat(axSupExp());
+// ── الموردين وديون الزبائن والصندوق (يسجلها الكاشير؛ المالك يعدّل ويحذف) ──
+const AX_LED={invoice:'🧾 فاتورة',pay:'💵 تسديد',charge:'🧾 دين',collect:'💵 تحصيل',void:'↩️ إلغاء دين'};
+const AX_PM={drawer:'درج الكاشير',cash:'نقد',bank:'مصرف / تحويل',card:'بطاقة'};
+const AX_MVCAT={bank:'🏦 إيداع بالمصرف',owner:'👤 المالك',supplier:'🏭 مورد',customer:'🧾 تحصيل دين',purchase:'📦 مشتريات'};
+const axEnc=k=>encodeURIComponent(k).replace(/'/g,'%27');
+function axSupAccounts(){
+  const m={};axSup.forEach(s=>{m[s.id]={id:s.id,name:s.name||'',phone:s.phone||'',inv:0,paid:0,bal:0,last:0,n:0};});
+  axLed.forEach(e=>{if(e.kind!=='sup')return;const a=m[e.party]||(m[e.party]={id:e.party,name:e.partyName||'',phone:'',inv:0,paid:0,bal:0,last:0,n:0,gone:true}),amt=Number(e.amount)||0;
+    if(e.type==='invoice'){a.inv+=amt;a.paid+=Number(e.paid)||0;}else a.paid+=amt;
+    a.bal=a.inv-a.paid;a.n++;a.last=Math.max(a.last,e.ts||0);});
+  return Object.values(m).sort((a,b)=>b.bal-a.bal||a.name.localeCompare(b.name,'ar'));
+}
+function axCustAccounts(){
+  const m={};
+  axLed.forEach(e=>{if(e.kind!=='cust')return;const a=m[e.party]||(m[e.party]={key:e.party,name:e.partyName||'',phone:'',ch:0,col:0,bal:0,last:0,n:0}),amt=Number(e.amount)||0;
+    if((e.ts||0)>=a.last){a.last=e.ts||0;if(e.partyName)a.name=e.partyName;}if(e.phone)a.phone=e.phone;
+    if(e.type==='charge')a.ch+=amt;else a.col+=amt;a.bal=a.ch-a.col;a.n++;});
+  return Object.values(m).sort((a,b)=>b.bal-a.bal||b.last-a.last);
+}
+// الصندوق اليومي: كل وردية — الداخل والطالع من الدرج حسب النوع
+function axBoxRows(from,to){
+  return axShifts.filter(x=>(x.openedAtMs||0)>=from&&(x.openedAtMs||0)<to).sort((a,b)=>(a.openedAtMs||0)-(b.openedAtMs||0)).map(x=>{
+    const r=x.report||null,b={id:x.id,ts:x.openedAtMs||0,cashier:x.cashier||'—',open:Number(x.openingCash)||0,cash:r?Number(r.cash)||0:null,cust:0,supp:0,bank:0,ownOut:0,ownIn:0,oIn:0,oOut:0,cap:0,
+      expected:x.expectedCash!=null?x.expectedCash:null,counted:x.countedCash!=null?x.countedCash:null,diff:x.status==='closed'?(x.diff||0):null,status:x.status};
+    (x.cashMoves||[]).forEach(m=>{const a=Number(m.amount)||0,c=m.cat||'other';
+      if(m.type==='cap')b.cap+=a;
+      else if(m.type==='in')b[c==='customer'?'cust':c==='owner'?'ownIn':'oIn']+=a;
+      else b[c==='supplier'||c==='purchase'?'supp':c==='bank'?'bank':c==='owner'?'ownOut':'oOut']+=a;});
+    return b;});
+}
+// كشف حساب مورد أو زبون: كل الحركات بالتسلسل والرصيد بعد كل وحدة
+function axLedRows(kind,id){
+  const list=axLed.filter(e=>e.kind===kind&&e.party===id).sort((x,y)=>(x.ts||0)-(y.ts||0)||(x.createdAtMs||0)-(y.createdAtMs||0));
+  let bal=0;const rows=[];
+  list.forEach(e=>{const amt=Number(e.amount)||0,pm=AX_PM[e.method]||'نقد',nt=e.note?' — '+e.note:'';
+    if(kind==='sup'&&e.type==='invoice'){bal+=amt;rows.push({e,t:'🧾 فاتورة'+nt,plus:amt,bal});if(e.paid>0){bal-=e.paid;rows.push({e,t:'💵 مدفوع وقت الشراء ('+pm+')',minus:e.paid,bal,sub:true});}}
+    else if(kind==='sup'){bal-=amt;rows.push({e,t:'💵 تسديد ('+pm+')'+nt,minus:amt,bal});}
+    else{const plus=e.type==='charge';bal+=plus?amt:-amt;rows.push({e,t:(AX_LED[e.type]||e.type)+(e.type==='collect'?' ('+pm+')':'')+nt,[plus?'plus':'minus']:amt,bal});}});
+  return rows;
+}
+window.axLedStmt=(kind,id)=>{
+  id=decodeURIComponent(id);
+  const show=()=>{const a=(kind==='sup'?axSupAccounts():axCustAccounts()).find(x=>(kind==='sup'?x.id:x.key)===id);if(!a){axClose();return;}
+    const rows=axLedRows(kind,id),L=kind==='sup'?['الفواتير','المدفوع','الرصيد علينا']:['الديون','المسدد','الرصيد عليه'];
+    const tp=rows.reduce((s,r)=>s+(r.plus||0),0),tm=rows.reduce((s,r)=>s+(r.minus||0),0);
+    axOpen(`<div class="modal-title">📄 كشف حساب ${kind==='sup'?'المورد':'الزبون'}: ${esc(a.name)}</div>
+      <div class="ax-kv"><b>الهاتف</b><span>${esc(a.phone||'—')}</span><b>${L[0]}</b><span>${fmt(Math.round(tp))}</span><b>${L[1]}</b><span>${fmt(Math.round(tm))}</span><b>${L[2]}</b><span class="${a.bal>0?'ax-neg':'ax-pos'}">${fmt(Math.round(a.bal))} د.ع</span></div>
+      <div class="tm-scroll"><table class="tm-tbl"><tr><th>التاريخ</th><th>الحركة</th><th>المبلغ</th><th>الرصيد</th><th>بواسطة</th></tr>
+      ${rows.slice().reverse().map(r=>`<tr class="${r.sub?'':'ax-row'}" ${r.sub?'':`onclick="axLedView('${esc(r.e.id)}')"`}><td>${axFmtD(r.e.ts)}</td><td style="white-space:normal;max-width:260px">${esc(r.t)}</td><td class="${r.plus?'ax-neg':'ax-pos'}">${r.plus?'+':'−'}${fmt(Math.round(r.plus||r.minus))}</td><td><b>${fmt(Math.round(r.bal))}</b></td><td>${r.sub?'':esc(r.e.by||'—')}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">لا توجد حركات</td></tr>'}
+      </table></div>
+      <div class="modal-btns"><button class="btn-sm btn-edit" onclick="axLedPrint('${kind}','${axEnc(id)}')">🖨️ طباعة الكشف</button><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`,show);};
+  show();
+};
+window.axLedPrint=(kind,id)=>{
+  id=decodeURIComponent(id);const a=(kind==='sup'?axSupAccounts():axCustAccounts()).find(x=>(kind==='sup'?x.id:x.key)===id);if(!a)return;
+  const rows=axLedRows(kind,id),rn=(allRestaurants.find(r=>r.id===axRid)||{}).name||currentUser.restaurantName||'',dv='<div style="border-top:1px dashed #000;margin:6px 0"></div>';
+  const row=(x,y,b)=>`<div style="display:flex;justify-content:space-between;gap:6px;font-size:11px;margin:3px 0;${b?'font-weight:900;font-size:13px':''}"><span>${x}</span><span>${y}</span></div>`;
+  const html=`<html><head><meta charset="UTF-8"></head><body style="font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:12px;width:300px;color:#000">
+    <h2 style="text-align:center;font-size:15px;margin:0">📄 كشف حساب ${kind==='sup'?'مورد':'زبون'}</h2><div style="text-align:center;font-size:11px">${esc(rn)}<br><b>${esc(a.name)}</b>${a.phone?' • '+esc(a.phone):''}</div>${dv}
+    ${rows.map(r=>row(esc(axYmd(r.e.ts||0))+' '+esc(r.t),(r.plus?'+':'−')+fmt(Math.round(r.plus||r.minus))+' = '+fmt(Math.round(r.bal)))).join('')}${dv}
+    ${row(kind==='sup'?'الرصيد علينا':'الرصيد عليه',fmt(Math.round(a.bal))+' د.ع',true)}${dv}<div style="text-align:center;font-size:10px">طُبع ${esc(dt12(Date.now()))}</div></body></html>`;
+  let f=document.getElementById('axPrt');if(!f){f=document.createElement('iframe');f.id='axPrt';f.style.cssText='position:fixed;left:-9999px;top:0;width:320px;height:600px;border:0';document.body.appendChild(f);}
+  f.onload=()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){}};f.srcdoc=html;
+};
+window.axLedView=id=>{
+  const show=()=>{const e=axLed.find(x=>x.id===id);if(!e){axClose();return;}
+    const ed=canEditAcc()&&!e.orderId,it=(a,b)=>`<b>${a}</b><span>${b}</span>`;
+    axOpen(`<div class="modal-title">${esc(AX_LED[e.type]||e.type)} — ${esc(e.partyName||'')}</div>
+      <div class="ax-kv">${it('الحساب',e.kind==='sup'?'🏭 مورد':'👤 زبون')}${it('المبلغ',fmt(e.amount)+' د.ع')}${e.type==='invoice'?it('المدفوع منها',fmt(e.paid||0)+' د.ع')+it('الآجل',fmt((e.amount||0)-(e.paid||0))+' د.ع'):''}
+        ${e.method?it('الطريقة',esc(AX_PM[e.method]||e.method)):''}${e.cat?it('نوع المصروف',esc(e.cat)):''}${e.ref?it('من','📦 وارد مخزون'):''}${e.orderId?it('الطلب',esc(e.orderId.slice(0,6).toUpperCase())):''}
+        ${it('التاريخ',axFmtD(e.ts))}${it('سجّله',esc(e.by||'—'))}${e.editedBy?it('آخر تعديل',esc(e.editedBy)+' • '+axFmtD(e.editedAtMs)):''}</div>
+      <div style="font-weight:800;margin:6px 0">📝 البيان</div><div class="ax-note">${esc(e.note||'—')}</div>
+      ${e.orderId?'<div style="font-size:12px;color:var(--muted);margin-top:8px">🔒 حركة طلب — إذا الطلب غلط ينلغى من الكاشير ويرجع الدين تلقائياً</div>':''}
+      ${ed?`<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><div class="form-row">
+        ${e.ref?'':`<div class="form-group"><label>المبلغ</label><input class="form-inp" id="axLamt" type="number" value="${Number(e.amount)||0}"></div>`}
+        ${e.type==='invoice'?`<div class="form-group"><label>المدفوع منها</label><input class="form-inp" id="axLpaid" type="number" value="${Number(e.paid)||0}"></div>`:''}</div>
+        <div class="form-group"><label>البيان</label><textarea class="form-inp" id="axLnote" rows="2">${esc(e.note||'')}</textarea></div></div>`:''}
+      <div class="modal-btns">${ed?`<button class="btn-primary" onclick="axLedSave('${esc(id)}')">💾 حفظ التعديل</button><button class="btn-sm btn-del" onclick="axLedDel('${esc(id)}')">🗑️ حذف</button>`:''}<button class="btn-sm" onclick="axLedStmt('${e.kind}','${axEnc(e.party)}')">↩️ كشف الحساب</button><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`,null);};
+  show();
+};
+window.axLedSave=async id=>{
+  const e=axLed.find(x=>x.id===id);if(!e||e.orderId)return;
+  const f={note:document.getElementById('axLnote').value.trim().slice(0,300),editedBy:(currentUser.name||currentUser.email||'الإدارة').slice(0,60),editedAtMs:Date.now()};
+  const ai=document.getElementById('axLamt'),pi=document.getElementById('axLpaid');
+  if(ai){f.amount=Number(ai.value);if(!(f.amount>0)){toast('⚠️ أدخل مبلغاً صحيحاً','warn');return;}}
+  if(pi){f.paid=Math.max(0,Number(pi.value)||0);if(f.paid>(f.amount!=null?f.amount:e.amount)){toast('⚠️ المدفوع أكبر من الفاتورة','warn');return;}if(f.paid>0&&!e.method)f.method='cash';}
+  try{const fb=window._fb;await fb.updateDoc(fb.doc(fb.db,'accounting',axRid,'ledger',id),f);audit('ledger.edit',{restaurantId:axRid,id,amount:f.amount!=null?f.amount:e.amount});
+    toast('✅ تم التعديل');axLedStmt(e.kind,axEnc(e.party));}
+  catch(err){toast('❌ تعذّر الحفظ: '+(err.code||err.message),'error');}
+};
+window.axLedDel=async id=>{
+  const e=axLed.find(x=>x.id===id);if(!e||e.orderId)return;
+  if(!confirm('حذف هذي الحركة نهائياً؟\n'+(AX_LED[e.type]||'')+' '+fmt(e.amount)+' د.ع — '+(e.partyName||'')))return;
+  try{const fb=window._fb;await fb.deleteDoc(fb.doc(fb.db,'accounting',axRid,'ledger',id));audit('ledger.delete',{restaurantId:axRid,id,amount:e.amount});
+    toast('🗑️ انحذفت الحركة');axLedStmt(e.kind,axEnc(e.party));}
+  catch(err){toast('❌ تعذّر الحذف: '+(err.code||err.message),'error');}
+};
 window.axSetTab=t=>{axTab=t==='rec'?'items':t;accRender();};
 // live: ما نعيد رسم الشاشة إذا نافذة التفاصيل مفتوحة أو المستخدم يكتب
 window.accRender=function(live){
   const el=document.getElementById('axBody');if(!el)return;
   if(live&&(document.getElementById('axMo').classList.contains('open')||/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName||''))){if(axView)axView();return;}
-  const T=[['rep','🧾 تقرير المبيعات'],['sales','🍔 مبيعات الأصناف'],['fin','💰 قائمة الدخل'],['items','📋 الأصناف والأرباح'],['shifts','🧮 الورديات'],['exp','💸 المصروفات'],['mat','📦 المخزون'],['mov','🔄 حركات المخزون']];
+  const T=[['rep','🧾 تقرير المبيعات'],['sales','🍔 مبيعات الأصناف'],['fin','💰 قائمة الدخل'],['items','📋 الأصناف والأرباح'],['shifts','🧮 الورديات'],['box','🏦 الصندوق'],['exp','💸 المصروفات'],['sup','🏭 الموردين'],['cust','🧾 ديون الزبائن'],['mat','📦 المخزون'],['mov','🔄 حركات المخزون']];
   document.getElementById('axTabs').innerHTML=T.map(([k,l])=>`<button class="${k===axTab?'on':''}" onclick="axSetTab('${k}')">${l}</button>`).join('');
   if(!axRid){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">اختر المطعم</div>';return;}
   if(axDoc===null){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">⏳ جاري التحميل…</div>';return;}
@@ -2288,7 +2391,7 @@ window.accRender=function(live){
     h=`<div class="stats">${kpi(fmt(R.sales),'💰 مجموع المبيعات (د.ع)')}${kpi(toA(R.n),'📦 عدد الطلبات')}${kpi(fmt(R.n?Math.round(R.sales/R.n):0),'🧾 متوسط الطلب')}${kpi(fmt(R.exp),'💸 المصروفات')}</div>
     <div class="card"><div class="card-title"><span class="dot"></span> التقرير — ${esc(axRangeLabel())} <button class="btn-sm btn-edit" style="margin-inline-start:auto" onclick="axPrintReport()">🖨️ طباعة الوصل</button></div><table class="tm-tbl">
       ${ln('🪑 صالة ('+toA(R.byType.salon.n)+' طلب)',fmt(R.byType.salon.v))}${ln('🥡 سفري ('+toA(R.byType.takeaway.n)+' طلب)',fmt(R.byType.takeaway.v))}${ln('🏍️ دلفري ('+toA(R.byType.delivery.n)+' طلب)',fmt(R.byType.delivery.v))}
-      ${R.fees?ln('أجور التوصيل (للكباتن)',fmt(R.fees)):''}${ln('💵 نقداً',fmt(R.cash))}${ln('💳 بطاقة',fmt(R.card))}${R.later?ln('⏳ آجل غير محصّل',fmt(R.later),'ax-neg'):''}${R.cod?ln('🏍️ عند الكباتن (ما مسدد)',fmt(R.cod)):''}
+      ${R.fees?ln('أجور التوصيل (للكباتن)',fmt(R.fees)):''}${ln('💵 نقداً',fmt(R.cash))}${ln('💳 بطاقة',fmt(R.card))}${R.later?ln('⏳ آجل غير محصّل',fmt(R.later),'ax-neg'):''}${R.credit?ln('🧾 دين على زبائن',fmt(R.credit),'ax-neg'):''}${R.cod?ln('🏍️ عند الكباتن (ما مسدد)',fmt(R.cod)):''}
       ${R.disc?ln('٪ الخصومات','−'+fmt(R.disc),'ax-neg'):''}${R.cancN?ln('❌ الطلبات الملغية ('+toA(R.cancN)+')',fmt(R.cancV),'ax-neg'):''}${ln('عدد الأصناف المباعة',toA(R.items))}
       ${ln('= مجموع المبيعات',fmt(R.sales)+' د.ع','ax-pos')}${R.exp?ln('(−) المصروفات','−'+fmt(R.exp),'ax-neg'):''}
     </table></div>
@@ -2324,15 +2427,36 @@ window.accRender=function(live){
       <tr><th>الكاشير</th><th>الفتح</th><th>الإغلاق</th><th>المبيعات</th><th>المتوقع بالدرج</th><th>الفعلي</th><th>الفرق</th></tr>
       ${list.map(x=>`<tr class="ax-row" onclick="axShiftView('${esc(x.id)}')"><td><b>${esc(x.cashier||'—')}</b>${x.autoClosed?'<small style="display:block;color:var(--muted)">إغلاق تلقائي</small>':''}</td><td>${axFmtD(x.openedAtMs)}</td><td>${x.status==='open'?'<span class="ax-pos">مفتوحة</span>':axFmtD(x.closedAtMs)}</td><td>${fmt(x.report&&x.report.sales)}</td><td>${fmt(x.expectedCash)}</td><td>${x.countedCash!=null?fmt(x.countedCash):'—'}</td><td class="${(x.diff||0)<0?'ax-neg':'ax-pos'}">${x.status==='closed'?fmt(x.diff||0):'—'}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px">لا توجد ورديات بهذه الفترة</td></tr>'}
     </table></div></div>`;
+  }else if(axTab==='box'){
+    const B=axBoxRows(from,to),S=f=>B.reduce((x,b)=>x+(b[f]||0),0),c=v=>v?fmt(Math.round(v)):'—';
+    h=`<div class="stats">${kpi(fmt(S('bank')),'🏦 إيداع بالمصرف')}${kpi(fmt(S('ownOut')),'👤 سحب المالك')}${kpi(fmt(S('supp')),'🏭 موردين ومشتريات من الدرج')}${kpi(fmt(S('cust')),'🧾 تحصيل ديون للدرج')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> 🏦 الصندوق اليومي — كل وردية: الداخل والطالع من الدرج (اضغط للتفاصيل)</div><div class="tm-scroll"><table class="tm-tbl">
+      <tr><th>الوردية</th><th>افتتاحي</th><th>مبيعات نقدية</th><th>تحصيل ديون</th><th>موردين ومشتريات</th><th>إيداع بالمصرف</th><th>سحب المالك</th><th>من المالك</th><th>إيداعات أخرى</th><th>مسحوبات أخرى</th><th>المتوقع</th><th>الفعلي</th><th>الفرق</th></tr>
+      ${B.slice().reverse().map(b=>`<tr class="ax-row" onclick="axShiftView('${esc(b.id)}')"><td><b>${esc(b.cashier)}</b><small style="display:block;color:var(--muted)">${axFmtD(b.ts)}</small></td><td>${fmt(b.open)}</td><td>${b.cash==null?'<span style="color:var(--muted)">مفتوحة</span>':fmt(b.cash)}</td><td class="ax-pos">${c(b.cust)}</td><td class="ax-neg">${c(b.supp)}</td><td>${c(b.bank)}</td><td class="ax-neg">${c(b.ownOut)}</td><td>${c(b.ownIn)}</td><td>${c(b.oIn)}</td><td>${c(b.oOut)}</td><td>${b.expected==null?'—':fmt(b.expected)}</td><td>${b.counted==null?'—':fmt(b.counted)}</td><td class="${(b.diff||0)<0?'ax-neg':'ax-pos'}">${b.diff==null?'—':fmt(b.diff)}</td></tr>`).join('')||'<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:18px">لا توجد ورديات بهذه الفترة</td></tr>'}
+    </table></div><div style="font-size:12px;color:var(--muted);margin-top:6px">💡 الكاشير يسجّل من «الوردية»: ➖ سحب ← «🏦 إيداع بالمصرف» أو «👤 سحب المالك»، وتسديد الموردين وتحصيل الديون من الدرج ينحسب تلقائياً.</div></div>`;
+  }else if(axTab==='sup'){
+    const A=axSupAccounts(),owe=A.reduce((x,a)=>x+Math.max(0,a.bal),0),inP=axLed.filter(e=>e.kind==='sup'&&inR(e.ts));
+    h=`<div class="stats">${kpi(toA(axSup.length),'🏭 مورد')}${kpi(`<span class="${owe?'ax-neg':''}">${fmt(Math.round(owe))}</span>`,'💳 علينا للموردين (لحد اليوم)')}${kpi(fmt(Math.round(inP.filter(e=>e.type==='invoice').reduce((x,e)=>x+(Number(e.amount)||0),0))),'🧾 فواتير الفترة')}${kpi(fmt(Math.round(inP.reduce((x,e)=>x+(e.type==='pay'?Number(e.amount)||0:Number(e.paid)||0),0))),'💵 المدفوع بالفترة')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> 🏭 الموردين — اضغط على أي مورد لكشف حسابه</div><div class="tm-scroll"><table class="tm-tbl">
+      <tr><th>المورد</th><th>الهاتف</th><th>الفواتير</th><th>المدفوع</th><th>الرصيد علينا</th><th>آخر حركة</th></tr>
+      ${A.map(a=>`<tr class="ax-row" onclick="axLedStmt('sup','${axEnc(a.id)}')"><td><b>${esc(a.name)}</b>${a.gone?' <small style="color:var(--muted)">(محذوف)</small>':''}</td><td>${esc(a.phone||'—')}</td><td>${fmt(Math.round(a.inv))}</td><td>${fmt(Math.round(a.paid))}</td><td class="${a.bal>0?'ax-neg':'ax-pos'}"><b>${fmt(Math.round(a.bal))}</b></td><td>${a.last?axFmtD(a.last):'—'}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:18px">لا يوجد موردين — الكاشير يضيفهم من «المخزون ← 🏭 الموردين»</td></tr>'}
+    </table></div></div>`;
+  }else if(axTab==='cust'){
+    const A=axCustAccounts(),due=A.reduce((x,a)=>x+Math.max(0,a.bal),0),open=A.filter(a=>Math.round(a.bal)!==0),inP=axLed.filter(e=>e.kind==='cust'&&inR(e.ts));
+    h=`<div class="stats">${kpi(toA(A.filter(a=>a.bal>0).length),'👤 زبون عليه دين')}${kpi(`<span class="${due?'ax-neg':''}">${fmt(Math.round(due))}</span>`,'🧾 ديون لنا (لحد اليوم)')}${kpi(fmt(Math.round(inP.filter(e=>e.type==='charge').reduce((x,e)=>x+(Number(e.amount)||0),0))),'➕ ديون الفترة')}${kpi(fmt(Math.round(inP.filter(e=>e.type==='collect').reduce((x,e)=>x+(Number(e.amount)||0),0))),'💵 المحصّل بالفترة')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> 🧾 ديون الزبائن — اضغط على أي زبون لكشف حسابه</div><div class="tm-scroll"><table class="tm-tbl">
+      <tr><th>الزبون</th><th>الهاتف</th><th>الديون</th><th>المسدد</th><th>الرصيد عليه</th><th>آخر حركة</th></tr>
+      ${open.concat(A.filter(a=>Math.round(a.bal)===0)).map(a=>`<tr class="ax-row" onclick="axLedStmt('cust','${axEnc(a.key)}')"><td><b>${esc(a.name)}</b></td><td>${esc(a.phone||'—')}</td><td>${fmt(Math.round(a.ch))}</td><td>${fmt(Math.round(a.col))}</td><td class="${a.bal>0?'ax-neg':'ax-pos'}"><b>${fmt(Math.round(a.bal))}</b></td><td>${axFmtD(a.last)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:18px">لا توجد ديون — البيع بالدين من نافذة الدفع بالكاشير ← «🧾 دين»</td></tr>'}
+    </table></div></div>`;
   }else if(axTab==='exp'){
-    const list=axAllExp().filter(e=>inR(e.ts)).sort((a,b)=>(b.ts||0)-(a.ts||0));
+    const list=axExpAll().filter(e=>inR(e.ts)).sort((a,b)=>(b.ts||0)-(a.ts||0));
     const tot=list.reduce((s,e)=>s+(Number(e.amount)||0),0),by={};list.forEach(e=>{by[e.cat||'أخرى']=(by[e.cat||'أخرى']||0)+(Number(e.amount)||0);});
     const mx=Math.max(1,...Object.values(by));
     h=`<div class="stats">${kpi(fmt(tot),'💸 مجموع المصروفات (د.ع)')}${kpi(toA(list.length),'🧾 عدد المصروفات')}</div>
     ${Object.keys(by).length?`<div class="card"><div class="card-title"><span class="dot"></span> حسب النوع</div>${Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div style="margin:8px 0"><div style="display:flex;justify-content:space-between;font-weight:800;font-size:13px"><span>${esc(k)}</span><span>${fmt(v)}</span></div><div class="tm-bar"><i style="width:${Math.round(v*100/mx)}%"></i></div></div>`).join('')}</div>`:''}
     <div class="card"><div class="card-title"><span class="dot"></span> كل المصروفات — اضغط على أي سطر للتفاصيل</div><div class="tm-scroll"><table class="tm-tbl">
       <tr><th>التاريخ</th><th>النوع</th><th>المبلغ</th><th>الملاحظة</th><th>أضافه</th></tr>
-      ${list.map(e=>`<tr class="ax-row" onclick="axExpView('${esc(e.id)}')"><td>${axFmtD(e.ts)}</td><td><b>${esc(e.cat||'')}</b></td><td class="ax-neg">${fmt(e.amount)}</td><td style="white-space:normal;max-width:280px">${esc(e.note||'—')}</td><td>${esc(e.by||'—')}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">لا توجد مصروفات بهذه الفترة</td></tr>'}
+      ${list.map(e=>`<tr class="ax-row" onclick="${e._led?'axLedView':'axExpView'}('${esc(e.id)}')"><td>${axFmtD(e.ts)}</td><td><b>${esc(e.cat||'')}</b></td><td class="ax-neg">${fmt(e.amount)}</td><td style="white-space:normal;max-width:280px">${esc(e.note||'—')}</td><td>${esc(e.by||'—')}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:18px">لا توجد مصروفات بهذه الفترة</td></tr>'}
     </table></div></div>`;
   }else if(axTab==='mat'){
     const st=m=>(m.qty||0)<=0?'out':(m.min>0&&m.qty<=m.min?'low':'ok');
@@ -2368,7 +2492,7 @@ window.accRender=function(live){
       ${F.canc.n?`<tr><td>طلبات ملغية (${toA(F.canc.n)})</td><td style="text-align:left">${fmt(F.canc.v)}</td>${P?'<td></td><td></td>':''}</tr>`:''}
     </table></div>
     ${F.tax?`<div style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ صافي المبيعات يشمل ضريبة ${fmt(Math.round(F.tax))} د.ع — بملف المحاسب تطلع بحساب منفصل.</div>`:''}
-    <div style="font-size:12px;color:var(--muted);margin-top:6px">📤 ملف المحاسب: قائمة الدخل، والقيود اليومية (مدين/دائن) جاهزة للإدخال ببرامج مثل «البيان» و«الأمين»، والمبيعات حسب اليوم وطريقة الدفع، والمصروفات، ودليل الحسابات.</div></div>`;
+    <div style="font-size:12px;color:var(--muted);margin-top:6px">📤 ملف المحاسب: قائمة الدخل، والقيود اليومية (مدين/دائن) جاهزة للإدخال ببرامج مثل «البيان» و«الأمين»، والمبيعات حسب اليوم وطريقة الدفع، والمصروفات، وأرصدة الموردين وديون الزبائن وحركاتهم، والصندوق اليومي، ودليل الحسابات.</div></div>`;
   }else{
     const rec=axDoc.recipes||{},matN=id=>(mats.find(m=>m.id===id)||{}).name||'؟';
     const keys=Object.keys(rec);
@@ -2388,7 +2512,7 @@ function axFin(from,to){
   const inR=ts=>(ts||0)>=from&&(ts||0)<to,os=allOrders.filter(o=>o.restaurantId===axRid&&inR(o.createdAtMs));
   const done=os.filter(o=>o.status==='delivered'),canc=os.filter(o=>o.status==='cancelled');
   let sales=0,cogs=0,tax=0;done.forEach(o=>{sales+=o.value||0;tax+=Number(o.tax)||0;(o.items||[]).forEach(i=>{cogs+=(Number(i.cost)||0)*(i.qty||1);});});
-  const exp=axAllExp().filter(e=>inR(e.ts)).reduce((s,e)=>s+(Number(e.amount)||0),0);
+  const exp=axExpAll().filter(e=>inR(e.ts)).reduce((s,e)=>s+(Number(e.amount)||0),0);
   const mv=((axDoc&&axDoc.moves)||[]).filter(e=>inR(e.ts)),waste=-mv.filter(e=>e.type==='waste').reduce((s,e)=>s+(e.value||0),0),cnt=mv.filter(e=>e.type==='count').reduce((s,e)=>s+(e.value||0),0);
   const gross=sales-cogs;
   return{done,orders:done.length,sales,cogs,gross,exp,waste,cnt,tax,net:gross-exp-waste+cnt,avg:done.length?sales/done.length:0,
@@ -2417,14 +2541,16 @@ const axYmd=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+String(d.getMon
 // طريقة الدفع لكل طلب (نفس منطق تقرير المبيعات): الدلفري غير المسدد «عند الكباتن»
 function axPaySplit(o){
   const v=o.value||0,p=o.payment||{},paidHere=p.method&&!['cod','later'].includes(p.method);
-  if(axTypeOf(o)==='delivery'&&!paidHere)return o.capSettled===true?{cash:v,card:0,later:0,cod:0}:{cash:0,card:0,later:0,cod:v};
-  if(p.method==='later')return{cash:0,card:0,later:v,cod:0};
+  if(axTypeOf(o)==='delivery'&&!paidHere)return o.capSettled===true?{cash:v,card:0,later:0,cod:0,credit:0}:{cash:0,card:0,later:0,cod:v,credit:0};
+  if(p.method==='later')return{cash:0,card:0,later:v,cod:0,credit:0};
+  if(p.method==='credit')return{cash:0,card:0,later:0,cod:0,credit:v};
   const card=Number(p.card)||0,cash=p.cash!=null?Number(p.cash)||0:(p.method==='card'?0:v);
-  return{cash,card,later:0,cod:0};
+  return{cash,card,later:0,cod:0,credit:0};
 }
 // دليل حسابات بسيط بأرقام ثابتة — المحاسب يربطها بدليله بالبيان/الأمين مرة وحدة
-const AX_ACC={cash:['1101','الصندوق (نقد)','أصول'],bank:['1102','المصرف — مدفوعات البطاقة','أصول'],later:['1201','ذمم الزبائن (آجل)','أصول'],cap:['1202','ذمم الكباتن (دلفري غير مسدد)','أصول'],
-  inv:['1301','المخزون (المواد الخام)','أصول'],tax:['2101','ضريبة المبيعات المستحقة','خصوم'],open:['3101','رأس المال — أرصدة افتتاحية','حقوق ملكية'],sales:['4101','المبيعات','إيرادات'],
+const AX_ACC={cash:['1101','الصندوق (نقد)','أصول'],bank:['1102','المصرف (بطاقة وتحويلات وإيداعات)','أصول'],later:['1201','ذمم الزبائن (آجل ودين)','أصول'],cap:['1202','ذمم الكباتن (دلفري غير مسدد)','أصول'],
+  inv:['1301','المخزون (المواد الخام)','أصول'],tax:['2101','ضريبة المبيعات المستحقة','خصوم'],sup:['2201','الموردين (ذمم دائنة)','خصوم'],open:['3101','رأس المال — أرصدة افتتاحية','حقوق ملكية'],
+  owner:['3201','جاري المالك (مسحوبات وإيداعات)','حقوق ملكية'],sales:['4101','المبيعات','إيرادات'],
   over:['4201','زيادة الجرد','إيرادات'],cogs:['5101','تكلفة البضاعة المباعة','مصروفات'],waste:['5301','التالف والهالك','مصروفات'],short:['5302','عجز الجرد','مصروفات']};
 const axExpAcc=cat=>{const i=AX_CATS.indexOf(cat);return['52'+String((i<0?AX_CATS.length-1:i)+1).padStart(2,'0'),'مصروف — '+(i<0?AX_CATS[AX_CATS.length-1]:cat),'مصروفات'];};
 // القيود اليومية (قيد مزدوج): مبيعات وتكلفة كل يوم بقيد مجمّع، وكل مصروف وحركة مخزون بقيد لوحده
@@ -2433,7 +2559,7 @@ function axJournal(from,to,F){
   const add=(ts,desc,lines)=>{lines=lines.filter(l=>R(l.dr||0)||R(l.cr||0)).map(l=>({a:l.a,dr:R(l.dr||0),cr:R(l.cr||0)}));if(lines.length)J.push({ts,desc,lines});};
   const day={};F.done.forEach(o=>{const k=axDayKey(o.createdAtMs),d=day[k]||(day[k]={n:0,v:0,tax:0,cost:0,cash:0,card:0,later:0,cod:0});
     const sp=axPaySplit(o);d.n++;d.v+=o.value||0;d.tax+=Number(o.tax)||0;(o.items||[]).forEach(i=>{d.cost+=(Number(i.cost)||0)*(i.qty||1);});
-    d.cash+=sp.cash;d.card+=sp.card;d.later+=sp.later;d.cod+=sp.cod;});
+    d.cash+=sp.cash;d.card+=sp.card;d.later+=sp.later+sp.credit;d.cod+=sp.cod;});
   Object.keys(day).sort((a,b)=>a-b).forEach(k=>{const d=day[k],ts=+k;
     const card=R(d.card),later=R(d.later),cod=R(d.cod),tax=R(d.tax),total=R(d.v),cash=total-card-later-cod;   // الفرق البسيط (فكة/تقريب) ينحسب بالصندوق حتى القيد يتوازن
     add(ts,`مبيعات ${axYmd(ts)} — ${d.n} طلب مسلّم`,[{a:AX_ACC.cash,dr:cash},{a:AX_ACC.bank,dr:card},{a:AX_ACC.later,dr:later},{a:AX_ACC.cap,dr:cod},{a:AX_ACC.sales,cr:total-tax},{a:AX_ACC.tax,cr:tax}]);
@@ -2441,12 +2567,29 @@ function axJournal(from,to,F){
   });
   axAllExp().filter(e=>inR(e.ts)).forEach(e=>{const amt=Number(e.amount)||0;add(e.ts,`${e.cat||'مصروف'}${e.note?' — '+e.note:''}${e.by?' (بواسطة '+e.by+')':''}`,[{a:axExpAcc(e.cat),dr:amt},{a:AX_ACC.cash,cr:amt}]);});
   ((axDoc&&axDoc.moves)||[]).filter(e=>inR(e.ts)).forEach(e=>{const v=Number(e.value)||0,a=Math.abs(v),nm=`${e.name||'مادة'}${e.note?' — '+e.note:''}`;
-    if(e.type==='purchase')add(e.ts,'مشتريات: '+nm,[{a:AX_ACC.inv,dr:a},{a:AX_ACC.cash,cr:a}]);
+    if(e.type==='purchase')add(e.ts,'مشتريات: '+nm,[{a:AX_ACC.inv,dr:a},{a:e.pm==='bank'?AX_ACC.bank:AX_ACC.cash,cr:a}]);
     else if(e.type==='purchase_return')add(e.ts,'مرتجع للمورد: '+nm,[{a:AX_ACC.cash,dr:a},{a:AX_ACC.inv,cr:a}]);
     else if(e.type==='waste')add(e.ts,'تالف / هالك: '+nm,[{a:AX_ACC.waste,dr:a},{a:AX_ACC.inv,cr:a}]);
     else if(e.type==='count')add(e.ts,(v>=0?'زيادة جرد: ':'عجز جرد: ')+nm,v>=0?[{a:AX_ACC.inv,dr:a},{a:AX_ACC.over,cr:a}]:[{a:AX_ACC.short,dr:a},{a:AX_ACC.inv,cr:a}]);
     else if(e.type==='open'&&v>0)add(e.ts,'رصيد افتتاحي: '+nm,[{a:AX_ACC.inv,dr:a},{a:AX_ACC.open,cr:a}]);
   });
+  // دفتر الموردين والزبائن — دين الطلبات وإلغاؤه ينحسب من الطلبات نفسها (فوق)
+  const pa=m=>m==='bank'||m==='card'?AX_ACC.bank:AX_ACC.cash;
+  axLed.filter(e=>inR(e.ts)).forEach(e=>{const amt=Number(e.amount)||0,paid=Math.min(amt,Number(e.paid)||0),nt=e.note?' — '+e.note:'',who=e.partyName||'';
+    if(e.kind==='sup'&&e.type==='invoice'&&e.ref){
+      // وارد مخزون من مورد: قيد المشتريات فوق انسجل مدفوع كامل ← الجزء الآجل ينتقل لحساب المورد
+      if(amt-paid>0)add(e.ts,'الجزء الآجل من فاتورة المورد '+who+nt,[{a:pa(e.method),dr:amt-paid},{a:AX_ACC.sup,cr:amt-paid}]);
+    }else if(e.kind==='sup'&&e.type==='invoice')add(e.ts,'فاتورة مورد: '+who+nt,[{a:axExpAcc(e.cat||'مشتريات أخرى'),dr:amt},{a:pa(e.method),cr:paid},{a:AX_ACC.sup,cr:amt-paid}]);
+    else if(e.kind==='sup'&&e.type==='pay')add(e.ts,'تسديد للمورد: '+who+nt,[{a:AX_ACC.sup,dr:amt},{a:pa(e.method),cr:amt}]);
+    else if(e.kind==='cust'&&e.type==='charge'&&!e.orderId)add(e.ts,'دين سابق على الزبون: '+who+nt,[{a:AX_ACC.later,dr:amt},{a:AX_ACC.open,cr:amt}]);
+    else if(e.kind==='cust'&&e.type==='collect')add(e.ts,'تحصيل دين من الزبون: '+who+nt,[{a:pa(e.method),dr:amt},{a:AX_ACC.later,cr:amt}]);
+  });
+  // الصندوق اليومي: إيداع النقد بالمصرف وسحب/إيداع المالك من درج الوردية (الباقي ينحسب من مكانه)
+  axShifts.forEach(x=>(x.cashMoves||[]).filter(m=>inR(m.ts)).forEach(m=>{const amt=Number(m.amount)||0,by=x.cashier?' (وردية '+x.cashier+')':'',nt=m.note?' — '+m.note:'';
+    if(m.type==='out'&&m.cat==='bank')add(m.ts,'إيداع نقد بالمصرف'+by+nt,[{a:AX_ACC.bank,dr:amt},{a:AX_ACC.cash,cr:amt}]);
+    else if(m.type==='out'&&m.cat==='owner')add(m.ts,'مسحوبات المالك من الدرج'+by+nt,[{a:AX_ACC.owner,dr:amt},{a:AX_ACC.cash,cr:amt}]);
+    else if(m.type==='in'&&m.cat==='owner')add(m.ts,'إيداع من المالك بالدرج'+by+nt,[{a:AX_ACC.cash,dr:amt},{a:AX_ACC.owner,cr:amt}]);
+  }));
   J.sort((x,y)=>x.ts-y.ts);
   return J;
 }
@@ -2469,12 +2612,20 @@ window.axExportAcc=async()=>{
     const J=axJournal(from,to,F);let dr=0,cr=0;const jRows=[];
     J.forEach((e,i)=>e.lines.forEach((l,j)=>{dr+=l.dr;cr+=l.cr;jRows.push([j?blank:i+1,j?blank:axYmd(e.ts),l.a[0],l.a[1],l.dr?{v:l.dr,t:'money'}:blank,l.cr?{v:l.cr,t:'money'}:blank,j?blank:e.desc]);}));
     // ٣) المبيعات حسب اليوم وطريقة الدفع
-    const day={};F.done.forEach(o=>{const k=axDayKey(o.createdAtMs),d=day[k]||(day[k]={n:0,v:0,cash:0,card:0,later:0,cod:0,disc:0,tax:0}),sp=axPaySplit(o);
-      d.n++;d.v+=o.value||0;d.cash+=sp.cash;d.card+=sp.card;d.later+=sp.later;d.cod+=sp.cod;d.disc+=Number(o.discount)||0;d.tax+=Number(o.tax)||0;});
+    const day={};F.done.forEach(o=>{const k=axDayKey(o.createdAtMs),d=day[k]||(day[k]={n:0,v:0,cash:0,card:0,later:0,credit:0,cod:0,disc:0,tax:0}),sp=axPaySplit(o);
+      d.n++;d.v+=o.value||0;d.cash+=sp.cash;d.card+=sp.card;d.later+=sp.later;d.credit+=sp.credit;d.cod+=sp.cod;d.disc+=Number(o.discount)||0;d.tax+=Number(o.tax)||0;});
     const dk=Object.keys(day).sort((a,b)=>a-b),sum=f=>dk.reduce((s,k)=>s+day[k][f],0);
-    const dRows=dk.map(k=>{const d=day[k];return[axYmd(+k),{v:d.n,t:'num'},{v:M(d.v),t:'money'},{v:M(d.cash),t:'money'},{v:M(d.card),t:'money'},{v:M(d.later),t:'money'},{v:M(d.cod),t:'money'},{v:M(d.disc),t:'money'},{v:M(d.tax),t:'money'}];});
+    const dRows=dk.map(k=>{const d=day[k];return[axYmd(+k),{v:d.n,t:'num'},{v:M(d.v),t:'money'},{v:M(d.cash),t:'money'},{v:M(d.card),t:'money'},{v:M(d.later),t:'money'},{v:M(d.credit),t:'money'},{v:M(d.cod),t:'money'},{v:M(d.disc),t:'money'},{v:M(d.tax),t:'money'}];});
+    // ٥) الموردين وديون الزبائن (الأرصدة لحد اليوم) + حركاتهم بالفترة، و٦) الصندوق (ورديات الفترة)
+    const SA=axSupAccounts(),CA=axCustAccounts();
+    const sRows=SA.map(a=>[a.name,a.phone||'',{v:M(a.inv),t:'money'},{v:M(a.paid),t:'money'},{v:M(a.bal),t:'money'}]);
+    const cRows=CA.map(a=>[a.name,a.phone||'',{v:M(a.ch),t:'money'},{v:M(a.col),t:'money'},{v:M(a.bal),t:'money'}]);
+    const lRows=axLed.filter(e=>(e.ts||0)>=from&&(e.ts||0)<to).sort((a,b)=>(a.ts||0)-(b.ts||0)).map(e=>[axYmd(e.ts||0),e.kind==='sup'?'مورد':'زبون',AX_LED[e.type]||e.type,e.partyName||'',
+      {v:M(e.amount),t:'money'},e.type==='invoice'?{v:M(e.paid),t:'money'}:blank,AX_PM[e.method]||'',e.note||'',e.by||'']);
+    const BX=axBoxRows(from,to),bRows=BX.map(b=>[axYmd(b.ts),b.cashier,{v:M(b.open),t:'money'},b.cash==null?blank:{v:M(b.cash),t:'money'},{v:M(b.cust),t:'money'},{v:M(b.supp),t:'money'},{v:M(b.bank),t:'money'},{v:M(b.ownOut),t:'money'},{v:M(b.ownIn),t:'money'},{v:M(b.oIn),t:'money'},{v:M(b.oOut),t:'money'},b.expected==null?blank:{v:M(b.expected),t:'money'},b.counted==null?blank:{v:M(b.counted),t:'money'},b.diff==null?blank:{v:M(b.diff),t:'money'}]);
+    const bs=f=>M(BX.reduce((s,b)=>s+(b[f]||0),0));
     // ٤) المصروفات
-    const ex=axAllExp().filter(e=>(e.ts||0)>=from&&(e.ts||0)<to).sort((a,b)=>(a.ts||0)-(b.ts||0));
+    const ex=axExpAll().filter(e=>(e.ts||0)>=from&&(e.ts||0)<to).sort((a,b)=>(a.ts||0)-(b.ts||0));
     const eRows=ex.map(e=>[axYmd(e.ts||0),e.cat||'',{v:M(e.amount),t:'money'},e.note||'',e.by||'']);
     // ٥) دليل الحسابات
     const used=new Set();J.forEach(e=>e.lines.forEach(l=>used.add(l.a[0])));
@@ -2484,9 +2635,16 @@ window.axExportAcc=async()=>{
       {name:'قائمة الدخل',subtitle:'قائمة الدخل (الأرباح والخسائر)'+(Q?' — مقارنة ويا '+P.label:''),columns:[{h:'البند',w:34},{h:'هذي الفترة',w:18,t:'money'},{h:Q?P.label:'الفترة السابقة',w:22,t:'money'},{h:'التغيير',w:12}],rows:incRows},
       {name:'القيود اليومية',subtitle:'قيود يومية بالقيد المزدوج — جاهزة للإدخال ببرامج المحاسبة',meta:meta.concat(['مبيعات وتكلفة كل يوم بقيد مجمّع؛ الآجل وذمم الكباتن حسب حالتها وقت التصدير']),
         columns:[{h:'رقم القيد',w:9,t:'num'},{h:'التاريخ',w:12},{h:'رقم الحساب',w:11},{h:'اسم الحساب',w:30},{h:'مدين',w:16,t:'money'},{h:'دائن',w:16,t:'money'},{h:'البيان',w:46}],rows:jRows,totals:[null,null,null,'المجموع (متوازن)',M(dr),M(cr),null]},
-      {name:'المبيعات حسب اليوم',subtitle:'المبيعات المسلّمة حسب اليوم وطريقة الدفع',columns:[{h:'التاريخ',w:12},{h:'الطلبات',w:9,t:'num'},{h:'المبيعات',w:15,t:'money'},{h:'نقداً',w:15,t:'money'},{h:'بطاقة',w:14,t:'money'},{h:'آجل',w:13,t:'money'},{h:'عند الكباتن',w:14,t:'money'},{h:'الخصومات',w:13,t:'money'},{h:'الضريبة',w:12,t:'money'}],
-        rows:dRows,totals:['المجموع',sum('n'),M(sum('v')),M(sum('cash')),M(sum('card')),M(sum('later')),M(sum('cod')),M(sum('disc')),M(sum('tax'))]},
+      {name:'المبيعات حسب اليوم',subtitle:'المبيعات المسلّمة حسب اليوم وطريقة الدفع',columns:[{h:'التاريخ',w:12},{h:'الطلبات',w:9,t:'num'},{h:'المبيعات',w:15,t:'money'},{h:'نقداً',w:15,t:'money'},{h:'بطاقة',w:14,t:'money'},{h:'آجل',w:13,t:'money'},{h:'دين على زبائن',w:14,t:'money'},{h:'عند الكباتن',w:14,t:'money'},{h:'الخصومات',w:13,t:'money'},{h:'الضريبة',w:12,t:'money'}],
+        rows:dRows,totals:['المجموع',sum('n'),M(sum('v')),M(sum('cash')),M(sum('card')),M(sum('later')),M(sum('credit')),M(sum('cod')),M(sum('disc')),M(sum('tax'))]},
       {name:'المصروفات',subtitle:'المصروفات التشغيلية',columns:[{h:'التاريخ',w:12},{h:'الفئة',w:16},{h:'المبلغ',w:15,t:'money'},{h:'الملاحظة',w:36},{h:'بواسطة',w:18}],rows:eRows,totals:['المجموع',null,M(ex.reduce((s,e)=>s+(Number(e.amount)||0),0)),null,null]},
+      {name:'الموردين',subtitle:'أرصدة الموردين لحد اليوم (اللي علينا)',columns:[{h:'المورد',w:26},{h:'الهاتف',w:15},{h:'الفواتير',w:15,t:'money'},{h:'المدفوع',w:15,t:'money'},{h:'الرصيد علينا',w:16,t:'money'}],
+        rows:sRows,totals:['المجموع',null,M(SA.reduce((s,a)=>s+a.inv,0)),M(SA.reduce((s,a)=>s+a.paid,0)),M(SA.reduce((s,a)=>s+a.bal,0))]},
+      {name:'ديون الزبائن',subtitle:'ديون الزبائن لحد اليوم (اللي لنا)',columns:[{h:'الزبون',w:26},{h:'الهاتف',w:15},{h:'الديون',w:15,t:'money'},{h:'المسدد',w:15,t:'money'},{h:'الرصيد عليه',w:16,t:'money'}],
+        rows:cRows,totals:['المجموع',null,M(CA.reduce((s,a)=>s+a.ch,0)),M(CA.reduce((s,a)=>s+a.col,0)),M(CA.reduce((s,a)=>s+a.bal,0))]},
+      {name:'حركات الموردين والزبائن',subtitle:'كل فاتورة وتسديد ودين وتحصيل بالفترة',columns:[{h:'التاريخ',w:12},{h:'الحساب',w:8},{h:'الحركة',w:14},{h:'الاسم',w:24},{h:'المبلغ',w:14,t:'money'},{h:'المدفوع منها',w:14,t:'money'},{h:'الطريقة',w:14},{h:'البيان',w:34},{h:'بواسطة',w:16}],rows:lRows},
+      {name:'الصندوق',subtitle:'الصندوق اليومي — كل وردية: الداخل والطالع من الدرج',columns:[{h:'التاريخ',w:12},{h:'الكاشير',w:16},{h:'افتتاحي',w:13,t:'money'},{h:'مبيعات نقدية',w:14,t:'money'},{h:'تحصيل ديون',w:13,t:'money'},{h:'موردين ومشتريات',w:15,t:'money'},{h:'إيداع بالمصرف',w:14,t:'money'},{h:'سحب المالك',w:13,t:'money'},{h:'من المالك',w:12,t:'money'},{h:'إيداعات أخرى',w:13,t:'money'},{h:'مسحوبات أخرى',w:13,t:'money'},{h:'المتوقع',w:13,t:'money'},{h:'الفعلي',w:13,t:'money'},{h:'الفرق',w:11,t:'money'}],
+        rows:bRows,totals:['المجموع',null,null,null,bs('cust'),bs('supp'),bs('bank'),bs('ownOut'),bs('ownIn'),bs('oIn'),bs('oOut'),null,null,bs('diff')]},
       {name:'دليل الحسابات',subtitle:'أرقام الحسابات المستعملة بالقيود — اربطها بدليلك مرة وحدة',columns:[{h:'رقم الحساب',w:12},{h:'اسم الحساب',w:34},{h:'النوع',w:14},{h:'مستعمل',w:9}],rows:chart}]});
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
@@ -2513,15 +2671,15 @@ window.axPrintFin=()=>{
 function axReport(from,to){
   const os=allOrders.filter(o=>o.restaurantId===axRid&&(o.createdAtMs||0)>=from&&(o.createdAtMs||0)<to);
   const live=os.filter(o=>o.status!=='cancelled'),canc=os.filter(o=>o.status==='cancelled');
-  const R={n:live.length,sales:0,disc:0,fees:0,items:0,cash:0,card:0,later:0,cod:0,cancN:canc.length,cancV:canc.reduce((s,o)=>s+(o.value||0),0),byType:{salon:{n:0,v:0},takeaway:{n:0,v:0},delivery:{n:0,v:0}},days:[]};
+  const R={n:live.length,sales:0,disc:0,fees:0,items:0,cash:0,card:0,later:0,cod:0,credit:0,cancN:canc.length,cancV:canc.reduce((s,o)=>s+(o.value||0),0),byType:{salon:{n:0,v:0},takeaway:{n:0,v:0},delivery:{n:0,v:0}},days:[]};
   const day={},dk=ms=>{const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();};
   live.forEach(o=>{const t=axTypeOf(o),v=o.value||0;R.sales+=v;R.disc+=o.discount||0;R.byType[t].n++;R.byType[t].v+=v;(o.items||[]).forEach(i=>{R.items+=i.qty||1;});
     const k=dk(o.createdAtMs||0),D=day[k]||(day[k]={n:0,sales:0,salon:0,takeaway:0,delivery:0,exp:0});D.n++;D.sales+=v;D[t]+=v;
     // الدلفري: الكابتن يستلم من الزبون ويسدد للكاشير قيمة الطلب (الأجرة اله) — اللي انسدد ينحسب نقد، والباقي «عند الكباتن»
     const p=o.payment||{},paidHere=p.method&&!['cod','later'].includes(p.method);
     if(t==='delivery'&&!paidHere){R.fees+=o.fee||0;if(o.capSettled===true)R.cash+=v;else R.cod+=v;return;}
-    if(p.method==='later')R.later+=v;else{R.cash+=p.cash!=null?p.cash:(p.method==='card'?0:v);R.card+=p.card||0;}});
-  const ex=axAllExp().filter(e=>(e.ts||0)>=from&&(e.ts||0)<to);R.exp=ex.reduce((s,e)=>s+(Number(e.amount)||0),0);
+    if(p.method==='later')R.later+=v;else if(p.method==='credit')R.credit+=v;else{R.cash+=p.cash!=null?p.cash:(p.method==='card'?0:v);R.card+=p.card||0;}});
+  const ex=axExpAll().filter(e=>(e.ts||0)>=from&&(e.ts||0)<to);R.exp=ex.reduce((s,e)=>s+(Number(e.amount)||0),0);
   ex.forEach(e=>{const k=dk(e.ts||0),D=day[k]||(day[k]={n:0,sales:0,salon:0,takeaway:0,delivery:0,exp:0});D.exp+=Number(e.amount)||0;});
   R.days=Object.keys(day).sort((a,b)=>b-a).map(k=>({...day[k],label:new Date(+k).toLocaleDateString('ar-IQ-u-nu-latn',{weekday:'short',year:'numeric',month:'numeric',day:'numeric'})}));
   return R;
@@ -2557,7 +2715,7 @@ window.axPrintReport=()=>{
     <h2 style="text-align:center;font-size:16px;margin:0">🧾 تقرير المبيعات</h2><div style="text-align:center;font-size:11px">${esc(rn)}<br>${esc(axRangeLabel())}</div>${dv}
     ${row('عدد الطلبات',R.n)}${row('عدد الأصناف المباعة',R.items)}${dv}
     ${row('🪑 صالة ('+R.byType.salon.n+')',fmt(R.byType.salon.v))}${row('🥡 سفري ('+R.byType.takeaway.n+')',fmt(R.byType.takeaway.v))}${row('🏍️ دلفري ('+R.byType.delivery.n+')',fmt(R.byType.delivery.v))}${R.fees?row('أجور التوصيل',fmt(R.fees)):''}${dv}
-    ${row('💵 نقداً',fmt(R.cash))}${row('💳 بطاقة',fmt(R.card))}${R.later?row('⏳ آجل',fmt(R.later)):''}${R.cod?row('🏍️ عند الكباتن',fmt(R.cod)):''}${R.disc?row('٪ الخصومات','-'+fmt(R.disc)):''}${R.cancN?row('❌ ملغي ('+R.cancN+')',fmt(R.cancV)):''}${dv}
+    ${row('💵 نقداً',fmt(R.cash))}${row('💳 بطاقة',fmt(R.card))}${R.later?row('⏳ آجل',fmt(R.later)):''}${R.credit?row('🧾 دين على زبائن',fmt(R.credit)):''}${R.cod?row('🏍️ عند الكباتن',fmt(R.cod)):''}${R.disc?row('٪ الخصومات','-'+fmt(R.disc)):''}${R.cancN?row('❌ ملغي ('+R.cancN+')',fmt(R.cancV)):''}${dv}
     ${row('مجموع المبيعات',fmt(R.sales)+' د.ع',true)}${R.exp?row('💸 المصروفات','-'+fmt(R.exp)):''}
     ${R.days.length>1?dv+R.days.map(d=>row(d.label,fmt(d.sales))).join(''):''}
     ${dv}<div style="text-align:center;font-size:10px">طُبع ${esc(dt12(Date.now()))}</div></body></html>`;
@@ -2595,9 +2753,9 @@ window.axShiftView=id=>{
     <div class="ax-kv">${it('الكاشير',esc(x.cashier||'—'))}${it('الفتح',axFmtD(x.openedAtMs))}${it('الإغلاق',x.status==='open'?'مفتوحة':axFmtD(x.closedAtMs)+(x.autoClosed?' (تلقائي)':''))}
       ${it('رصيد افتتاحي',fmt(x.openingCash))}${it('عدد الطلبات',toA(r.orders||0))}${it('صافي المبيعات',fmt(r.sales))}
       ${it('🪑 صالة',fmt(bt.salon&&bt.salon.v))}${it('🥡 سفري',fmt(bt.takeaway&&bt.takeaway.v))}${it('🏍️ دلفري',fmt(bt.delivery&&bt.delivery.v))}
-      ${it('💵 نقداً',fmt(r.cash))}${it('💳 بطاقة',fmt(r.card))}${it('الخصومات',fmt(r.disc))}${it('ملغي',toA(r.cancelled||0)+' • '+fmt(r.cancelledV))}
+      ${it('💵 نقداً',fmt(r.cash))}${it('💳 بطاقة',fmt(r.card))}${r.credit?it('🧾 دين على زبائن',fmt(r.credit)):''}${it('الخصومات',fmt(r.disc))}${it('ملغي',toA(r.cancelled||0)+' • '+fmt(r.cancelledV))}
       ${it('المتوقع بالدرج',fmt(x.expectedCash))}${it('النقد الفعلي',x.countedCash!=null?fmt(x.countedCash):'—')}${it('الفرق',x.status==='closed'?`<span class="${(x.diff||0)<0?'ax-neg':'ax-pos'}">${fmt(x.diff||0)}</span>`:'—')}</div>
-    ${(x.cashMoves||[]).length?`<div style="font-weight:800;margin:6px 0">💵 الإيداعات والمسحوبات</div><div class="ax-note">${x.cashMoves.map(m=>(m.type==='cap'?'🛵 تسديد كابتن ':m.type==='in'?'➕ ':'➖ ')+fmt(m.amount)+' — '+esc(m.note||'')+' • '+axFmtD(m.ts)).join('\n')}</div>`:''}
+    ${(x.cashMoves||[]).length?`<div style="font-weight:800;margin:6px 0">💵 الإيداعات والمسحوبات</div><div class="ax-note">${x.cashMoves.map(m=>(m.type==='cap'?'🛵 تسديد كابتن ':m.type==='in'?'➕ ':'➖ ')+(AX_MVCAT[m.cat]?AX_MVCAT[m.cat]+' ':'')+fmt(m.amount)+' — '+esc(m.note||'')+' • '+axFmtD(m.ts)).join('\n')}</div>`:''}
     ${x.note?`<div style="font-weight:800;margin:6px 0">📝 ملاحظة الإغلاق</div><div class="ax-note">${esc(x.note)}</div>`:''}
     <div class="modal-btns"><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`);
 };
@@ -2736,7 +2894,7 @@ function saveFile(name,text,type){
   setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
 }
 // 📥 نسخة طلبات فترة (المدير الأعلى): Excel للقراءة، أو JSON بكل التفاصيل
-const PAY_NAME={cash:'نقداً',card:'بطاقة',mixed:'مختلط',later:'آجل',cod:'عند الكابتن'};
+const PAY_NAME={cash:'نقداً',card:'بطاقة',mixed:'مختلط',later:'آجل',cod:'عند الكابتن',credit:'دين على زبون'};
 window.bkInit=function(){
   const sel=document.getElementById('bkRest');if(!sel)return;
   const cur=sel.value;sel.innerHTML='<option value="">كل المطاعم</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur;
