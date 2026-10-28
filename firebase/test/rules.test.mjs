@@ -390,6 +390,45 @@ test('الكاشير يضيف مصروفاً ولا يعدّله ولا يحذف
   await assertFails(getDocs(collection(as('rest2'), 'accounting/R1/expenses')));
   await assertSucceeds(getDocs(collection(as('staff1'), 'accounting/R1/expenses')));
 });
+// ── الموردين ودفتر الموردين والزبائن ──
+const sup = (o) => ({ name: 'مورد اللحوم', phone: '07701234567', by: 'علي', byUid: 'cash1', createdAtMs: 1, ...o });
+const led = (o) => ({ kind: 'cust', type: 'charge', party: 'c07701234567', partyName: 'أبو أحمد', phone: '07701234567', amount: 12000, orderId: 'O1', ts: 1700000000000, by: 'علي', byUid: 'cash1', createdAtMs: 1, ...o });
+test('الموردين: الكاشير يضيف مورد باسمه؛ التعديل والحذف للمطعم بس', async () => {
+  await assertSucceeds(setDoc(doc(as('cash1'), 'accounting/R1/suppliers/s1'), sup({})));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/suppliers/s2'), sup({ byUid: 'rest1' })));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/suppliers/s3'), sup({ name: '' })));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/suppliers/s4'), sup({ debt: 5 })));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R2/suppliers/s5'), sup({})));
+  await assertFails(updateDoc(doc(as('cash1'), 'accounting/R1/suppliers/s1'), { name: 'غيره' }));
+  await assertFails(deleteDoc(doc(as('cash1'), 'accounting/R1/suppliers/s1')));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'accounting/R1/suppliers/s1'), { name: 'مورد اللحوم الطازجة', editedBy: 'المالك', editedAtMs: 2 }));
+  await assertSucceeds(deleteDoc(doc(as('rest1'), 'accounting/R1/suppliers/s1')));
+  await assertFails(getDocs(collection(as('rest2'), 'accounting/R1/suppliers')));
+});
+test('دفتر الزبائن والموردين: الكاشير يسجّل بس (باسمه وبأنواع معروفة)؛ التعديل والحذف للمطعم', async () => {
+  await assertSucceeds(setDoc(doc(as('cash1'), 'accounting/R1/ledger/ch_O1'), led({})));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'accounting/R1/ledger/c1'), led({ type: 'collect', amount: 5000, method: 'drawer', shiftId: 'S1' })));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'accounting/R1/ledger/i1'), led({ kind: 'sup', type: 'invoice', party: 's1', partyName: 'مورد اللحوم', amount: 50000, paid: 20000, ref: 'mv:v1' })));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'accounting/R1/ledger/p1'), led({ kind: 'sup', type: 'pay', party: 's1', partyName: 'مورد اللحوم', amount: 30000, method: 'bank' })));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/ledger/x1'), led({ type: 'pay' })), 'cust has no pay');
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/ledger/x2'), led({ kind: 'sup', type: 'charge' })), 'sup has no charge');
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/ledger/x3'), led({ amount: 0 })));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/ledger/x4'), led({ kind: 'sup', type: 'invoice', amount: 1000, paid: 2000 })), 'paid > amount');
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/ledger/x5'), led({ byUid: 'rest1' })), 'not in another name');
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/ledger/x6'), led({ method: 'gold' })));
+  await assertSucceeds(setDoc(doc(as('cash1'), 'accounting/R1/ledger/g1'), led({ kind: 'sup', type: 'invoice', party: 's1', partyName: 'مورد الغاز', amount: 5000, paid: 0, cat: 'غاز / وقود' })));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/ledger/x9'), led({ cat: 'x'.repeat(41) })), 'category too long');
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/ledger/x7'), led({ editedBy: 'x' })));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R2/ledger/x8'), led({})));
+  await assertFails(updateDoc(doc(as('cash1'), 'accounting/R1/ledger/ch_O1'), { amount: 1 }));
+  await assertFails(deleteDoc(doc(as('cash1'), 'accounting/R1/ledger/ch_O1')));
+  await assertSucceeds(getDocs(collection(as('cash1'), 'accounting/R1/ledger')));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'accounting/R1/ledger/ch_O1'), { amount: 10000, editedBy: 'المالك', editedAtMs: 2 }));
+  await assertFails(updateDoc(doc(as('rest1'), 'accounting/R1/ledger/ch_O1'), { kind: 'sup' }));
+  await assertSucceeds(deleteDoc(doc(as('rest1'), 'accounting/R1/ledger/c1')));
+  await assertFails(getDocs(collection(as('rest2'), 'accounting/R1/ledger')));
+  await assertSucceeds(getDocs(collection(as('staff1'), 'accounting/R1/ledger')));
+});
 test('الكاشير لا يمسح مواد المخزون ولا يغيّر الوصفات أو المصروفات القديمة', async () => {
   await env.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'accounting/R1'), { materials: [{ id: 'm1', qty: 5 }], recipes: { 'a|b': [{ mid: 'm1', q: 1 }] }, costs: {}, moves: [], expenses: [{ id: 'old', amount: 1 }] }); });
   const base = { recipes: { 'a|b': [{ mid: 'm1', q: 1 }] }, costs: {}, moves: [{ id: 'v1' }], expenses: [{ id: 'old', amount: 1 }] };
