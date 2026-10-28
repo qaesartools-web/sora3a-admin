@@ -2351,20 +2351,24 @@ window.accRender=function(live){
       ${list.slice(0,500).map(e=>`<tr class="ax-row" onclick="axMovView('${esc(e.id)}')"><td>${axFmtD(e.ts)}</td><td><b>${esc(e.name||'')}</b></td><td>${esc(AX_MV[e.type]||e.type)}</td><td class="${e.qty>0?'ax-pos':'ax-neg'}">${e.qty>0?'+':''}${axQ(e.qty)} ${esc(e.unit||'')}</td><td>${fmt(Math.round(Math.abs(e.value||0)))}</td><td style="white-space:normal;max-width:240px">${esc(e.note||'—')}</td><td>${esc(e.by||'—')}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px">لا توجد حركات بهذه الفترة</td></tr>'}
     </table></div></div>`;
   }else if(axTab==='fin'){
-    const os=allOrders.filter(o=>o.restaurantId===axRid&&inR(o.createdAtMs));
-    const done=os.filter(o=>o.status==='delivered'),canc=os.filter(o=>o.status==='cancelled');
-    let sales=0,cogs=0;done.forEach(o=>{sales+=o.value||0;(o.items||[]).forEach(i=>{cogs+=(Number(i.cost)||0)*(i.qty||1);});});
-    const exp=axAllExp().filter(e=>inR(e.ts)).reduce((s,e)=>s+(Number(e.amount)||0),0);
-    const mv=moves.filter(e=>inR(e.ts)),waste=-mv.filter(e=>e.type==='waste').reduce((s,e)=>s+(e.value||0),0),cnt=mv.filter(e=>e.type==='count').reduce((s,e)=>s+(e.value||0),0);
-    const gross=sales-cogs,net=gross-exp-waste+cnt;
-    const ln=(a,b,c)=>`<tr><td>${a}</td><td class="${c||''}" style="text-align:left"><b>${b}</b></td></tr>`;
-    h=`<div class="stats">${kpi(fmt(sales),'💰 صافي المبيعات')}${kpi(fmt(Math.round(gross)),'📈 مجمل الربح')}${kpi(fmt(Math.round(exp)),'💸 المصروفات')}${kpi(`<span class="${net>=0?'ax-pos':'ax-neg'}">${fmt(Math.round(net))}</span>`,'🏁 صافي الربح')}</div>
-    <div class="card"><div class="card-title"><span class="dot"></span> قائمة الدخل</div><table class="tm-tbl">
-      ${ln('عدد الطلبات المسلّمة',toA(done.length))}${ln('صافي المبيعات',fmt(sales)+' د.ع')}${ln('(−) تكلفة البضاعة المباعة','−'+fmt(Math.round(cogs)),'ax-neg')}
-      ${ln('= مجمل الربح',fmt(Math.round(gross)))}${ln('(−) المصروفات التشغيلية','−'+fmt(Math.round(exp)),'ax-neg')}${ln('(−) التالف والهالك','−'+fmt(Math.round(waste)),'ax-neg')}
-      ${cnt?ln('(±) تسويات الجرد',fmt(Math.round(cnt)),cnt>=0?'ax-pos':'ax-neg'):''}${ln('= صافي الربح',fmt(Math.round(net))+' د.ع',net>=0?'ax-pos':'ax-neg')}
-      ${canc.length?ln('طلبات ملغية ('+toA(canc.length)+')',fmt(canc.reduce((s,o)=>s+(o.value||0),0))):''}
-    </table></div>`;
+    const F=axFin(from,to),P=axPrevRange(from,to);
+    const pOk=P&&needOrders(P.from,P.to,axRid,()=>{if(document.getElementById('scAcc').classList.contains('on')&&axTab==='fin')accRender();});
+    const Q=pOk?axFin(P.from,P.to):null;
+    const row=(lbl,k,cls,good)=>{const c=F[k],pv=Q?Q[k]:null;
+      return `<tr><td>${lbl}</td><td class="${cls||''}" style="text-align:left"><b>${fmt(Math.round(c))}</b></td>${P?`<td style="text-align:left;color:var(--muted)">${Q?fmt(Math.round(pv)):'⏳'}</td><td style="text-align:left">${Q?axChg(c,pv,good):''}</td>`:''}</tr>`;};
+    h=`<div class="stats">${kpi(fmt(F.sales),'💰 صافي المبيعات',Q?axChg(F.sales,Q.sales,1):'')}${kpi(fmt(Math.round(F.gross)),'📈 مجمل الربح',Q?axChg(F.gross,Q.gross,1):'')}${kpi(fmt(Math.round(F.exp)),'💸 المصروفات',Q?axChg(F.exp,Q.exp,-1):'')}${kpi(`<span class="${F.net>=0?'ax-pos':'ax-neg'}">${fmt(Math.round(F.net))}</span>`,'🏁 صافي الربح',Q?axChg(F.net,Q.net,1):'')}</div>
+    <div class="card"><div class="card-title"><span class="dot"></span> قائمة الدخل — ${esc(axRangeLabel())}
+      <span style="margin-inline-start:auto;display:flex;gap:6px;flex-wrap:wrap"><button class="btn-sm btn-edit" onclick="axPrintFin()">🖨️ طباعة</button><button class="btn-sm btn-edit" id="axExpBtn" onclick="axExportAcc()">📤 تصدير للمحاسب (Excel)</button></span></div>
+      <div class="tm-scroll"><table class="tm-tbl">
+      ${P?`<tr><th>البند</th><th style="text-align:left">هذي الفترة</th><th style="text-align:left">${esc(P.label)}</th><th style="text-align:left">التغيير</th></tr>`:''}
+      ${row('عدد الطلبات المسلّمة','orders','',1)}${row('صافي المبيعات (د.ع)','sales','',1)}${row('(−) تكلفة البضاعة المباعة','cogs','ax-neg',-1)}
+      ${row('= مجمل الربح','gross','',1)}${row('(−) المصروفات التشغيلية','exp','ax-neg',-1)}${row('(−) التالف والهالك','waste','ax-neg',-1)}
+      ${F.cnt||(Q&&Q.cnt)?row('(±) تسويات الجرد','cnt',F.cnt>=0?'ax-pos':'ax-neg',1):''}${row('= صافي الربح (د.ع)','net',F.net>=0?'ax-pos':'ax-neg',1)}
+      ${row('متوسط الطلب (د.ع)','avg','',1)}
+      ${F.canc.n?`<tr><td>طلبات ملغية (${toA(F.canc.n)})</td><td style="text-align:left">${fmt(F.canc.v)}</td>${P?'<td></td><td></td>':''}</tr>`:''}
+    </table></div>
+    ${F.tax?`<div style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ صافي المبيعات يشمل ضريبة ${fmt(Math.round(F.tax))} د.ع — بملف المحاسب تطلع بحساب منفصل.</div>`:''}
+    <div style="font-size:12px;color:var(--muted);margin-top:6px">📤 ملف المحاسب: قائمة الدخل، والقيود اليومية (مدين/دائن) جاهزة للإدخال ببرامج مثل «البيان» و«الأمين»، والمبيعات حسب اليوم وطريقة الدفع، والمصروفات، ودليل الحسابات.</div></div>`;
   }else{
     const rec=axDoc.recipes||{},matN=id=>(mats.find(m=>m.id===id)||{}).name||'؟';
     const keys=Object.keys(rec);
@@ -2378,6 +2382,134 @@ window.accRender=function(live){
 // ── تقرير المبيعات للفترة (الإدارة فقط تجمع التواريخ) ──
 const axTypeOf=o=>o.orderType||'delivery';
 function axRangeLabel(){const s=document.getElementById('axRange');const o=s.options[s.selectedIndex];if(s.value==='custom')return (document.getElementById('axFrom').value||'')+' ← '+(document.getElementById('axTo').value||'');return o?o.text:'';}
+// ── قائمة الدخل: نفس الحساب للفترة الحالية والسابقة وملف المحاسب ──
+// المبيعات = الطلبات المسلّمة بس (مثل قائمة الدخل بالكاشير)، والتكلفة من تكلفة الصنف المحفوظة وقت البيع
+function axFin(from,to){
+  const inR=ts=>(ts||0)>=from&&(ts||0)<to,os=allOrders.filter(o=>o.restaurantId===axRid&&inR(o.createdAtMs));
+  const done=os.filter(o=>o.status==='delivered'),canc=os.filter(o=>o.status==='cancelled');
+  let sales=0,cogs=0,tax=0;done.forEach(o=>{sales+=o.value||0;tax+=Number(o.tax)||0;(o.items||[]).forEach(i=>{cogs+=(Number(i.cost)||0)*(i.qty||1);});});
+  const exp=axAllExp().filter(e=>inR(e.ts)).reduce((s,e)=>s+(Number(e.amount)||0),0);
+  const mv=((axDoc&&axDoc.moves)||[]).filter(e=>inR(e.ts)),waste=-mv.filter(e=>e.type==='waste').reduce((s,e)=>s+(e.value||0),0),cnt=mv.filter(e=>e.type==='count').reduce((s,e)=>s+(e.value||0),0);
+  const gross=sales-cogs;
+  return{done,orders:done.length,sales,cogs,gross,exp,waste,cnt,tax,net:gross-exp-waste+cnt,avg:done.length?sales/done.length:0,
+    canc:{n:canc.length,v:canc.reduce((s,o)=>s+(o.value||0),0)}};
+}
+// الفترة السابقة للمقارنة (نفس الطول، قبلها مباشرة) — حدودها ثابتة (ساعة أو يوم كامل)
+// حتى ما تتغير كل ما ترسم الشاشة وتنطلب طلبات جديدة من السيرفر بلا توقف
+function axPrevRange(from,to){
+  const v=document.getElementById('axRange').value,now=Date.now(),HR=3600000;
+  if(v==='all'||!(from>0)||!(Math.min(to,now)>from))return null;
+  if(v==='today')return{from:from-DAY,to:from-DAY+Math.ceil((now-from)/HR)*HR,label:'أمس لحد نفس الساعة'};
+  if(v==='month'){const d=new Date(from),ps=new Date(d.getFullYear(),d.getMonth()-1,1).getTime(),days=Math.ceil((now-from)/DAY);return{from:ps,to:Math.min(ps+days*DAY,from),label:'نفس الأيام من الشهر الماضي'};}
+  if(v==='custom'){const len=to-from;return{from:from-len,to:from,label:'الفترة اللي قبلها'};}
+  if(v==='yesterday')return{from:from-DAY,to:from,label:'اليوم اللي قبله'};
+  const n=+v;if(!(n>0))return null;
+  return{from:from-n*DAY,to:from,label:`الـ${n} ${n>10?'يوم':'أيام'} اللي قبلها`};
+}
+// نسبة التغيير بسهم: good=1 الزيادة زينة (مبيعات/ربح)، -1 الزيادة مو زينة (تكاليف)
+function axChgPct(c,p){if(!p)return c?null:0;return Math.round((c-p)/Math.abs(p)*1000)/10;}
+function axChg(c,p,good){
+  const x=axChgPct(c,p);if(x===null)return '<span style="color:var(--muted);font-size:12px">جديد</span>';if(!x)return '<span style="color:var(--muted);font-size:12px">= نفسه</span>';
+  const up=x>0,ok=good>0?up:!up;return `<span class="${ok?'ax-pos':'ax-neg'}" style="font-size:12px;font-weight:800">${up?'▲':'▼'} ${toA(Math.abs(x))}٪</span>`;
+}
+const axDayKey=ms=>{const d=new Date(ms||0);d.setHours(0,0,0,0);return d.getTime();};
+const axYmd=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+// طريقة الدفع لكل طلب (نفس منطق تقرير المبيعات): الدلفري غير المسدد «عند الكباتن»
+function axPaySplit(o){
+  const v=o.value||0,p=o.payment||{},paidHere=p.method&&!['cod','later'].includes(p.method);
+  if(axTypeOf(o)==='delivery'&&!paidHere)return o.capSettled===true?{cash:v,card:0,later:0,cod:0}:{cash:0,card:0,later:0,cod:v};
+  if(p.method==='later')return{cash:0,card:0,later:v,cod:0};
+  const card=Number(p.card)||0,cash=p.cash!=null?Number(p.cash)||0:(p.method==='card'?0:v);
+  return{cash,card,later:0,cod:0};
+}
+// دليل حسابات بسيط بأرقام ثابتة — المحاسب يربطها بدليله بالبيان/الأمين مرة وحدة
+const AX_ACC={cash:['1101','الصندوق (نقد)','أصول'],bank:['1102','المصرف — مدفوعات البطاقة','أصول'],later:['1201','ذمم الزبائن (آجل)','أصول'],cap:['1202','ذمم الكباتن (دلفري غير مسدد)','أصول'],
+  inv:['1301','المخزون (المواد الخام)','أصول'],tax:['2101','ضريبة المبيعات المستحقة','خصوم'],open:['3101','رأس المال — أرصدة افتتاحية','حقوق ملكية'],sales:['4101','المبيعات','إيرادات'],
+  over:['4201','زيادة الجرد','إيرادات'],cogs:['5101','تكلفة البضاعة المباعة','مصروفات'],waste:['5301','التالف والهالك','مصروفات'],short:['5302','عجز الجرد','مصروفات']};
+const axExpAcc=cat=>{const i=AX_CATS.indexOf(cat);return['52'+String((i<0?AX_CATS.length-1:i)+1).padStart(2,'0'),'مصروف — '+(i<0?AX_CATS[AX_CATS.length-1]:cat),'مصروفات'];};
+// القيود اليومية (قيد مزدوج): مبيعات وتكلفة كل يوم بقيد مجمّع، وكل مصروف وحركة مخزون بقيد لوحده
+function axJournal(from,to,F){
+  const inR=ts=>(ts||0)>=from&&(ts||0)<to,J=[],R=Math.round;
+  const add=(ts,desc,lines)=>{lines=lines.filter(l=>R(l.dr||0)||R(l.cr||0)).map(l=>({a:l.a,dr:R(l.dr||0),cr:R(l.cr||0)}));if(lines.length)J.push({ts,desc,lines});};
+  const day={};F.done.forEach(o=>{const k=axDayKey(o.createdAtMs),d=day[k]||(day[k]={n:0,v:0,tax:0,cost:0,cash:0,card:0,later:0,cod:0});
+    const sp=axPaySplit(o);d.n++;d.v+=o.value||0;d.tax+=Number(o.tax)||0;(o.items||[]).forEach(i=>{d.cost+=(Number(i.cost)||0)*(i.qty||1);});
+    d.cash+=sp.cash;d.card+=sp.card;d.later+=sp.later;d.cod+=sp.cod;});
+  Object.keys(day).sort((a,b)=>a-b).forEach(k=>{const d=day[k],ts=+k;
+    const card=R(d.card),later=R(d.later),cod=R(d.cod),tax=R(d.tax),total=R(d.v),cash=total-card-later-cod;   // الفرق البسيط (فكة/تقريب) ينحسب بالصندوق حتى القيد يتوازن
+    add(ts,`مبيعات ${axYmd(ts)} — ${d.n} طلب مسلّم`,[{a:AX_ACC.cash,dr:cash},{a:AX_ACC.bank,dr:card},{a:AX_ACC.later,dr:later},{a:AX_ACC.cap,dr:cod},{a:AX_ACC.sales,cr:total-tax},{a:AX_ACC.tax,cr:tax}]);
+    add(ts,`تكلفة مبيعات ${axYmd(ts)}`,[{a:AX_ACC.cogs,dr:d.cost},{a:AX_ACC.inv,cr:d.cost}]);
+  });
+  axAllExp().filter(e=>inR(e.ts)).forEach(e=>{const amt=Number(e.amount)||0;add(e.ts,`${e.cat||'مصروف'}${e.note?' — '+e.note:''}${e.by?' (بواسطة '+e.by+')':''}`,[{a:axExpAcc(e.cat),dr:amt},{a:AX_ACC.cash,cr:amt}]);});
+  ((axDoc&&axDoc.moves)||[]).filter(e=>inR(e.ts)).forEach(e=>{const v=Number(e.value)||0,a=Math.abs(v),nm=`${e.name||'مادة'}${e.note?' — '+e.note:''}`;
+    if(e.type==='purchase')add(e.ts,'مشتريات: '+nm,[{a:AX_ACC.inv,dr:a},{a:AX_ACC.cash,cr:a}]);
+    else if(e.type==='purchase_return')add(e.ts,'مرتجع للمورد: '+nm,[{a:AX_ACC.cash,dr:a},{a:AX_ACC.inv,cr:a}]);
+    else if(e.type==='waste')add(e.ts,'تالف / هالك: '+nm,[{a:AX_ACC.waste,dr:a},{a:AX_ACC.inv,cr:a}]);
+    else if(e.type==='count')add(e.ts,(v>=0?'زيادة جرد: ':'عجز جرد: ')+nm,v>=0?[{a:AX_ACC.inv,dr:a},{a:AX_ACC.over,cr:a}]:[{a:AX_ACC.short,dr:a},{a:AX_ACC.inv,cr:a}]);
+    else if(e.type==='open'&&v>0)add(e.ts,'رصيد افتتاحي: '+nm,[{a:AX_ACC.inv,dr:a},{a:AX_ACC.open,cr:a}]);
+  });
+  J.sort((x,y)=>x.ts-y.ts);
+  return J;
+}
+window.axExportAcc=async()=>{
+  if(!axRid)return;
+  const [from,to]=axRange();
+  if(!needOrders(from,to,axRid,()=>{})){toast('⏳ دا ينجاب طلبات الفترة — اضغط مرة ثانية بعد ثواني','warn');return;}
+  const btn=document.getElementById('axExpBtn');if(btn)btn.disabled=true;
+  try{
+    const F=axFin(from,to),P=axPrevRange(from,to),Q=P&&needOrders(P.from,P.to,axRid,()=>{})?axFin(P.from,P.to):null;
+    const rn=(allRestaurants.find(r=>r.id===axRid)||{}).name||currentUser.restaurantName||'المطعم',lbl=axRangeLabel();
+    const end=Math.min(to,Date.now()),period=axYmd(from)+' ← '+axYmd(end-1);
+    const meta=[rn+' — '+lbl+' ('+period+')','طُبع '+dt12(Date.now())];
+    const blank={v:'',t:'text'},M=n=>Math.round(n||0),pc=(c,p)=>{const x=axChgPct(c,p);return x===null?'جديد':x?(x>0?'▲ ':'▼ ')+Math.abs(x)+'٪':'—';};
+    // ١) قائمة الدخل
+    const lines=[['عدد الطلبات المسلّمة','orders','num'],['صافي المبيعات','sales'],['(−) تكلفة البضاعة المباعة','cogs'],['= مجمل الربح','gross'],['(−) المصروفات التشغيلية','exp'],['(−) التالف والهالك','waste'],['(±) تسويات الجرد','cnt'],['= صافي الربح','net'],['متوسط الطلب','avg']];
+    const incRows=lines.filter(([,k])=>k!=='cnt'||F.cnt||(Q&&Q.cnt)).map(([t,k,ty])=>[t,{v:M(F[k]),t:ty||'money'},Q?{v:M(Q[k]),t:ty||'money'}:blank,Q?pc(F[k],Q[k]):'']);
+    if(F.tax)incRows.push(['منها ضريبة مستحقة (ضمن المبيعات)',{v:M(F.tax),t:'money'},Q?{v:M(Q.tax),t:'money'}:blank,'']);
+    // ٢) القيود
+    const J=axJournal(from,to,F);let dr=0,cr=0;const jRows=[];
+    J.forEach((e,i)=>e.lines.forEach((l,j)=>{dr+=l.dr;cr+=l.cr;jRows.push([j?blank:i+1,j?blank:axYmd(e.ts),l.a[0],l.a[1],l.dr?{v:l.dr,t:'money'}:blank,l.cr?{v:l.cr,t:'money'}:blank,j?blank:e.desc]);}));
+    // ٣) المبيعات حسب اليوم وطريقة الدفع
+    const day={};F.done.forEach(o=>{const k=axDayKey(o.createdAtMs),d=day[k]||(day[k]={n:0,v:0,cash:0,card:0,later:0,cod:0,disc:0,tax:0}),sp=axPaySplit(o);
+      d.n++;d.v+=o.value||0;d.cash+=sp.cash;d.card+=sp.card;d.later+=sp.later;d.cod+=sp.cod;d.disc+=Number(o.discount)||0;d.tax+=Number(o.tax)||0;});
+    const dk=Object.keys(day).sort((a,b)=>a-b),sum=f=>dk.reduce((s,k)=>s+day[k][f],0);
+    const dRows=dk.map(k=>{const d=day[k];return[axYmd(+k),{v:d.n,t:'num'},{v:M(d.v),t:'money'},{v:M(d.cash),t:'money'},{v:M(d.card),t:'money'},{v:M(d.later),t:'money'},{v:M(d.cod),t:'money'},{v:M(d.disc),t:'money'},{v:M(d.tax),t:'money'}];});
+    // ٤) المصروفات
+    const ex=axAllExp().filter(e=>(e.ts||0)>=from&&(e.ts||0)<to).sort((a,b)=>(a.ts||0)-(b.ts||0));
+    const eRows=ex.map(e=>[axYmd(e.ts||0),e.cat||'',{v:M(e.amount),t:'money'},e.note||'',e.by||'']);
+    // ٥) دليل الحسابات
+    const used=new Set();J.forEach(e=>e.lines.forEach(l=>used.add(l.a[0])));
+    const chart=Object.values(AX_ACC).concat(AX_CATS.map(axExpAcc)).sort((a,b)=>a[0].localeCompare(b[0])).map(a=>[a[0],a[1],a[2],used.has(a[0])?'✔':'']);
+    const {xlsxBytes}=await import('./xlsx.js?v=1');
+    const bytes=xlsxBytes({title:'سرعة — ملف المحاسب',subtitle:rn,meta,sheets:[
+      {name:'قائمة الدخل',subtitle:'قائمة الدخل (الأرباح والخسائر)'+(Q?' — مقارنة ويا '+P.label:''),columns:[{h:'البند',w:34},{h:'هذي الفترة',w:18,t:'money'},{h:Q?P.label:'الفترة السابقة',w:22,t:'money'},{h:'التغيير',w:12}],rows:incRows},
+      {name:'القيود اليومية',subtitle:'قيود يومية بالقيد المزدوج — جاهزة للإدخال ببرامج المحاسبة',meta:meta.concat(['مبيعات وتكلفة كل يوم بقيد مجمّع؛ الآجل وذمم الكباتن حسب حالتها وقت التصدير']),
+        columns:[{h:'رقم القيد',w:9,t:'num'},{h:'التاريخ',w:12},{h:'رقم الحساب',w:11},{h:'اسم الحساب',w:30},{h:'مدين',w:16,t:'money'},{h:'دائن',w:16,t:'money'},{h:'البيان',w:46}],rows:jRows,totals:[null,null,null,'المجموع (متوازن)',M(dr),M(cr),null]},
+      {name:'المبيعات حسب اليوم',subtitle:'المبيعات المسلّمة حسب اليوم وطريقة الدفع',columns:[{h:'التاريخ',w:12},{h:'الطلبات',w:9,t:'num'},{h:'المبيعات',w:15,t:'money'},{h:'نقداً',w:15,t:'money'},{h:'بطاقة',w:14,t:'money'},{h:'آجل',w:13,t:'money'},{h:'عند الكباتن',w:14,t:'money'},{h:'الخصومات',w:13,t:'money'},{h:'الضريبة',w:12,t:'money'}],
+        rows:dRows,totals:['المجموع',sum('n'),M(sum('v')),M(sum('cash')),M(sum('card')),M(sum('later')),M(sum('cod')),M(sum('disc')),M(sum('tax'))]},
+      {name:'المصروفات',subtitle:'المصروفات التشغيلية',columns:[{h:'التاريخ',w:12},{h:'الفئة',w:16},{h:'المبلغ',w:15,t:'money'},{h:'الملاحظة',w:36},{h:'بواسطة',w:18}],rows:eRows,totals:['المجموع',null,M(ex.reduce((s,e)=>s+(Number(e.amount)||0),0)),null,null]},
+      {name:'دليل الحسابات',subtitle:'أرقام الحسابات المستعملة بالقيود — اربطها بدليلك مرة وحدة',columns:[{h:'رقم الحساب',w:12},{h:'اسم الحساب',w:34},{h:'النوع',w:14},{h:'مستعمل',w:9}],rows:chart}]});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    // اسم إنگليزي: بعض المتصفحات ترفض الأسماء العربية للملفات النازلة (اسم المطعم داخل الملف)
+    a.download=`sora3a-accountant-${axYmd(from)}_${axYmd(end-1)}.xlsx`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    audit('acc.export',{restaurantId:axRid,from,to,entries:J.length});
+    toast(Q||!P?'✅ نزل ملف المحاسب':'✅ نزل ملف المحاسب (المقارنة بالفترة السابقة لسه دا تنجاب)');
+  }catch(err){console.warn('export',err);toast('❌ تعذّر إنشاء الملف: '+(err.message||err),'error');}
+  finally{if(btn)btn.disabled=false;}
+};
+window.axPrintFin=()=>{
+  const [from,to]=axRange(),F=axFin(from,to),P=axPrevRange(from,to),Q=P&&needOrders(P.from,P.to,axRid,()=>{})?axFin(P.from,P.to):null;
+  const rn=(allRestaurants.find(r=>r.id===axRid)||{}).name||currentUser.restaurantName||'',dv='<div style="border-top:1px dashed #000;margin:6px 0"></div>',M=n=>fmt(Math.round(n||0));
+  const r=(t,k,b)=>`<tr style="${b?'font-weight:900':''}"><td style="padding:2px 0">${t}</td><td style="text-align:left">${M(F[k])}</td>${Q?`<td style="text-align:left;font-size:10px">${M(Q[k])}</td>`:''}</tr>`;
+  const html=`<html><head><meta charset="UTF-8"></head><body style="font-family:Tajawal,Arial,sans-serif;direction:rtl;padding:12px;width:300px;color:#000">
+    <h2 style="text-align:center;font-size:16px;margin:0">💰 قائمة الدخل</h2><div style="text-align:center;font-size:11px">${esc(rn)}<br>${esc(axRangeLabel())}</div>${dv}
+    <table style="width:100%;border-collapse:collapse;font-size:12px">${Q?`<tr style="font-size:10px"><td></td><td style="text-align:left">هذي الفترة</td><td style="text-align:left">${esc(P.label)}</td></tr>`:''}
+    ${r('الطلبات المسلّمة','orders')}${r('صافي المبيعات','sales')}${r('(−) تكلفة البضاعة','cogs')}${r('= مجمل الربح','gross',1)}${r('(−) المصروفات','exp')}${r('(−) التالف والهالك','waste')}${F.cnt?r('(±) تسويات الجرد','cnt'):''}
+    </table>${dv}<table style="width:100%;font-size:13px">${r('صافي الربح (د.ع)','net',1)}</table>${dv}
+    <div style="text-align:center;font-size:10px">طُبع ${esc(dt12(Date.now()))}</div></body></html>`;
+  let f=document.getElementById('axPrt');if(!f){f=document.createElement('iframe');f.id='axPrt';f.style.cssText='position:fixed;left:-9999px;top:0;width:320px;height:600px;border:0';document.body.appendChild(f);}
+  f.onload=()=>{try{f.contentWindow.focus();f.contentWindow.print();}catch(e){}};f.srcdoc=html;
+};
 function axReport(from,to){
   const os=allOrders.filter(o=>o.restaurantId===axRid&&(o.createdAtMs||0)>=from&&(o.createdAtMs||0)<to);
   const live=os.filter(o=>o.status!=='cancelled'),canc=os.filter(o=>o.status==='cancelled');

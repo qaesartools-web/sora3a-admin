@@ -167,3 +167,59 @@ test('item sales report: each item with price, count and total; unsold items; to
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
+
+test('income statement compares with the previous period; accountant Excel has balanced double-entry journal, payments by day, expenses and chart of accounts', async () => {
+  const own = await signUp('accy@x.com', 'secret123');
+  const now = Date.now(), D = 86400000, cur = now - D, old = now - 9 * D;
+  const it = (name, qty, price, cost) => ({ name, variant: 'وحدة', qty, price, cost });
+  await E.withSecurityRulesDisabled(async (c) => { const db = c.firestore();
+    await setDoc(doc(db, 'users', own), { role: 'restaurant', restaurantId: 'RY', email: 'accy@x.com', name: 'أبو حيدر' });
+    await setDoc(doc(db, 'restaurants/RY'), { name: 'مطعم القيود', userId: own, active: true });
+    await setDoc(doc(db, 'restaurants/RY/menu/main'), { updatedAtMs: 1, device: 's', cats: [] });
+    await setDoc(doc(db, 'accounting/RY'), { materials: [], recipes: {}, costs: {}, expenses: [], moves: [
+      { id: 'pv1', mid: 'm1', name: 'لحم', unit: 'كغم', type: 'purchase', qty: 2, cost: 10000, value: 20000, ts: cur, note: 'مورد الشورجة' },
+      { id: 'pv2', mid: 'm1', name: 'لحم', unit: 'كغم', type: 'waste', qty: -0.15, cost: 10000, value: -1500, ts: cur, note: 'خربان' }] });
+    await setDoc(doc(db, 'accounting/RY/expenses/ey1'), { cat: 'غاز / وقود', amount: 3000, note: 'قنينة', ts: cur, by: 'الكاشير' });
+    const o = (id, d) => setDoc(doc(db, 'orders', id), { restaurantId: 'RY', status: 'delivered', createdAtMs: cur, ...d });
+    await o('YA', { orderType: 'salon', value: 10000, items: [it('كباب', 2, 5000, 2000)], payment: { method: 'cash', cash: 10000, card: 0 } });
+    await o('YB', { orderType: 'takeaway', value: 6000, tax: 500, items: [it('تكة', 1, 5500, 2000)], payment: { method: 'card', cash: 0, card: 6000 } });
+    await o('YC', { orderType: 'delivery', value: 8000, fee: 2000, items: [it('شاورما', 4, 2000, 750)], payment: { method: 'cod' }, capSettled: false, captainId: 'CY' });
+    await o('YD', { orderType: 'salon', value: 5000, items: [it('حمص', 2, 2500, 500)], payment: { method: 'later' } });
+    await o('YE', { orderType: 'salon', value: 9000, status: 'cancelled', items: [it('كباب', 1, 9000, 4000)] });
+    await o('YP', { orderType: 'salon', value: 20000, createdAtMs: old, items: [it('كباب', 4, 5000, 2000)], payment: { method: 'cash', cash: 20000, card: 0 } });
+  });
+  const p = await page(B, { w: 1280, h: 900 });
+  await p.goto('http://localhost:5050/sora3a-admin/index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#lEmail', 'accy@x.com'); await p.fill('#lPass', 'secret123'); await p.click('#lBtn');
+  await p.waitForSelector('#appPage', { state: 'visible' });
+  await p.click('.dnav-btn[data-screen="scAcc"]');
+  await p.selectOption('#axRange', '7');
+  await p.click('#axTabs button >> text=قائمة الدخل');
+  // الفترة السابقة تنجاب من السيرفر وتطلع بعمود المقارنة
+  await p.waitForFunction(() => { const t = document.getElementById('axBody').textContent; return t.includes('الـ7 أيام اللي قبلها') && !t.includes('⏳'); }, null, { timeout: 15000 });
+  const t = await p.textContent('#axBody');
+  assert.ok(t.includes('29,000'), 'sales of delivered orders only (cancelled excluded)');
+  assert.ok(t.includes('14,500'), 'net = 29000 − 10000 cost − 3000 expenses − 1500 waste');
+  assert.ok(t.includes('12,000'), 'previous period net');
+  assert.match(t, /▲ 20\.8٪/, 'net profit change vs previous 7 days');
+  assert.ok(t.includes('ضريبة 500'), 'tax note');
+  await p.screenshot({ path: 'shots/admin-fin-compare.png', fullPage: true });
+  // ملف المحاسب
+  const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 15000 }), p.click('#axExpBtn')]);
+  assert.match(dl.suggestedFilename(), /^sora3a-accountant-\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}\.xlsx$/);
+  const fs = await import('node:fs');
+  const x = fs.readFileSync(await dl.path()).toString('utf8');   // zip بدون ضغط: نص الأوراق مقروء مباشرة
+  assert.ok(x.startsWith('PK'), 'real xlsx (zip)');
+  for (const s of ['مطعم القيود', 'قائمة الدخل', 'القيود اليومية', 'المبيعات حسب اليوم', 'المصروفات', 'دليل الحسابات', 'ضريبة المبيعات المستحقة', 'ذمم الكباتن (دلفري غير مسدد)', 'ذمم الزبائن (آجل)', 'مشتريات: لحم — مورد الشورجة', 'تالف / هالك: لحم — خربان', 'مصروف — غاز / وقود'])
+    assert.ok(x.includes(s), 'xlsx has: ' + s);
+  // قيد مبيعات اليوم: نقد 10000 + بطاقة 6000 + آجل 5000 + كباتن 8000 = مبيعات 28500 + ضريبة 500
+  for (const v of [10000, 6000, 5000, 8000, 28500, 500]) assert.ok(x.includes(`<v>${v}</v>`), 'journal amount ' + v);
+  // المجموع متوازن: 29000 + 10000 تكلفة + 3000 مصروف + 20000 مشتريات + 1500 تالف = 63500 مدين = 63500 دائن
+  assert.equal((x.match(/<v>63500<\/v>/g) || []).length, 2, 'debit total = credit total');
+  assert.ok(x.includes('<v>14500</v>') && x.includes('<v>12000</v>'), 'income sheet: net now and previous');
+  const aud = await until(async () => { let v; await E.withSecurityRulesDisabled(async (c) => { v = (await getDocs(collection(c.firestore(), 'auditLog'))).docs.map((d) => d.data()).find((a) => a.action === 'acc.export'); }); return v; });
+  assert.ok(aud, 'export is audited');
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
