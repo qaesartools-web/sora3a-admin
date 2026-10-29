@@ -347,6 +347,21 @@ body.staff-mode .staff-banner{display:block;}
 .ax-kv b{color:var(--muted);font-weight:700;}
 .ax-kv span{word-break:break-word;}
 .ax-note{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;white-space:pre-wrap;}
+.mn-cats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.mn-cats button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:9px 14px;font-weight:800;font-family:inherit;cursor:pointer;}
+.mn-cats button small{color:var(--muted);font-weight:700;margin-inline-start:4px;}
+.mn-cats button.on{background:var(--accent);color:#fff;border-color:var(--accent);}.mn-cats button.on small{color:#e6ffe9;}
+.mn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+.mn-item{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:14px;padding:12px;background:var(--panel);}
+.mn-item.out{opacity:.6;}
+.mn-img{width:100%;height:120px;border-radius:10px;background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:40px;overflow:hidden;}
+.mn-img img{width:100%;height:100%;object-fit:cover;}
+.mn-info{display:flex;flex-direction:column;gap:3px;}.mn-info b{font-size:15px;}.mn-info small{color:var(--muted);font-size:12px;}.mn-info span{color:var(--accent);font-weight:800;font-size:13px;}
+.mn-acts{display:flex;flex-wrap:wrap;gap:6px;}
+.mn-info .ax-badge{align-self:flex-start;}
+.mn-var{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:6px;margin-bottom:2px;}
+.mn-prof{font-size:12px;font-weight:800;margin:0 4px 8px;min-height:4px;}
+@media(max-width:600px){.mn-var{grid-template-columns:1fr 1fr;}}
 .ax-badge{display:inline-block;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:800;}
 .ax-badge.out{background:rgba(239,68,68,.15);color:var(--red);}.ax-badge.low{background:rgba(245,158,11,.18);color:var(--yellow);}.ax-badge.ok{background:rgba(34,197,94,.15);color:var(--green);}
 .svc-row{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px;align-items:center;}
@@ -586,6 +601,12 @@ body.staff-mode .staff-banner{display:block;}
       <div id="axBody"></div>
     </div>
     <div class="modal-ov" id="axMo"><div class="modal" id="axMoBody"></div></div>
+    <!-- المنيو (التعديل من هنا بس) -->
+    <div class="screen" id="scMenu">
+      <div class="tm-filters"><select class="form-sel admin-only" id="mnRest" onchange="menuInit()"></select></div>
+      <div id="mnBody"></div>
+    </div>
+    <div class="modal-ov" id="mnMo"><div class="modal" id="mnMoBody"></div></div>
     <div class="screen" id="scTimes">
       <div class="tm-filters">
         <select class="form-sel" id="tmRange" onchange="renderTimes()"><option value="today">اليوم</option><option value="yesterday">أمس</option><option value="7" selected>آخر 7 أيام</option><option value="30">آخر 30 يوم</option></select>
@@ -821,7 +842,7 @@ import { initializeAuth, browserLocalPersistence, indexedDBLocalPersistence,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch, getAggregateFromServer, count, sum }
+  query, where, orderBy, limit, onSnapshot, serverTimestamp, writeBatch, getAggregateFromServer, count, sum, runTransaction }
   from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const app = initializeApp({
@@ -852,7 +873,7 @@ const auth = initializeAuth(app,{persistence:[indexedDBLocalPersistence,browserL
 const auth2 = initializeAuth(app2,{persistence:[]});
 const db = getFirestore(app);
 window._fb={auth,auth2,db,signInWithEmailAndPassword,createUserWithEmailAndPassword,signOut,onAuthStateChanged,
-  collection,doc,addDoc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,query,where,orderBy,limit,onSnapshot,serverTimestamp,writeBatch,getAggregateFromServer,count,sum};
+  collection,doc,addDoc,setDoc,getDoc,getDocs,updateDoc,deleteDoc,query,where,orderBy,limit,onSnapshot,serverTimestamp,writeBatch,getAggregateFromServer,count,sum,runTransaction};
 window.dispatchEvent(new Event('fbReady'));
 </script>
 
@@ -1085,6 +1106,7 @@ const tabs=[
   {id:'map',label:'الخريطة',icon:'🗺️',screen:'scMap',adminOnly:false,feat:'captain'},
   {id:'analytics',label:'التحليلات',icon:'📊',screen:'scAnalytics',adminOnly:false},
   {id:'times',label:'أوقات الطلبات',icon:'⏱️',screen:'scTimes',manage:true},
+  {id:'menu',label:'المنيو',icon:'🍔',screen:'scMenu',manage:true},
   {id:'acc',label:'المخزون والحسابات',icon:'📒',screen:'scAcc',manage:true},
   {id:'staff',label:'الموظفين',icon:'👥',screen:'scStaff',adminOnly:true},
   {id:'myrest',label:'الكاشيرية والخطوط',icon:'☎️',screen:'scMyRest',manage:true},
@@ -1119,6 +1141,7 @@ window.goTab=function(screenId,btn){
   if(screenId==='scAnalytics')renderAnalytics();
   if(screenId==='scTimes')renderTimes();
   if(screenId==='scAcc')accInit();
+  if(screenId==='scMenu')menuInit();
   if(screenId==='scRests')renderRests();
   if(screenId==='scLeads')renderLeads();
   if(screenId==='scStaff')renderStaffList();
@@ -2239,6 +2262,237 @@ window.renderTimes=async function(){
   </table></div></div>`;
   el.innerHTML=h;
 };
+// ── المنيو: الإضافة والتعديل من لوحة الإدارة بس (الكاشير يبيع وينقّص المخزون الجاهز فقط) ──
+// restaurants/{rid}/menu/main = {cats:[{cat,emoji,items:[{name,variants:[{name,price}],imgId?,stock?}]}]}، والصور بـ menuImages/{imgId}
+// كل تعديل transaction على آخر نسخة (حتى ما يضيع تعديل أو نقص مخزون من الكاشير بنفس اللحظة)
+let mnRid=null,mnDoc=null,mnAcc=null,mnUnsubs=[],mnCur=0,mnQ='',mnEd=null;
+const mnImg={};   // imgId → صورة (data URL) أو null أثناء التحميل
+const MN_SAMPLE=[
+  {cat:'برغر',emoji:'🍔',items:[{name:'كلاسك برغر',variants:[{name:'وحدة',price:4000}]},{name:'تشيز برغر',variants:[{name:'وحدة',price:5000}]},{name:'دبل برغر',variants:[{name:'وحدة',price:6500}]}]},
+  {cat:'شاورما',emoji:'🌯',items:[{name:'سندويش شاورما',variants:[{name:'صغير',price:2500},{name:'كبير',price:3500}]},{name:'صحن شاورما',variants:[{name:'وحدة',price:7000}]}]},
+  {cat:'مقبلات',emoji:'🍟',items:[{name:'بطاطا',variants:[{name:'وحدة',price:2000}]},{name:'حمص',variants:[{name:'وحدة',price:2500}]}]},
+  {cat:'مشروبات',emoji:'🥤',items:[{name:'ببسي',variants:[{name:'وحدة',price:1000}]},{name:'ماء',variants:[{name:'وحدة',price:500}]}]}];
+const mnCats=()=>(mnDoc&&Array.isArray(mnDoc.cats)?mnDoc.cats:[]);
+window.menuInit=function(){
+  const sel=document.getElementById('mnRest');
+  if(isAdmin()&&sel){const cur=sel.value;sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur||(allRestaurants[0]&&allRestaurants[0].id)||'';}
+  const rid=isRest()?currentUser.restaurantId:(sel&&sel.value);
+  if(rid===mnRid&&mnUnsubs.length){menuRender();return;}
+  mnUnsubs.forEach(u=>u&&u());mnUnsubs=[];mnRid=rid;mnDoc=null;mnAcc=null;mnCur=0;mnQ='';
+  if(!rid){menuRender();return;}
+  const fb=window._fb;
+  mnUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',rid,'menu','main'),s=>{mnDoc=s.exists()?s.data():{cats:[]};menuRender(true);},()=>{mnDoc={cats:[]};menuRender(true);}));
+  mnUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'accounting',rid),s=>{mnAcc=s.exists()?s.data():{};},()=>{}));
+  unsubs.push(()=>{mnUnsubs.forEach(u=>u&&u());mnUnsubs=[];mnRid=null;});
+  menuRender();
+};
+function mnLoadImgs(list){
+  const fb=window._fb,rid=mnRid;
+  list.forEach(p=>{const id=p.imgId;if(!id||id in mnImg)return;mnImg[id]=null;
+    fb.getDoc(fb.doc(fb.db,'restaurants',rid,'menuImages',id)).then(s=>{const d=s.exists()&&s.data().data;mnImg[id]=typeof d==='string'&&/^data:image\//.test(d)?d:'';
+      const el=document.querySelector(`[data-mnimg="${id}"]`);if(el&&mnImg[id])el.innerHTML=`<img src="${mnImg[id]}" alt="">`;}).catch(()=>{mnImg[id]='';});});
+}
+const mnPrice=p=>(p.variants||[]).map(v=>(v.name&&v.name!=='وحدة'?esc(v.name)+' ':'')+fmt(v.price)).join(' • ');
+const mnStock=p=>typeof p.stock!=='number'?'':p.stock<=0?'<span class="ax-badge out">نفذ</span>':`<span class="ax-badge ${p.stock<=3?'low':'ok'}">باقي ${toA(p.stock)}</span>`;
+window.menuRender=function(live){
+  const el=document.getElementById('mnBody');if(!el)return;
+  if(live&&(document.getElementById('mnMo').classList.contains('open')||/INPUT|TEXTAREA|SELECT/.test((document.activeElement||{}).tagName||'')))return;
+  if(!mnRid){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">اختر المطعم</div>';return;}
+  if(mnDoc===null){el.innerHTML='<div class="card" style="text-align:center;color:var(--muted)">⏳ جاري التحميل…</div>';return;}
+  const cats=mnCats(),nItems=cats.reduce((s,c)=>s+(c.items||[]).length,0);
+  if(mnCur>=cats.length)mnCur=Math.max(0,cats.length-1);
+  const head=`<div class="card"><div class="card-title"><span class="dot"></span> 🍔 منيو المطعم <small style="color:var(--muted);font-weight:600;margin-inline-start:8px">${toA(cats.length)} فرع • ${toA(nItems)} صنف</small>
+    <span style="margin-inline-start:auto;display:flex;gap:6px;flex-wrap:wrap"><button class="btn-sm btn-edit" onclick="mnCatEdit(-1)">➕ فرع جديد</button>${cats.length?`<button class="btn-primary" style="padding:8px 14px;width:auto;margin:0" onclick="mnItemEdit(${mnCur},-1)">➕ صنف جديد</button>`:''}</span></div>
+    <div style="font-size:12px;color:var(--muted)">✏️ تعديل المنيو صار من هنا بس — أي تغيير يوصل لكل أجهزة الكاشير ومنيو الباركود فوراً</div></div>`;
+  if(!cats.length){el.innerHTML=head+`<div class="card" style="text-align:center;padding:30px"><div style="font-size:42px">🍔</div><div style="font-weight:800;margin:8px 0">المنيو فاضي</div>
+    <div style="color:var(--muted);font-size:13px;margin-bottom:14px">ابدأ بإضافة فرع (مثلاً برغر، شاورما، مشروبات) وبعدين أصنافه</div>
+    <button class="btn-primary" onclick="mnCatEdit(-1)">➕ أضف أول فرع</button> <button class="btn-sm btn-edit" onclick="mnSample()">📋 منيو تجريبي</button></div>`;return;}
+  const c=cats[mnCur],q=mnQ.trim().toLowerCase();
+  const list=q?cats.flatMap((cc,ci)=>(cc.items||[]).map((p,pi)=>({p,ci,pi,c:cc}))).filter(x=>String(x.p.name).toLowerCase().includes(q)):(c.items||[]).map((p,pi)=>({p,ci:mnCur,pi,c}));
+  mnLoadImgs(list.map(x=>x.p));
+  el.innerHTML=head+`<div class="mn-cats">${cats.map((cc,i)=>`<button class="${i===mnCur&&!q?'on':''}" onclick="mnSel(${i})">${esc(cc.emoji||'🍽️')} ${esc(cc.cat)} <small>${toA((cc.items||[]).length)}</small></button>`).join('')}</div>
+   <div class="card"><div class="card-title" style="flex-wrap:wrap;gap:8px">${q?`🔍 نتائج «${esc(mnQ)}»`:`${esc(c.emoji||'🍽️')} ${esc(c.cat)}`}
+    <span style="margin-inline-start:auto;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+     <input class="form-inp" id="mnQ" placeholder="🔍 بحث بكل المنيو…" value="${esc(mnQ)}" oninput="mnQ=this.value;clearTimeout(window._mnQt);window._mnQt=setTimeout(()=>{menuRender();const i=document.getElementById('mnQ');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},250)" style="max-width:220px;margin:0">
+     ${q?'':`<button class="btn-sm btn-edit" onclick="mnCatEdit(${mnCur})">✏️ تعديل الفرع</button><button class="btn-sm" title="قبل" onclick="mnCatMove(${mnCur},-1)" ${mnCur?'':'disabled'}>⬆️</button><button class="btn-sm" title="بعد" onclick="mnCatMove(${mnCur},1)" ${mnCur<cats.length-1?'':'disabled'}>⬇️</button><button class="btn-sm btn-del" onclick="mnCatDel(${mnCur})">🗑️</button>`}</span></div>
+    <div class="mn-grid">${list.map(({p,ci,pi,c:cc})=>`<div class="mn-item ${typeof p.stock==='number'&&p.stock<=0?'out':''}">
+      <div class="mn-img" data-mnimg="${esc(p.imgId||'')}">${p.imgId&&mnImg[p.imgId]?`<img src="${mnImg[p.imgId]}" alt="">`:esc(cc.emoji||'🍽️')}</div>
+      <div class="mn-info"><b>${esc(p.name)}</b>${q?`<small>${esc(cc.emoji||'')} ${esc(cc.cat)}</small>`:''}<span>${mnPrice(p)} د.ع</span>${mnStock(p)}</div>
+      <div class="mn-acts"><button class="btn-sm btn-edit" onclick="mnItemEdit(${ci},${pi})">✏️ تعديل</button>
+       <button class="btn-sm" onclick="mnItemOut(${ci},${pi})">${typeof p.stock==='number'&&p.stock<=0?'✅ متوفر':'🚫 نفذ'}</button>
+       ${q?'':`<button class="btn-sm" title="قبل" onclick="mnItemMove(${ci},${pi},-1)" ${pi?'':'disabled'}>⬆️</button><button class="btn-sm" title="بعد" onclick="mnItemMove(${ci},${pi},1)" ${pi<(cc.items||[]).length-1?'':'disabled'}>⬇️</button>`}
+       <button class="btn-sm btn-del" onclick="mnItemDel(${ci},${pi})">🗑️</button></div></div>`).join('')||`<div style="text-align:center;color:var(--muted);padding:24px;grid-column:1/-1">${q?'لا توجد نتائج':'لا توجد أصناف بهذا الفرع بعد'}</div>`}</div>
+    ${q?'':`<button class="btn-sm btn-edit" style="margin-top:12px" onclick="mnItemEdit(${mnCur},-1)">➕ صنف جديد بـ ${esc(c.cat)}</button>`}</div>`;
+};
+window.mnSel=i=>{mnCur=i;mnQ='';menuRender();};
+// كل التعديلات: نقرأ آخر نسخة، نعدّلها، ونكتبها — الأصناف تنعرف بالاسم (مو بالترتيب) حتى ما نعدّل صنف ثاني لو تغيّر الترتيب
+async function mnTx(mut,act,data){
+  const fb=window._fb,ref=fb.doc(fb.db,'restaurants',mnRid,'menu','main');
+  try{
+    let out;
+    await fb.runTransaction(fb.db,async tx=>{
+      const s=await tx.get(ref),d=s.exists()?s.data():{};
+      const cats=JSON.parse(JSON.stringify(Array.isArray(d.cats)?d.cats:[]));
+      out=mut(cats);
+      if(out===false)return;
+      tx.set(ref,{...d,cats,updatedAtMs:Date.now(),device:'admin'});
+    });
+    if(out===false)return false;
+    audit(act,{restaurantId:mnRid,...(data||{})});
+    return true;
+  }catch(err){toast('❌ تعذّر الحفظ: '+(err.code||err.message),'error');return false;}
+}
+const mnFind=(cats,catName,itemName)=>{const ci=cats.findIndex(c=>c.cat===catName);const pi=ci<0?-1:(cats[ci].items||[]).findIndex(p=>p.name===itemName);return{ci,pi};};
+window.mnSample=async()=>{
+  if(mnCats().some(c=>(c.items||[]).length)){toast('⚠️ المنيو بيه أصناف','warn');return;}
+  if(await mnTx(cats=>{cats.splice(0,cats.length,...JSON.parse(JSON.stringify(MN_SAMPLE)));},'menu.sample'))toast('✅ انضاف منيو تجريبي — عدّله على كيفك');
+};
+// ── الفروع ──
+window.mnCatEdit=ci=>{
+  const c=ci>=0?mnCats()[ci]:null;
+  axOpenMn(`<div class="modal-title">${c?'✏️ تعديل الفرع':'➕ فرع جديد'}</div>
+    <div class="form-row"><div class="form-group" style="flex:3"><label>اسم الفرع *</label><input class="form-inp" id="mnCn" maxlength="40" value="${esc(c?c.cat:'')}" placeholder="مثال: مشويات"></div>
+    <div class="form-group" style="flex:1"><label>إيموجي</label><input class="form-inp" id="mnCe" maxlength="8" value="${esc(c?c.emoji||'':'')}" placeholder="🥩"></div></div>
+    <div class="modal-btns"><button class="btn-primary" id="mnCsave">💾 حفظ</button><button class="btn-sm" onclick="mnClose()">إلغاء</button></div>`);
+  document.getElementById('mnCsave').onclick=async()=>{
+    const name=document.getElementById('mnCn').value.trim().slice(0,40),emoji=document.getElementById('mnCe').value.trim().slice(0,8)||'🍽️';
+    if(!name){toast('⚠️ أدخل اسم الفرع','warn');return;}
+    const old=c&&c.cat;
+    const ok=await mnTx(cats=>{
+      if(cats.some(x=>x.cat===name&&x.cat!==old)){toast('⚠️ أكو فرع بنفس الاسم','warn');return false;}
+      if(old){const x=cats.find(x=>x.cat===old);if(!x){toast('⚠️ الفرع انحذف من جهاز ثاني','warn');return false;}x.cat=name;x.emoji=emoji;}
+      else cats.push({cat:name,emoji,items:[]});
+    },old?'menu.cat.edit':'menu.cat.add',{cat:name});
+    if(!ok)return;
+    // قسم المطبخ مربوط باسم الفرع: ينتقل للاسم الجديد
+    if(old&&old!==name)mnRenameCatSection(old,name);
+    if(!old)mnCur=1e6;   // الفرع الجديد بالأخير (العرض يرجّعه لآخر فرع)
+    mnClose();toast(old?'✅ تم تعديل الفرع':'✅ انضاف الفرع: '+name);
+  };
+  // التركيز فوراً (مو بعد مهلة: كان ينقل الكتابة لخانة الاسم إذا المستخدم بلّش يكتب بخانة ثانية)
+  document.getElementById('mnCn').focus();
+};
+async function mnRenameCatSection(old,name){
+  const fb=window._fb,ref=fb.doc(fb.db,'restaurants',mnRid,'settings','main');
+  try{const s=await fb.getDoc(ref),cs=s.exists()&&s.data().catSection;
+    if(cs&&cs[old]){const n={...cs,[name]:cs[old]};delete n[old];await fb.updateDoc(ref,{catSection:n,updatedAtMs:Date.now()});}}catch(e){}
+}
+window.mnCatMove=async(ci,d)=>{
+  const name=mnCats()[ci]&&mnCats()[ci].cat;if(!name)return;
+  if(await mnTx(cats=>{const i=cats.findIndex(c=>c.cat===name),j=i+d;if(i<0||j<0||j>=cats.length)return false;[cats[i],cats[j]]=[cats[j],cats[i]];},'menu.cat.move',{cat:name}))mnCur=Math.max(0,ci+d);
+};
+window.mnCatDel=async ci=>{
+  const c=mnCats()[ci];if(!c)return;
+  if(!confirm(`حذف فرع «${c.cat}»${(c.items||[]).length?` وكل أصنافه (${(c.items||[]).length})`:''}؟`))return;
+  if(await mnTx(cats=>{const i=cats.findIndex(x=>x.cat===c.cat);if(i<0)return false;cats.splice(i,1);},'menu.cat.delete',{cat:c.cat,items:(c.items||[]).length}))toast('🗑️ انحذف الفرع');
+};
+// ── الأصناف ──
+window.mnItemMove=async(ci,pi,d)=>{
+  const c=mnCats()[ci],p=c&&c.items[pi];if(!p)return;
+  await mnTx(cats=>{const f=mnFind(cats,c.cat,p.name);if(f.pi<0)return false;const it=cats[f.ci].items,j=f.pi+d;if(j<0||j>=it.length)return false;[it[f.pi],it[j]]=[it[j],it[f.pi]];},'menu.item.move',{item:p.name});
+};
+window.mnItemOut=async(ci,pi)=>{
+  const c=mnCats()[ci],p=c&&c.items[pi];if(!p)return;
+  const out=typeof p.stock==='number'&&p.stock<=0;
+  if(await mnTx(cats=>{const f=mnFind(cats,c.cat,p.name);if(f.pi<0)return false;const x=cats[f.ci].items[f.pi];if(out)delete x.stock;else x.stock=0;},'menu.item.stock',{item:p.name,out:!out}))
+    toast(out?'✅ رجع متوفر':'🚫 صار «نفذ» — ما ينطلب لحد ما ترجّعه');
+};
+window.mnItemDel=async(ci,pi)=>{
+  const c=mnCats()[ci],p=c&&c.items[pi];if(!p)return;
+  if(!confirm(`حذف «${p.name}» من المنيو؟`))return;
+  if(await mnTx(cats=>{const f=mnFind(cats,c.cat,p.name);if(f.pi<0)return false;cats[f.ci].items.splice(f.pi,1);},'menu.item.delete',{item:p.name}))toast('🗑️ انحذف الصنف');
+};
+const mnHasRec=(name,vn)=>{const r=((mnAcc&&mnAcc.recipes)||{})[name+'|'+vn];return !!(r&&r.length);};
+const mnCost=(name,vn)=>Number(((mnAcc&&mnAcc.costs)||{})[name+'|'+vn])||0;
+function mnVarRows(){
+  const e=mnEd;
+  document.getElementById('mnVars').innerHTML=e.vars.map((v,i)=>`<div class="mn-var">
+    <input class="form-inp" placeholder="الحجم (مثلاً وحدة، صغير، كبير)" value="${esc(v.name)}" oninput="mnEd.vars[${i}].name=this.value">
+    <input class="form-inp" type="number" min="0" placeholder="السعر" value="${v.price||''}" oninput="mnEd.vars[${i}].price=Math.round(Number(this.value)||0);mnProf(${i})">
+    <input class="form-inp" type="number" min="0" placeholder="${v.rec?'من الوصفة':'التكلفة (اختياري)'}" value="${v.rec?'':v.cost||''}" ${v.rec?'disabled title="التكلفة محسوبة من الوصفة بالكاشير"':''} oninput="mnEd.vars[${i}].cost=Math.round(Number(this.value)||0);mnProf(${i})">
+    ${e.vars.length>1?`<button class="btn-sm btn-del" onclick="mnEd.vars.splice(${i},1);mnVarRows()">✕</button>`:''}</div><div class="mn-prof" id="mnPf${i}"></div>`).join('');
+  e.vars.forEach((v,i)=>mnProf(i));
+}
+// الربح لكل حجم (للمالك): السعر − التكلفة
+window.mnProf=i=>{const v=mnEd&&mnEd.vars[i],el=document.getElementById('mnPf'+i);if(!v||!el)return;
+  el.innerHTML=v.cost>0&&v.price>0?`<span class="${v.price-v.cost>=0?'ax-pos':'ax-neg'}">الربح ${fmt(v.price-v.cost)} (${Math.round((v.price-v.cost)*100/v.price)}%)</span>`:'';};
+window.mnItemEdit=(ci,pi)=>{
+  const cats=mnCats(),c=cats[ci];if(!c)return;
+  const p=pi>=0?c.items[pi]:null;
+  mnEd={cat:c.cat,orig:p?p.name:null,img:undefined,imgId:p&&p.imgId||'',
+    vars:p?(p.variants||[]).map(v=>({orig:v.name,name:v.name,price:v.price,cost:mnHasRec(p.name,v.name)?0:mnCost(p.name,v.name),rec:mnHasRec(p.name,v.name)})):[{name:'وحدة',price:0,cost:0}]};
+  const prev=mnEd.imgId&&mnImg[mnEd.imgId];
+  axOpenMn(`<div class="modal-title">${p?'✏️ تعديل الصنف':'➕ صنف جديد'}</div>
+    <div class="form-row"><div class="form-group" style="flex:2"><label>اسم الصنف *</label><input class="form-inp" id="mnIn" maxlength="60" value="${esc(p?p.name:'')}" placeholder="مثال: زنكر"></div>
+    <div class="form-group" style="flex:1"><label>الفرع</label><select class="form-sel" id="mnIc">${cats.map(x=>`<option value="${esc(x.cat)}" ${x.cat===c.cat?'selected':''}>${esc(x.emoji||'')} ${esc(x.cat)}</option>`).join('')}</select></div></div>
+    <div class="form-group"><label>الأحجام والأسعار (د.ع) — والتكلفة إذا تريد تشوف الربح</label><div id="mnVars"></div>
+      <button class="btn-sm btn-edit" style="margin-top:6px" onclick="mnEd.vars.push({name:'',price:0,cost:0});mnVarRows()">➕ حجم/سعر</button></div>
+    <div class="form-row"><div class="form-group" style="flex:1"><label>📦 المخزون الجاهز (فاضي = غير محدود)</label><input class="form-inp" id="mnIs" type="number" min="0" value="${p&&typeof p.stock==='number'?p.stock:''}" placeholder="مثلاً 24 علبة"></div>
+    <div class="form-group" style="flex:1"><label>📷 الصورة</label><div style="display:flex;gap:8px;align-items:center"><div class="mn-img" id="mnIp" style="width:64px;height:48px">${prev?`<img src="${prev}" alt="">`:esc(c.emoji||'🍽️')}</div>
+      <label class="btn-sm btn-edit" style="cursor:pointer">اختيار<input type="file" accept="image/*" style="display:none" onchange="mnPickImg(this)"></label>${mnEd.imgId?'<button class="btn-sm btn-del" onclick="mnEd.img=null;mnEd.imgId=\'\';document.getElementById(\'mnIp\').textContent=\'—\'">إزالة</button>':''}</div></div></div>
+    <div class="modal-btns"><button class="btn-primary" id="mnIsave">💾 حفظ الصنف</button><button class="btn-sm" onclick="mnClose()">إلغاء</button></div>`);
+  mnVarRows();
+  document.getElementById('mnIsave').onclick=mnItemSave;
+  document.getElementById('mnIn').focus();
+};
+// الصورة: نفس مقاس الكاشير (٤٠٠×٣٠٠ جيبك) حتى تبقى خفيفة
+window.mnPickImg=input=>{
+  const file=input.files[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=ev=>{const img=new Image();img.onload=()=>{const W=400,H=300,cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,W,H);
+    const s=Math.max(W/img.width,H/img.height),w=img.width*s,h=img.height*s;x.drawImage(img,(W-w)/2,(H-h)/2,w,h);mnEd.img=cv.toDataURL('image/jpeg',0.82);
+    document.getElementById('mnIp').innerHTML=`<img src="${mnEd.img}" alt="">`;};img.onerror=()=>toast('⚠️ الصورة ما انقرت','warn');img.src=ev.target.result;};
+  r.readAsDataURL(file);
+};
+async function mnItemSave(){
+  const e=mnEd,fb=window._fb;
+  const name=document.getElementById('mnIn').value.trim().slice(0,60),toCat=document.getElementById('mnIc').value,sv=document.getElementById('mnIs').value;
+  if(!name){toast('⚠️ أدخل اسم الصنف','warn');return;}
+  const vars=e.vars.map(v=>({...v,name:String(v.name||'').trim().slice(0,30)||'وحدة',price:Math.round(Number(v.price)||0)})).filter(v=>v.price>0);
+  if(!vars.length){toast('⚠️ لازم سعر واحد على الأقل','warn');return;}
+  if(new Set(vars.map(v=>v.name)).size!==vars.length){toast('⚠️ أكو حجمين بنفس الاسم','warn');return;}
+  const btn=document.getElementById('mnIsave');btn.disabled=true;
+  try{
+    let imgId=e.imgId;
+    if(e.img){imgId='i'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+      await fb.setDoc(fb.doc(fb.db,'restaurants',mnRid,'menuImages',imgId),{data:e.img,updatedAtMs:Date.now()});mnImg[imgId]=e.img;}
+    const ok=await mnTx(cats=>{
+      const to=cats.find(c=>c.cat===toCat);if(!to){toast('⚠️ الفرع انحذف من جهاز ثاني','warn');return false;}
+      let f=null,item={};
+      if(e.orig){f=mnFind(cats,e.cat,e.orig);if(f.pi<0){toast('⚠️ الصنف انحذف أو تغيّر اسمه من جهاز ثاني','warn');return false;}item=cats[f.ci].items[f.pi];}
+      // الاسم ما يتكرر بكل المنيو (المخزون والتكلفة بالكاشير ينربطون باسم الصنف)
+      if(cats.some((c,ci)=>(c.items||[]).some((p,pi)=>p.name===name&&!(f&&ci===f.ci&&pi===f.pi)))){toast('⚠️ أكو صنف بنفس الاسم','warn');return false;}
+      const old=item.variants||[];
+      const nx={...item,name,variants:vars.map(v=>({...(old.find(o=>o.name===v.orig)||{}),name:v.name,price:v.price}))};
+      if(imgId)nx.imgId=imgId;else delete nx.imgId;
+      delete nx.img;
+      if(sv==='')delete nx.stock;else nx.stock=Math.max(0,parseInt(sv)||0);
+      if(f&&cats[f.ci].cat===toCat)cats[f.ci].items[f.pi]=nx;
+      else{if(f)cats[f.ci].items.splice(f.pi,1);(to.items=to.items||[]).push(nx);}
+    },e.orig?'menu.item.edit':'menu.item.add',{item:name});
+    if(!ok){btn.disabled=false;return;}
+    mnSaveCosts(e,name,vars);
+    mnClose();toast(e.orig?'✅ تم حفظ الصنف':'✅ انضاف الصنف: '+name);
+  }catch(err){btn.disabled=false;toast('❌ تعذّر الحفظ: '+(err.code||err.message),'error');}
+}
+// التكلفة والوصفة مربوطة بـ «الاسم|الحجم» بدفتر الحسابات: تنتقل مع تغيير الاسم وتنحفظ التكلفة الجديدة
+async function mnSaveCosts(e,name,vars){
+  const fb=window._fb,ref=fb.doc(fb.db,'accounting',mnRid);
+  const renames=e.orig?vars.filter(v=>v.orig&&(v.orig!==v.name||e.orig!==name)).map(v=>[e.orig+'|'+v.orig,name+'|'+v.name]):[];
+  const sets=vars.filter(v=>!v.rec&&v.cost>0).map(v=>[name+'|'+v.name,v.cost]),clears=vars.filter(v=>!v.rec&&!v.cost).map(v=>name+'|'+v.name);
+  if(!renames.length&&!sets.length&&!clears.some(k=>((mnAcc&&mnAcc.costs)||{})[k]))return;
+  try{
+    await fb.runTransaction(fb.db,async tx=>{
+      const s=await tx.get(ref),d=s.exists()?s.data():{};
+      const costs={...(d.costs||{})},recipes={...(d.recipes||{})};
+      renames.forEach(([a,b])=>{if(a in costs){costs[b]=costs[a];delete costs[a];}if(a in recipes){recipes[b]=recipes[a];delete recipes[a];}});
+      clears.forEach(k=>{delete costs[k];});sets.forEach(([k,c])=>{costs[k]=c;});
+      if(s.exists())tx.update(ref,{costs,recipes});else tx.set(ref,{costs,recipes,materials:[],moves:[],expenses:[]});
+    });
+  }catch(err){toast('⚠️ الصنف انحفظ بس التكلفة ما انحفظت: '+(err.code||err.message),'warn');}
+}
+function axOpenMn(html){document.getElementById('mnMoBody').innerHTML=html;document.getElementById('mnMo').classList.add('open');}
+window.mnClose=()=>{document.getElementById('mnMo').classList.remove('open');mnEd=null;menuRender();};
 // ── المخزون والحسابات: قراءة كاملة لكل الأرقام + الإدارة فقط تعدّل وتحذف المصروفات ──
 const AX_MV={open:'رصيد افتتاحي',purchase:'وارد — مشتريات',sale:'صادر — منصرف للمبيعات',sale_return:'وارد — مردود مبيعات',waste:'صادر — تالف / هالك',count:'تسوية جرد',purchase_return:'صادر — مرتجع للمورد'};
 const AX_CATS=['رواتب','إيجار','كهرباء وماء','غاز / وقود','صيانة','تغليف','تسويق وإعلان','مشتريات أخرى','أخرى'];
@@ -2951,7 +3205,8 @@ window.exportCSV=function(){
 
 // ── RESTAURANT STAFF (CASHIERS) & PHONE LINES ──
 // التقارير والأرباح صارت للإدارة فقط؛ الكاشير يطبع تقرير اليوم من الوردية
-const PERMS=[['discount','٪ الخصم'],['cancel','❌ إلغاء الطلبات'],['inventory','📦 المخزون والمصروفات (إضافة ومشاهدة)'],['menu','🍔 تعديل المنيو'],['settings','⚙️ الإعدادات']];
+// تعديل المنيو صار من لوحة الإدارة بس ← ما بقت صلاحية «تعديل المنيو» للكاشير
+const PERMS=[['discount','٪ الخصم'],['cancel','❌ إلغاء الطلبات'],['inventory','📦 المخزون والمصروفات (إضافة ومشاهدة)'],['settings','⚙️ الإعدادات']];
 const PERM_DEFAULT={discount:true,cancel:false,inventory:false,menu:false,settings:false};
 // أنواع الطلبات اللي يشتغل عليها الكاشير + البيجر — مفتوحة إلا إذا انطفت (false)
 const ORD_PERMS=[['oSalon','🪑 صالة'],['oTake','🛍️ سفري فوري'],['oHold','🥡 سفري قيد التحضير'],['oDeliv','🏍️ دلفري والاتصالات 📞'],['pager','📟 البيجر']];
