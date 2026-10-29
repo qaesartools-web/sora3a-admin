@@ -31,22 +31,22 @@ async function login(p) {
 const ordersRP = () => all('orders', 'restaurantId', 'RP');
 const clean = (p) => p.errors.filter((e) => !/favicon|Failed to load resource|vibrate|integrity|digest|messaging|serviceWorker|ServiceWorker/i.test(e));
 
-test('new restaurant: empty menu, import sample → synced to second device', async () => {
+test('new restaurant: empty menu points to the admin app; the menu written from admin reaches every device', async () => {
   const a = await page(B, { w: 1280, h: 800 });
   await login(a);
   await a.waitForSelector('.prod-empty');
-  await a.click('.prod-empty button >> text=استيراد');
-  await a.waitForSelector('#prods .prod');
-  const m = await until(() => read('restaurants/RP/menu/main'));
-  assert.ok(m && m.cats.length >= 5, 'menu pushed to cloud');
-  // device 2
+  assert.match(await a.textContent('.prod-empty'), /تطبيق الإدارة/);
+  assert.equal(await a.locator('.prod-empty button >> text=استيراد').count(), 0, 'no sample import in the cashier');
   const b = await page(B, { w: 1280, h: 800 });
   await login(b);
-  await b.waitForFunction(() => document.querySelectorAll('#prods .prod').length > 3, null, { timeout: 15000 });
-  await b.waitForTimeout(2500);   // ننتظر وصول آخر نسخة من المنيو قبل التعديل (الجهاز الأول قد يرفعها مرتين)
-  // edit on device 2 → appears on device 1
-  await b.evaluate(() => { menu[0].items.push({ name: 'برغر الشيف', variants: [{ name: 'وحدة', price: 6500 }] }); saveMenu(); });
-  await a.waitForFunction(() => menu[0].items.some((i) => i.name === 'برغر الشيف'), null, { timeout: 15000 });
+  await b.waitForSelector('.prod-empty');
+  assert.equal(await read('restaurants/RP/menu/main'), undefined, 'the cashier never creates the menu');
+  // المالك يضيف المنيو من تطبيق الإدارة ← يوصل للجهازين
+  const sample = await a.evaluate(() => defaultMenu.map((c) => ({ cat: c.cat, emoji: c.emoji, items: c.items.map(({ img, ...x }) => x) })));
+  sample[0].items.push({ name: 'برغر الشيف', variants: [{ name: 'وحدة', price: 6500 }] });
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RP/menu/main'), { cats: sample, updatedAtMs: Date.now(), device: 'admin' }); });
+  for (const p of [a, b]) await p.waitForFunction(() => menu[0] && menu[0].items.some((i) => i.name === 'برغر الشيف'), null, { timeout: 15000 });
+  assert.ok(await a.locator('#prods .prod').count() > 3);
   assert.deepEqual(clean(a), []); assert.deepEqual(clean(b), []);
   await b.context().close(); await a.context().close();
 });
@@ -311,13 +311,14 @@ test('delivery edge cases: self pickup is paid into the drawer, paid orders cann
   await p.waitForSelector(`#holdStrip .hchip:has-text("#${h.ticketNo}")`);
   await p.click('#prods .prod >> nth=0'); await p.click('#sendBtn'); await p.keyboard.press('2');
   await p.waitForSelector('#payOv.on'); await p.click('#payOk');
-  const q = await until(async () => (await ordersRP()).find((x) => x.orderType === 'takeaway' && !x.held && x.ticketNo > h.ticketNo));
+  // أحدث طلب سفري فوري بعد تذكرة «قيد التحضير» (طلبات الاختبار المزروعة فوق بيها أرقام أكبر — ترتيب القراءة مو ثابت)
+  const q = await until(async () => (await ordersRP()).filter((x) => x.orderType === 'takeaway' && !x.held && (x.createdAtMs || 0) > (h.createdAtMs || 0)).sort((a, b) => b.createdAtMs - a.createdAtMs)[0]);
   assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), new RegExp('class="num">#' + q.ticketNo + '<'), 'quick takeaway receipt shows the screen number');
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
 
-test('windows app (no native prompt): «تعديل» a category opens an in-page dialog and saves the new name and emoji', async () => {
+test('windows app (no native prompt): the menu tab is settings only, menu editing points to the admin app, confirms stay in-page', async () => {
   const p = await page(B, { w: 1280, h: 800 });
   await p.context().addInitScript(() => {
     const ua = navigator.userAgent + ' Electron/30.0.0';
@@ -327,19 +328,19 @@ test('windows app (no native prompt): «تعديل» a category opens an in-page
   const native = []; p.on('dialog', (d) => native.push(d.message()));
   await login(p);
   await p.waitForSelector('#prods .prod');
-  await p.evaluate(() => { goTab('menu'); showMTab('cats'); });
-  await p.waitForSelector('#catsList button >> text=تعديل');
-  const old = await p.evaluate(() => menu[0].cat);
-  await p.click('#catsList button >> text=تعديل');
-  await p.waitForSelector('#acOv.on');
-  assert.equal(await p.inputValue('#acf_name'), old);
-  await p.fill('#acf_name', 'مشويات'); await p.fill('#acf_emoji', '🔥');
-  await p.click('#acDlgOk');
-  const m = await until(async () => { const d = await read('restaurants/RP/menu/main'); return d && d.cats[0].cat === 'مشويات' ? d : null; });
-  assert.equal(m.cats[0].emoji, '🔥');
-  await p.waitForSelector('#catsList >> text=مشويات');
-  // الحذف: تأكيد داخل الصفحة (مو نافذة المتصفح)
-  await p.click('#catsList button >> nth=1');
+  assert.match(await p.textContent('.dnb[data-tab="menu"]'), /الإعدادات/);
+  await p.evaluate(() => goTab('menu'));
+  await p.waitForSelector('#mSetSec', { state: 'visible' });
+  for (const id of ['#mt1', '#mt2', '#mt3', '#mAddSec', '#mListSec', '#mCatsSec']) assert.equal(await p.isVisible(id), false, id + ' hidden');
+  assert.match(await p.textContent('#menuScreen'), /تطبيق الإدارة/);
+  // أي محاولة تعديل من الكاشير ما تغيّر المنيو
+  const before = JSON.stringify((await read('restaurants/RP/menu/main')).cats.map((c) => [c.cat, c.items.map((i) => [i.name, i.variants])]));
+  await p.evaluate(() => { editItem(0, 0); renameCat(0); delCat(0); showMTab('list'); });
+  await p.waitForTimeout(1500);
+  assert.equal(await p.isVisible('#acOv.on'), false);
+  assert.equal(JSON.stringify((await read('restaurants/RP/menu/main')).cats.map((c) => [c.cat, c.items.map((i) => [i.name, i.variants])])), before);
+  // التأكيد داخل الصفحة (مو نافذة المتصفح)
+  await p.click('.lout');
   await p.waitForSelector('.ask-ov');
   await p.click('.ask-ov .ask-no');
   assert.deepEqual(native, [], 'no native dialogs in the windows app');

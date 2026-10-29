@@ -55,31 +55,37 @@ test('cashier: no reports/profits, daily receipt from shift tab, expenses by sin
   // المخزون والحسابات: المخزون والمصروفات فقط
   await p.evaluate(() => goTab('acc'));
   const tabs = await p.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
-  assert.deepEqual(tabs.filter((t) => !t.includes('رجوع')), ['📦 المخزون', '💸 المصروفات']);
+  assert.deepEqual(tabs.filter((t) => !t.includes('رجوع')), ['📦 المخزون', '💸 المصروفات', '🏭 الموردين', '🧾 ديون الزبائن']);
   await p.click('#acTabs .mtab >> text=المصروفات');
   assert.equal(await p.locator('#acBody .prow').count(), 0, 'no from/to range for cashier');
   assert.equal(await p.locator('#acBody input[onchange^="acSetExpDay"]').count(), 1, 'single day picker');
   assert.ok((await p.textContent('#acBody')).includes('مصروفات اليوم'));
-  // قائمة الأصناف بدون تكلفة وربح
-  await p.evaluate(() => { goTab('menu'); showMTab('list'); });
-  assert.ok(!(await p.textContent('#mItemsList')).includes('ربح'));
+  // قائمة الأصناف والتعديل صارت بتطبيق الإدارة بس
+  assert.equal(await p.isVisible('#mt2'), false);
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
 
-test('owner edits an item with cost and sees the profit', async () => {
-  const p = await pos('rown@x.com');
-  await p.evaluate(() => { goTab('menu'); showMTab('list'); });
-  await p.click('.micard:has-text("زنكر") button[onclick^="editItem"]');
-  await p.waitForSelector('#acOv.on');
-  await p.fill('#acf_vp0', '7000'); await p.fill('#acf_vc0', '4200');
-  await p.waitForFunction(() => document.querySelector('.item-profit').textContent.includes('ربح 2,800 (40%)'));
-  await p.screenshot({ path: 'shots/pos-item-cost.png' });
-  await p.click('#acDlgOk');
+test('owner edits an item with cost from the admin app and sees the profit; the cashier gets the new price', async () => {
+  const c = await pos('rown@x.com');
+  const p = await page(B, { w: 1280, h: 900 });
+  await p.goto('http://localhost:5050/sora3a-admin/index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#lEmail', 'rown@x.com'); await p.fill('#lPass', 'secret123'); await p.click('#lBtn');
+  await p.waitForSelector('#appPage', { state: 'visible' });
+  await p.click('.dnav-btn[data-screen="scMenu"]');
+  await p.click('.mn-item:has-text("زنكر") button >> text=تعديل');
+  await p.waitForSelector('#mnMo.open');
+  await p.fill('#mnVars .mn-var >> nth=0 >> input >> nth=1', '7000');
+  await p.fill('#mnVars .mn-var >> nth=0 >> input >> nth=2', '4200');
+  await p.waitForFunction(() => document.getElementById('mnPf0').textContent.includes('الربح 2,800 (40%)'));
+  await p.screenshot({ path: 'shots/admin-item-cost.png' });
+  await p.click('#mnIsave');
   const a = await until(async () => { const d = await accDoc(); return d.costs['زنكر|وحدة'] === 4200 ? d : null; });
   assert.ok(a);
-  assert.equal(await p.evaluate(() => menu[0].items.find((i) => i.name === 'زنكر').variants[0].price), 7000);
-  await p.context().close();
+  await c.waitForFunction(() => menu[0].items.find((i) => i.name === 'زنكر').variants[0].price === 7000, null, { timeout: 15000 });
+  assert.deepEqual(clean(p), []);
+  await p.context().close(); await c.context().close();
 });
 
 test('admin: sales report with any date range + print, items & profit, shifts', async () => {
@@ -105,7 +111,8 @@ test('admin: sales report with any date range + print, items & profit, shifts', 
   assert.ok((await p.textContent('#axBody')).includes('40%'));
   await p.click('.ax-row:has-text("زنكر")');
   await p.fill('#axIcost', '3600');
-  await p.waitForFunction(() => document.getElementById('axIprev').textContent.includes('2,400'));
+  // السعر صار 7,000 من تعديل المنيو بتطبيق الإدارة (الاختبار اللي قبله)
+  await p.waitForFunction(() => document.getElementById('axIprev').textContent.includes('3,400'));
   await p.click('#axMoBody button >> text=حفظ التكلفة');
   await until(async () => (await accDoc()).costs['زنكر|وحدة'] === 3600);
   await p.screenshot({ path: 'shots/admin-items.png', fullPage: true });
@@ -149,7 +156,7 @@ test('no duplicates: owner cashier sends reports to the admin panel; stock keeps
   assert.equal(await p.$('#nb3'), null);
   await p.click('.dnb[data-tab="acc"]');
   const tabs = await p.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
-  assert.deepEqual(tabs, ['📦 المخزون', '🧾 الوصفات والتكلفة', '💸 المصروفات', '🧰 أدوات', '💰 قائمة الدخل والحركات ↗']);
+  assert.deepEqual(tabs, ['📦 المخزون', '🧾 الوصفات والتكلفة', '💸 المصروفات', '🏭 الموردين', '🧾 ديون الزبائن', '🧰 أدوات', '💰 قائمة الدخل والحركات ↗']);
   await p.click('#acTabs .ac-ext');
   assert.equal(await p.evaluate(() => window.__opened), 'http://localhost:5050/sora3a-admin/');
   await p.context().close();

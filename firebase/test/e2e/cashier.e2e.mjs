@@ -76,7 +76,7 @@ test('only the super admin adds and stops cashiers; the owner manages permission
   await p.click('#mcAddBtn');
   const cu = await until(async () => (await all('users', 'role', 'cashier'))[0]);
   assert.equal(cu.restaurantId, 'RC');
-  assert.deepEqual(cu.perms, { discount: true, cancel: false, inventory: false, menu: false, settings: false, oSalon: true, oTake: true, oHold: true, oDeliv: true, pager: true });
+  assert.deepEqual(cu.perms, { discount: true, cancel: false, inventory: false, settings: false, oSalon: true, oTake: true, oHold: true, oDeliv: true, pager: true });
   U.cash = cu.id;
   await p.waitForSelector('#mcList .entity');
   // إيقاف وتفعيل من المدير الأعلى
