@@ -316,3 +316,33 @@ test('delivery edge cases: self pickup is paid into the drawer, paid orders cann
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
+
+test('windows app (no native prompt): «تعديل» a category opens an in-page dialog and saves the new name and emoji', async () => {
+  const p = await page(B, { w: 1280, h: 800 });
+  await p.context().addInitScript(() => {
+    const ua = navigator.userAgent + ' Electron/30.0.0';
+    Object.defineProperty(navigator, 'userAgent', { get: () => ua });
+    window.prompt = () => null;   // برنامج الويندوز ما يدعم prompt
+  });
+  const native = []; p.on('dialog', (d) => native.push(d.message()));
+  await login(p);
+  await p.waitForSelector('#prods .prod');
+  await p.evaluate(() => { goTab('menu'); showMTab('cats'); });
+  await p.waitForSelector('#catsList button >> text=تعديل');
+  const old = await p.evaluate(() => menu[0].cat);
+  await p.click('#catsList button >> text=تعديل');
+  await p.waitForSelector('#acOv.on');
+  assert.equal(await p.inputValue('#acf_name'), old);
+  await p.fill('#acf_name', 'مشويات'); await p.fill('#acf_emoji', '🔥');
+  await p.click('#acDlgOk');
+  const m = await until(async () => { const d = await read('restaurants/RP/menu/main'); return d && d.cats[0].cat === 'مشويات' ? d : null; });
+  assert.equal(m.cats[0].emoji, '🔥');
+  await p.waitForSelector('#catsList >> text=مشويات');
+  // الحذف: تأكيد داخل الصفحة (مو نافذة المتصفح)
+  await p.click('#catsList button >> nth=1');
+  await p.waitForSelector('.ask-ov');
+  await p.click('.ask-ov .ask-no');
+  assert.deepEqual(native, [], 'no native dialogs in the windows app');
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
