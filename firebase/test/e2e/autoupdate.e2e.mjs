@@ -97,3 +97,35 @@ test('admin and captain update silently and keep their screen', async () => {
   await c.waitForFunction(() => document.querySelector('.nav button[data-tab="history"]').classList.contains('on'), null, { timeout: 15000 });
   await c.context().close();
 });
+
+test('Windows/Mac program update: a bar keeps coming back until it is installed — «install now» only when the cart is empty', async () => {
+  const p = await page(B, { w: 1280, h: 800 });
+  await p.addInitScript(() => {
+    window.__installs = 0;
+    window.SoraDesktop = { version: '1.0.15', platform: 'win32', canAutoStart: true, printers: async () => [], print: async () => ({ ok: true }), jobs: async () => [], reprint: async () => ({}),
+      getTestMode: async () => false, setTestMode: async () => false, openSimulator: async () => true, getAutoStart: async () => true, setAutoStart: async () => true,
+      onUpdate: (cb) => { window.__upd = cb; }, installUpdate: async () => { window.__installs++; return true; } };
+  });
+  await p.goto('http://localhost:5050/sora3a-rest2/index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#inEmail', 'au@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
+  await p.waitForSelector('#prods .prod', { timeout: 15000 });
+  // البرنامج نزّل نسخة ← شريط بزر «ثبّت هسه»
+  await p.evaluate(() => window.__upd('1.0.16'));
+  await p.waitForSelector('#deskUpd:has-text("1.0.16") [data-du="go"]');
+  // «لاحقاً» يخفيه — والبرنامج يذكّر من جديد (مثلاً بعد ما تنفتح الصفحة) ← يرجع
+  await p.click('#deskUpd [data-du="later"]');
+  assert.equal(await p.$('#deskUpd'), null);
+  await p.evaluate(() => window.__upd('1.0.16'));
+  await p.waitForSelector('#deskUpd');
+  // السلة بيها طلب ← ما يثبّت، يقول خلّص أول
+  await p.click('#prods .prod >> nth=0');
+  await p.click('#deskUpd [data-du="go"]');
+  await p.waitForSelector('#toast.on:has-text("خلّص الطلب")', { timeout: 5000 });
+  assert.equal(await p.evaluate(() => window.__installs), 0);
+  // السلة فارغة ← يثبّت
+  await p.evaluate(() => { cart.length = 0; renderCart(); });
+  await p.click('#deskUpd [data-du="go"]');
+  await p.waitForFunction(() => window.__installs === 1, null, { timeout: 5000 });
+  await p.context().close();
+});
