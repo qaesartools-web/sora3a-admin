@@ -147,3 +147,45 @@ test('inside the Android app: native token is saved, no web permission sheet', a
   assert.equal(await p.$('[data-act="enable-notif"]'), null);
   await p.context().close();
 });
+
+test('GPS: the location goes up when the captain moves (and every minute and a half standing still), not every few seconds; «unavailable» stops following the pending list', async () => {
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'captains/C1'), { restaurantId: 'R1', userId: uid, name: 'علي', available: true }); });
+  const p = await page(B, { notif: true });
+  // مواعيد أقصر للتجربة (نفس المنطق: تحرك ← بعد «move»، واقف ← كل «beat»)، وموقع نتحكم بيه
+  await p.addInitScript(() => {
+    window.__gps = { move: 1500, beat: 5000, idle: 60000, trackMove: 1500, trackBeat: 5000, tick: 500 };
+    let cb = null;
+    navigator.geolocation.watchPosition = (ok) => { cb = ok; return 1; };
+    navigator.geolocation.clearWatch = () => {};
+    window.__fix = (lat, lng) => cb && cb({ coords: { latitude: lat, longitude: lng, accuracy: 8 } });
+  });
+  await p.goto('http://localhost:5050/sora3a-captain/captain.html');
+  await p.fill('#email', 'cap@x.com'); await p.fill('#password', 'secret123'); await p.click('#loginBtn');
+  await p.waitForFunction(() => document.getElementById('hName').textContent.includes('علي'), null, { timeout: 15000 });
+  const l1 = await until(async () => { await p.evaluate(() => window.__fix(33.3, 44.4)); const d = await read('captainLocations/C1'); return d && d.lat === 33.3 ? d : null; });
+  assert.ok(l1, 'first location goes up right away');
+  // واقف (تذبذب GPS بسيط): ولا كتابة
+  for (let i = 0; i < 8; i++) { await p.evaluate(() => window.__fix(33.30002, 44.40002)); await new Promise((r) => setTimeout(r, 150)); }
+  assert.equal((await read('captainLocations/C1')).timestamp, l1.timestamp, 'no write while standing still');
+  // تحرك 300 متر ← ينكتب
+  await new Promise((r) => setTimeout(r, 400));
+  await p.evaluate(() => window.__fix(33.3027, 44.4));
+  const l2 = await until(async () => { const d = await read('captainLocations/C1'); return d.timestamp > l1.timestamp ? d : null; });
+  assert.ok(Math.abs(l2.lat - 33.3027) < 1e-9, 'moved → written');
+  // واقف بدون موقع جديد: يذكّر بعد «beat» حتى يبقى «شغّال» بالخارطة
+  const l3 = await until(async () => { const d = await read('captainLocations/C1'); return d.timestamp > l2.timestamp ? d : null; }, 10000);
+  assert.ok(l3 && l3.timestamp - l2.timestamp >= 4500, 'heartbeat while standing still: ' + (l3 && l3.timestamp - l2.timestamp));
+  // غير متاح ← ما يتابع الطلبات المعلّقة؛ يرجع متاح ← يوصله الطلب فوراً
+  await p.click('#availBtn');
+  await until(async () => (await read('captains/C1')).available === false);
+  await E.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), 'orders/O9ZZZZZZZZZZZZ'), { restaurantId: 'R1', restaurantName: 'برغر', status: 'pending', rejectedBy: [], value: 9000, fee: 2000, address: 'الكرادة', createdAtMs: Date.now(), day: today, timeline: [] });
+  });
+  await new Promise((r) => setTimeout(r, 1200));
+  assert.equal(await p.evaluate(() => document.getElementById('newPill').textContent), '0', 'not following pending orders while unavailable');
+  await p.click('#availBtn');
+  await p.waitForSelector('#incoming.show', { timeout: 10000 });
+  assert.match(await p.textContent('#incoming'), /الكرادة|9,000|2,000/);
+  assert.deepEqual(p.errors.filter((e) => !/favicon|Failed to load resource|vibrate|AudioContext|messaging|serviceWorker/i.test(e)), []);
+  await p.context().close();
+});
