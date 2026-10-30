@@ -947,3 +947,25 @@ test('منيو الباركود: طلب واحد لكل جهاز كل 20 ثان�
   await env.withSecurityRulesDisabled(async (c) => setDoc(doc(c.firestore(), 'webRate/dev1'), { at: new Date(Date.now() - 25000) }));
   await assertSucceeds(qrOrder(WEB(), 'dev1'));
 });
+
+// ── شبكة المطعم (بنت أو بدون نت): الرمز السري settings/lan ──
+//  الكاشير وشاشات المطعم المربوطة يقرونه (يتصافحون بيه على الواي فاي)؛ يسويه صاحب المطعم أو كاشير عنده صلاحية الإعدادات
+test('شبكة المطعم: الرمز السري يقراه الكاشير وشاشة المطبخ المربوطة، وما يشوفه الكابتن أو مطعم ثاني', async () => {
+  const KEY = { key: 'a'.repeat(64), atMs: 1 };
+  await assertFails(setDoc(doc(as('cash1'), 'restaurants/R1/settings/lan'), KEY), 'cashier without settings permission cannot create it');
+  await assertSucceeds(setDoc(doc(as('rest1'), 'restaurants/R1/settings/lan'), KEY));
+  await assertSucceeds(setDoc(doc(as('cash2'), 'restaurants/R1/settings/lan'), KEY));
+  await assertFails(setDoc(doc(as('rest2'), 'restaurants/R1/settings/lan'), KEY));
+  await assertSucceeds(getDoc(doc(as('cash1'), 'restaurants/R1/settings/lan')));
+  await assertSucceeds(getDoc(doc(as('rest1'), 'restaurants/R1/settings/lan')));
+  await assertFails(getDoc(doc(as('cap1'), 'restaurants/R1/settings/lan')), 'captain cannot read the LAN key');
+  await assertFails(getDoc(doc(as('rest2'), 'restaurants/R1/settings/lan')));
+  await assertFails(getDoc(doc(anon(), 'restaurants/R1/settings/lan')));
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'screens/scrK'), { restaurantId: 'R1', kind: 'kitchen', approved: true, code: 'ABCDEF' });
+    await setDoc(doc(ctx.firestore(), 'screens/scrO'), { restaurantId: 'R2', kind: 'kitchen', approved: true, code: 'ABCDEG' });
+  });
+  await assertSucceeds(getDoc(doc(as('scrK'), 'restaurants/R1/settings/lan')), 'linked kitchen screen reads its restaurant key');
+  await assertFails(getDoc(doc(as('scrO'), 'restaurants/R1/settings/lan')), 'another restaurant screen cannot');
+  await assertFails(setDoc(doc(as('scrK'), 'restaurants/R1/settings/lan'), KEY), 'screens cannot change it');
+});
