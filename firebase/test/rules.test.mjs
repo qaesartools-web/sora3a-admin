@@ -973,3 +973,16 @@ test('شبكة المطعم: الرمز السري يقراه الكاشير و�
   // الكابتن بعده يقرا باقي بيانات مطعمه (المنيو والإعدادات) مثل قبل
   await assertSucceeds(getDoc(doc(as('cap1'), 'restaurants/R1/settings/main')));
 });
+
+// شاشة المطبخ: لما تخلص كل الأقسام تعلّم وقتها (kitchenSecDoneAt) والطلب يروح للمجهز — رقم بس، وبدون ما تغيّر شي ثاني
+test('شاشة المطبخ: آخر قسم يعلّم kitchenSecDoneAt (رقم) والطلب يروح للمجهز', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'screens/scrK2'), { restaurantId: 'R1', kind: 'kitchenSec', approved: true, code: 'ABCDEJ' });
+    await setDoc(doc(db, 'orders/OK1'), { restaurantId: 'R1', status: 'preparing', kitchen: 'new', value: 5000, kSec: { g: { n: 1, readyAt: 0 } }, rejectedBy: [] });
+  });
+  const S = as('scrK2');
+  await assertSucceeds(updateDoc(doc(S, 'orders/OK1'), { kSec: { g: { n: 1, readyAt: 1 } }, kitchenSecDoneAt: 1700000000000 }));
+  await assertFails(updateDoc(doc(S, 'orders/OK1'), { kitchenSecDoneAt: 'x' }), 'must be a number');
+  await assertFails(updateDoc(doc(S, 'orders/OK1'), { kitchenSecDoneAt: 1, value: 1 }), 'cannot touch the price');
+});

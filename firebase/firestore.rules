@@ -380,8 +380,10 @@ service cloud.firestore {
             && request.resource.data.restaurantId == resource.data.restaurantId)
 
         // شاشة المطبخ المربوطة: «جاهز» بس (الطلب كله أو قسم منه) — وطلب أونلاين قيد التحضير يصير «جاهز للاستلام»
+        //  kitchenSecDoneAt: خلصت كل أقسام المطبخ ← الطلب راح لشاشة المجهز (ترتيبه عنده)
         || (kitchenScreenOf(resource.data.restaurantId)
-            && onlyChanged(['kitchen','kitchenReadyAt','kSec','status','readyAt','timeline'])
+            && onlyChanged(['kitchen','kitchenReadyAt','kSec','status','readyAt','timeline','kitchenSecDoneAt'])
+            && (!('kitchenSecDoneAt' in request.resource.data) || request.resource.data.kitchenSecDoneAt is number)
             && request.resource.data.get('kitchen', null) in [resource.data.get('kitchen', null), 'ready']
             && (request.resource.data.get('status', null) == resource.data.get('status', null)
                 || (resource.data.get('status', null) == 'preparing' && request.resource.data.status == 'ready')))

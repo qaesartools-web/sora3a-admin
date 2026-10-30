@@ -747,3 +747,78 @@ test('«تم التسليم» at the cashier takes the order off the ready scree
   assert.ok(s2.servedAtMs); assert.equal(s2.pagerDone, true);
   for (const x of [scr, c]) { assert.deepEqual(clean(x), []); await x.context().close(); }
 });
+
+// التسلسل: الكاشير ← شاشة المطبخ (كل قسم يطبخ) ← شاشة المجهز (يجمّع ويتمم) ← جاهز. شاشة المطبخ مطفية ← المجهز مباشرة
+test('kitchen flow: the order goes to the kitchen sections first, then to the preparer, who completes it; kitchen screen off → straight to the preparer', async () => {
+  const now = Date.now();
+  await write('restaurants/RW', { features: { kitchen: true, kitchenSec: true }, svcOff: {} });
+  await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: 3, kSecOn: true,
+    sections: [{ id: 'grill', name: 'الشوي', emoji: '🔥' }, { id: 'drinks', name: 'المشروبات', emoji: '🥤' }] });
+  const ord = (id, n, extra = {}) => put('orders/' + id, { restaurantId: 'RW', orderType: 'takeaway', status: 'preparing', held: true, kitchen: 'new', ticketNo: n, value: 9000, day: bagDay(now),
+    createdAt: '20:15', createdAtMs: now - 60000, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1, sec: 'grill' }, { name: 'لبن', variant: 'وحدة', qty: 1, sec: 'drinks' }],
+    kSec: { grill: { n: 1, readyAt: 0 }, drinks: { n: 1, readyAt: 0 } }, ...extra });
+  await ord('KF1', 91);
+  // شاشة المجهز: الطلب بعده بالمطبخ ← بشريط «بعدها بالمطبخ» بس، بدون زر
+  const prep = await page(B, { w: 1280, h: 800 });
+  await pairScreen(prep, BASE + 'kitchen.html');
+  await prep.waitForSelector('#cook:not([hidden])', { timeout: 15000 });
+  await prep.waitForFunction(() => /#91/.test(document.getElementById('cook').textContent), null, { timeout: 15000 });
+  assert.equal(await prep.locator('[data-done="KF1"]').count(), 0, 'not on the preparer while the kitchen cooks');
+  assert.match(await prep.textContent('#flow'), /بعد ما يخلص المطبخ/);
+  // شاشة المطبخ: قسم الشوي ثم المشروبات
+  const k = await page(B, { w: 1280, h: 800 });
+  await pairScreen(k, BASE + 'kitchen.html?sec=grill');
+  await k.waitForSelector('.card [data-sec="KF1|grill"]', { timeout: 15000 });
+  assert.match(await k.textContent('#flow'), /يروح لشاشة المجهز/);
+  await k.click('.card [data-sec="KF1|grill"]');
+  await until(async () => (await read('orders/KF1')).kSec.grill.readyAt > 0);
+  await k.goto(BASE + 'kitchen.html?sec=drinks');
+  await k.waitForSelector('.card [data-sec="KF1|drinks"]', { timeout: 15000 });
+  await k.click('.card [data-sec="KF1|drinks"]');
+  let o = await until(async () => { const x = await read('orders/KF1'); return x.kitchenSecDoneAt ? x : null; });
+  assert.equal(o.kitchen, 'new', 'kitchen done → with the preparer, not ready yet'); assert.equal(o.status, 'preparing');
+  // المجهز يستلمه (وينشال من «بعدها بالمطبخ») ويتممه
+  await prep.waitForSelector('.card [data-done="KF1"]', { timeout: 15000 });
+  assert.match(await prep.textContent('.card:has([data-done="KF1"])'), /تم التجهيز — جاهز للزبون/);
+  assert.equal(await prep.locator('.card:has([data-done="KF1"]) .sec[data-sec]').count(), 0, 'section chips are info only on the preparer');
+  await prep.click('.card [data-done="KF1"]');
+  o = await until(async () => { const x = await read('orders/KF1'); return x.kitchen === 'ready' ? x : null; });
+  assert.equal(o.status, 'ready');
+  // دلفري: نفس الشي، وزر المجهز يكول يرجع لكاشير الدلفري
+  await ord('KF3', 93, { orderType: 'delivery', status: 'preparing', awaitCap: true, held: false, kSec: { grill: { n: 1, readyAt: now }, drinks: { n: 1, readyAt: now } }, kitchenSecDoneAt: now });
+  await prep.waitForSelector('.card [data-done="KF3"]', { timeout: 15000 });
+  assert.match(await prep.textContent('.card:has([data-done="KF3"])'), /يرجع لكاشير الدلفري/);
+  // شاشة المطبخ مطفية ← الطلب يوصل للمجهز مباشرة
+  await write('restaurants/RW', { svcOff: { kitchenSec: true } });
+  await ord('KF2', 92);
+  await prep.waitForSelector('.card [data-done="KF2"]', { timeout: 15000 });
+  assert.match(await prep.textContent('#flow'), /مباشرة/);
+  assert.deepEqual(clean(prep), []); assert.deepEqual(clean(k), []);
+  await write('restaurants/RW', { features: { kitchen: false, kitchenSec: false }, svcOff: {} });
+  await prep.context().close(); await k.context().close();
+});
+
+// دلفري خلص تجهيزه يرجع للكاشير اللي سجّله (حتى يختار الكابتن)؛ إذا ما اختار خلال ٣ دقايق يطلع لباقي كاشيرية الدلفري
+test('a delivery order finished by the preparer comes back to the cashier who took it; other delivery cashiers see it only after 3 minutes', async () => {
+  const mk = async (email) => { const uid = await signUp(email, 'secret123');
+    await put('users/' + uid, { role: 'cashier', restaurantId: 'RW', email, name: email.split('@')[0], perms: {} }); };
+  await mk('dlA@x.com'); await mk('dlB@x.com');
+  const login = async (email, dev) => { const p = await page(B, { w: 1280, h: 860 });
+    await p.addInitScript((d) => { try { localStorage.setItem('pos_device', JSON.stringify(d)); } catch (e) {} }, dev);
+    await p.goto(BASE + 'index.html');
+    await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+    await p.fill('#inEmail', email); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
+    await p.waitForSelector('#prods .prod', { timeout: 15000 }); return p; };
+  const a = await login('dlA@x.com', 'dev-A'), b = await login('dlB@x.com', 'dev-B');
+  const now = Date.now();
+  await put('orders/DLB1', { restaurantId: 'RW', orderType: 'delivery', status: 'preparing', awaitCap: true, captainId: null, kitchen: 'ready', kitchenReadyAt: now, device: 'dev-A',
+    ticketNo: 95, customer: 'أبو حيدر', phone: '07705550000', value: 6000, fee: 1000, day: bagDay(now), createdAt: '20:20', createdAtMs: now - 5 * 60000, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1 }] });
+  await a.waitForSelector('#capWaitBox .cap-wait:has-text("#95")', { timeout: 15000 });
+  await b.waitForTimeout(1500);
+  assert.equal(await b.locator('#capWaitBox .cap-wait:has-text("#95")').count(), 0, 'the other delivery cashier does not get it right away');
+  // بعد ٣ دقايق (هنا نص ثانية) يطلع لهم هم
+  await b.evaluate(() => { window.__capBack = 500; renderCapWait(); });
+  await b.waitForSelector('#capWaitBox .cap-wait:has-text("#95")', { timeout: 5000 });
+  assert.deepEqual(clean(a), []); assert.deepEqual(clean(b), []);
+  await a.context().close(); await b.context().close();
+});
