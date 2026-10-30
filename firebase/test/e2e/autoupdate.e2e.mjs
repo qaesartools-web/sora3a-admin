@@ -39,6 +39,16 @@ test('cashier updates itself silently only when idle, and returns to the same ta
   await p.evaluate(() => { cart.length = 0; renderCart(); goTab('kitchen'); });
   await p.waitForTimeout(8000);
   assert.equal(await p.evaluate(() => window.__mark), 1, 'no reload while the app is on screen');
+  // بس يطلع زر «تحديث هسه» (برنامج الحاسبة شاشته دائماً أمام الكاشير) — الضغط عليه يحدّث ويرجع لنفس التبويب
+  await p.waitForSelector('#auBar:has-text("نزل تحديث")', { timeout: 8000 });
+  await p.click('#auBar button');
+  await p.waitForFunction(() => window.__mark === undefined, null, { timeout: 15000 });
+  await p.waitForFunction(() => document.getElementById('kitchenScreen').classList.contains('on'), null, { timeout: 15000 });
+  assert.equal(await p.$('#auBar'), null, 'no button after updating');
+  await p.waitForTimeout(2500);                                 // يسجّل الإصدار الجديد
+  await p.evaluate(() => { window.__mark = 1; });
+  await touch(f);
+  await p.waitForTimeout(11000);
   // التطبيق صار بالخلفية: يتحدث ويرجع لنفس التبويب
   await p.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
   await p.waitForFunction(() => window.__mark === undefined, null, { timeout: 15000 });
