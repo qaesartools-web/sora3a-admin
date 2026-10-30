@@ -39,7 +39,26 @@ for (const mode of Object.keys(MODES)) {
     await p.waitForTimeout(1000);
     const len = await p.evaluate(() => document.getElementById('mSetSec').innerHTML.length);
     if (mode.startsWith('bad')) assert.ok(await p.isVisible('#stTitle'), 'invoice fields shown');
-    assert.ok(len > 1000, 'settings rendered: ' + MODES[mode]); assert.deepEqual(errs, []);
+    assert.ok(len > 1000, 'settings rendered: ' + MODES[mode]);
+    // سطر النسخة يبين (حتى المطعم يصوّره)، وبدون تنبيه أحمر لما الإعدادات تنعرض
+    await p.waitForFunction(() => /نسخة الكاشير \d+/.test(document.getElementById('setDiag').textContent));
+    await p.waitForTimeout(700);
+    assert.doesNotMatch(await p.textContent('#setDiag'), /⚠️/); assert.deepEqual(errs, []);
     await p.context().close();
   });
 }
+
+test('if the settings ever fail to show, a red line says why (for a photo)', async () => {
+  const p = await page(B, { w: 1600, h: 900 });
+  await p.addInitScript(() => { window.__breakSettings = 1; });
+  await p.goto(BASE + 'index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#inEmail', 'rp@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
+  await p.waitForSelector('#prods .prod', { timeout: 15000 });
+  // نخرّب الصفحة عمداً (مثل نسخة قديمة أو خطأ غير متوقع): الإعدادات تبقى فارغة
+  await p.evaluate(() => { window.showMTab = () => { throw new Error('تجربة خطأ'); }; });
+  await p.click('[data-tab="menu"]');
+  await p.waitForFunction(() => /ما انعرضت/.test(document.getElementById('setDiag').textContent), null, { timeout: 5000 });
+  assert.match(await p.textContent('#setDiag'), /تجربة خطأ/);
+  await p.context().close();
+});
