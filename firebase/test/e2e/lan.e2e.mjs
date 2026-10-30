@@ -193,3 +193,76 @@ test('the kitchen app reopened with no internet still shows the cashier orders (
   kc.stop();
   await c.context().close(); await k.context().close();
 });
+
+test('Windows firewall blocking the screens: the cashier warns and one press allows them; browser pages say why they cannot work offline', async () => {
+  // برنامج الكاشير: جدار الحماية يمنع (ويندوز انضغط عليه «إلغاء») ← شريط أحمر + زر «اسمح بضغطة»
+  const c = await page(B, { w: 1280, h: 860 });
+  await wire(c, hub, 'hub');
+  const fw = { state: { ok: false, blocked: true, missing: true, pub: true }, fixes: 0 };
+  await c.exposeBinding('__fw', async (_s, m) => {
+    if (m === 'fix') { fw.fixes++; fw.state = { ok: true, blocked: false, missing: false, pub: true, fixed: true }; }
+    return fw.state;
+  });
+  await c.addInitScript(() => { window.SoraLan.fw = () => window.__fw('check'); window.SoraLan.fwFix = () => window.__fw('fix'); });
+  await c.goto(BASE + 'index.html');
+  await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await c.fill('#inEmail', 'lan@x.com'); await c.fill('#inPass', 'secret123'); await c.click('#loginBtn');
+  await c.waitForSelector('#prods .prod', { timeout: 15000 });
+  await c.waitForSelector('#lanFwBar:has-text("جدار حماية ويندوز")', { timeout: 15000 });
+  await c.evaluate(() => { goTab('menu'); showMTab('settings'); });
+  await c.waitForSelector('#lanBox:has-text("يمنع الشاشات")', { timeout: 10000 });
+  await c.screenshot({ path: 'shots/lan-firewall-blocked.png' });
+  await c.click('#lanFwBar button:has-text("اسمح")');
+  await c.waitForSelector('#lanFwBar', { state: 'detached', timeout: 10000 });
+  await c.waitForSelector('#lanBox:has-text("جدار الحماية: مسموح")', { timeout: 10000 });
+  assert.equal(fw.fixes, 1);
+  assert.deepEqual(clean(c), []);
+  await c.context().close();
+
+  // نفس الكاشير بالمتصفح (بدون البرنامج): الإعدادات توضّح إن بدون نت ما يوصل شي للشاشات
+  const b = await page(B, { w: 1280, h: 860 });
+  await b.goto(BASE + 'index.html');
+  await b.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await b.fill('#inEmail', 'lan@x.com'); await b.fill('#inPass', 'secret123'); await b.click('#loginBtn');
+  await b.waitForSelector('#prods .prod', { timeout: 15000 });
+  await b.evaluate(() => { goTab('menu'); showMTab('settings'); });
+  await b.waitForSelector('.sh-card:has-text("مفتوح بالمتصفح")', { timeout: 10000 });
+  assert.equal(await b.$('#lanFwBar'), null);
+  await b.context().close();
+
+  // شاشة المجهز بالمتصفح (مو التطبيق) والنت ينقطع: تقول ليش ما توصلها الطلبات وشنو الحل
+  const k = await page(B, { w: 1100, h: 800 });
+  await k.goto(BASE + 'kitchen.html');
+  await k.waitForSelector('#pairCode', { timeout: 15000 });
+  const code = (await k.textContent('#pairCode')).trim();
+  const pr = await until(() => read('screenPairs/' + code));
+  await put('screens/' + pr.uid, { restaurantId: 'RL', restName: 'مطعم الشبكة', code, kind: 'kitchen', name: 'المجهز', pairedBy: 'hq', approved: true, atMs: Date.now() });
+  await k.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  assert.equal(await k.isVisible('#lanH'), false, 'no hint while online');
+  await offline(k);
+  await k.waitForSelector('#lanH:has-text("مفتوحة بالمتصفح")', { timeout: 25000 });
+  await k.screenshot({ path: 'shots/lan-kitchen-browser-offline.png' });
+  await online(k);
+  await k.waitForSelector('#lanH', { state: 'hidden', timeout: 30000 });
+  await k.context().close();
+});
+
+test('the kitchen app with no cashier around explains what to check', async () => {
+  // تطبيق المطبخ (بيه الشبكة) بس ماكو كاشير شغّال على الواي فاي
+  const kc = createClient({ role: 'kitchen', udpPort: UDP + 1, targets: ['127.0.0.1'] });
+  const k = await page(B, { w: 1100, h: 800 });
+  await wire(k, kc, 'kitchen');
+  await k.goto(BASE + 'kitchen.html');
+  await k.waitForSelector('#pairCode', { timeout: 15000 });
+  const code = (await k.textContent('#pairCode')).trim();
+  const pr = await until(() => read('screenPairs/' + code));
+  await put('screens/' + pr.uid, { restaurantId: 'RL', restName: 'مطعم الشبكة', code, kind: 'kitchen', name: 'المجهز', pairedBy: 'hq', approved: true, atMs: Date.now() });
+  await k.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  await offline(k);
+  await k.waitForSelector('#lanB:has-text("ندوّر على الكاشير")', { timeout: 25000 });
+  await k.waitForSelector('#lanH:has-text("ما لگينا الكاشير")', { timeout: 25000 });
+  assert.match(await k.textContent('#lanH'), /جدار الحماية/);
+  await online(k);
+  kc.stop();
+  await k.context().close();
+});
