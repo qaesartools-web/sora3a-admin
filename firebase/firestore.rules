@@ -238,13 +238,13 @@ service cloud.firestore {
       //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
       //  devices (الأجهزة المعتمدة): يعتمدها المدير الأعلى بس، ويشوفها صاحب المطعم — الكاشيرية ما يشوفون مفاتيحها
       //  lan (شبكة المطعم — الرمز السري اللي يتصافح بيه الكاشير وشاشات المطبخ والطلب جاهز وتلفون الخط على الواي فاي):
-      //   يقراه الكاشير وصاحب المطعم وشاشة المطبخ المربوطة بس (مو الكابتن ولا تلفون الويتر)
+      //   يقراه الكاشير وصاحب المطعم وشاشة المطبخ وتلفون الويتر المربوطين بس (مو الكابتن)
       match /{coll}/{d=**} {
         allow read: if isOffice() || hqView('rests') || (coll == 'devices' && hqView('devices'))
           || (coll == 'devices' && ownsRest(rid))
           || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid && coll != 'lan')))
           || (coll == 'settings' && screenOf(rid))
-          || (coll == 'lan' && kitchenScreenOf(rid))
+          || (coll == 'lan' && (kitchenScreenOf(rid) || waiterScreenOf(rid)))
           || (coll in ['menu', 'menuImages'] && waiterScreenOf(rid));
         allow write: if isAdmin() || hqEdit('rests') || (coll == 'devices' && hqEdit('devices'))
           || (coll != 'devices' && (ownsRest(rid)
@@ -625,6 +625,9 @@ service cloud.firestore {
     //  يتابع حالة طلبه بالمعرّف (get فقط). الكاشير يعيد حساب الأسعار من منيوه، فما نثق بأسعار الزبون.
     match /webOrders/{id} {
       function pm(r) { return get(/databases/$(database)/documents/publicMenus/$(r)).data; }
+      // تلفون ويتر مربوط بنفس المطعم (الكاشير يسجّل طلبه إذا وصله على الواي فاي بدون نت)
+      function waiterOf(u, r) { return u is string && u.size() > 0 && exists(/databases/$(database)/documents/screens/$(u))
+        && get(/databases/$(database)/documents/screens/$(u)).data.restaurantId == r && get(/databases/$(database)/documents/screens/$(u)).data.get('kind', '') == 'waiter'; }
       function okNew(d) {
         return d.keys().hasOnly(['restaurantId','source','mode','table','items','customer','phone','address','note','status','total','createdAtMs','waiter','waiterUid','day'])
           && str(d.restaurantId, 64) && d.status == 'new'
@@ -647,8 +650,10 @@ service cloud.firestore {
             && pm(request.resource.data.restaurantId).get('modes', {}).get(request.resource.data.mode, false) == true)
           || (request.resource.data.source == 'waiter' && request.resource.data.mode == 'table'
             && feat(request.resource.data.restaurantId, 'waiter')
-            && (staffOf(request.resource.data.restaurantId) || waiterScreenOf(request.resource.data.restaurantId))
-            && request.resource.data.get('waiterUid', '') == request.auth.uid));
+            // تلفون الويتر باسمه بس، والكاشير/صاحب المطعم باسمه أو باسم تلفون ويتر مربوط بنفس المطعم (staffOf مرة وحدة: حسابه طويل)
+            && ((waiterScreenOf(request.resource.data.restaurantId) && request.resource.data.get('waiterUid', '') == request.auth.uid)
+              || (staffOf(request.resource.data.restaurantId) && (request.resource.data.get('waiterUid', '') == request.auth.uid
+                || waiterOf(request.resource.data.get('waiterUid', ''), request.resource.data.restaurantId))))));
       allow get: if true;
       allow list: if isOffice() || staffOf(resource.data.restaurantId)
         // تلفون الويتر المربوط: طلباته بس
