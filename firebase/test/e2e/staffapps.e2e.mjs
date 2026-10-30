@@ -465,8 +465,17 @@ test('kitchen display (شاشة المجهز): shows new orders, «جاهز» �
   // الخدمة موقوفة افتراضياً ← رسالة
   await put('restaurants/RW', { name: 'مطعم الشاشة', userId: U.owner, active: true, features: {} });
   const p = await page(B, { w: 1280, h: 800 });
+  await p.addInitScript(() => { window.__kMode = []; window.SoraKitchenNative = { mode: (m) => { if (!window.__kMode.includes(m)) window.__kMode.push(m); } }; });   // تطبيق الأندرويد
   await pairScreen(p, BASE + 'kitchen.html');
   await p.waitForSelector('#off:not([hidden])', { timeout: 15000 });
+  // شاشة المجهز بلونها (بنفسجي) — والتطبيق يبدّل أيقونته للمجهز
+  const pm = await p.evaluate(async () => (await fetch(document.querySelector('link[rel="manifest"]').href)).json());
+  assert.equal(pm.short_name, 'شاشة المجهز');
+  assert.ok(pm.icons.length === 3 && pm.icons.every((i) => /\/prep-(192|512|maskable-512)\.png$/.test(i.src)), 'preparer icons are purple');
+  assert.match(await p.getAttribute('link[rel="icon"]', 'href'), /prep-192\.png$/);
+  assert.match(await p.getAttribute('link[rel="apple-touch-icon"]', 'href'), /prep-apple-180\.png$/);
+  for (const i of pm.icons) assert.equal((await fetch(i.src.replace(/^.*\/sora3a-rest2\//, BASE))).status, 200, i.src);
+  assert.deepEqual(await p.evaluate(() => window.__kMode), ['prep']);
   // المدير الأعلى يفعّلها ← تشتغل مباشرة
   await write('restaurants/RW', { features: { kitchen: true } });
   await p.waitForSelector('#app:not([hidden])', { timeout: 15000 });
@@ -511,6 +520,7 @@ test('kitchen sections screen (kitchen.html?sec): each device picks its section 
     items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 2, sec: 'grill' }, { name: 'لبن', variant: 'وحدة', qty: 1, sec: 'drinks' }],
     kSec: { grill: { n: 2, readyAt: 0 }, drinks: { n: 1, readyAt: 0 } } });
   const p = await page(B, { w: 1280, h: 800 });
+  await p.addInitScript(() => { window.__kMode = []; window.SoraKitchenNative = { mode: (m) => { if (!window.__kMode.includes(m)) window.__kMode.push(m); } }; });   // تطبيق الأندرويد
   await pairScreen(p, BASE + 'kitchen.html?sec');
   // أول ما تنفتح: «اختار قسمك» بأقسام المطبخ
   await p.waitForSelector('#pick:not([hidden]) [data-pick="grill"]', { timeout: 15000 });
@@ -531,6 +541,10 @@ test('kitchen sections screen (kitchen.html?sec): each device picks its section 
   const mf = await p.evaluate(async () => (await fetch(document.querySelector('link[rel="manifest"]').href)).json());
   assert.equal(mf.short_name, 'المطبخ — الشوي'); assert.equal(mf.display, 'standalone');
   assert.match(mf.start_url, /\/sora3a-rest2\/kitchen\.html\?sec=grill$/); assert.ok(mf.icons.length >= 2);
+  // كل شاشة بلونها: المطبخ فيروزي (kitchen-*)، والمجهز بنفسجي (prep-*) — وتطبيق الأندرويد يبدّل أيقونته
+  assert.ok(mf.icons.every((i) => /\/kitchen-/.test(i.src)), 'kitchen screen keeps the teal icon');
+  assert.match(await p.getAttribute('link[rel="icon"]', 'href'), /kitchen-192\.png$/);
+  assert.deepEqual(await p.evaluate(() => window.__kMode || []), ['kitchen']);
   assert.equal(await p.getAttribute('meta[name="apple-mobile-web-app-title"]', 'content'), 'المطبخ — الشوي');
   // «الشوي جاهز» ← يتعلّم القسم بس، والطلب بعده بالمطبخ (المشروبات ما خلصت)
   await p.click('.card [data-sec="KS1|grill"]');
