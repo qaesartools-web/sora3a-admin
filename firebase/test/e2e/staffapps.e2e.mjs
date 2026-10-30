@@ -465,17 +465,16 @@ test('kitchen display (شاشة المجهز): shows new orders, «جاهز» �
   // الخدمة موقوفة افتراضياً ← رسالة
   await put('restaurants/RW', { name: 'مطعم الشاشة', userId: U.owner, active: true, features: {} });
   const p = await page(B, { w: 1280, h: 800 });
-  await p.addInitScript(() => { window.__kMode = []; window.SoraKitchenNative = { mode: (m) => { if (!window.__kMode.includes(m)) window.__kMode.push(m); } }; });   // تطبيق الأندرويد
   await pairScreen(p, BASE + 'kitchen.html');
   await p.waitForSelector('#off:not([hidden])', { timeout: 15000 });
-  // شاشة المجهز بلونها (بنفسجي) — والتطبيق يبدّل أيقونته للمجهز
+  // شاشة المجهز بلونها (بنفسجي)
   const pm = await p.evaluate(async () => (await fetch(document.querySelector('link[rel="manifest"]').href)).json());
   assert.equal(pm.short_name, 'شاشة المجهز');
   assert.ok(pm.icons.length === 3 && pm.icons.every((i) => /\/prep-(192|512|maskable-512)\.png$/.test(i.src)), 'preparer icons are purple');
   assert.match(await p.getAttribute('link[rel="icon"]', 'href'), /prep-192\.png$/);
   assert.match(await p.getAttribute('link[rel="apple-touch-icon"]', 'href'), /prep-apple-180\.png$/);
   for (const i of pm.icons) assert.equal((await fetch(i.src.replace(/^.*\/sora3a-rest2\//, BASE))).status, 200, i.src);
-  assert.deepEqual(await p.evaluate(() => window.__kMode), ['prep']);
+
   // المدير الأعلى يفعّلها ← تشتغل مباشرة
   await write('restaurants/RW', { features: { kitchen: true } });
   await p.waitForSelector('#app:not([hidden])', { timeout: 15000 });
@@ -520,7 +519,6 @@ test('kitchen sections screen (kitchen.html?sec): each device picks its section 
     items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 2, sec: 'grill' }, { name: 'لبن', variant: 'وحدة', qty: 1, sec: 'drinks' }],
     kSec: { grill: { n: 2, readyAt: 0 }, drinks: { n: 1, readyAt: 0 } } });
   const p = await page(B, { w: 1280, h: 800 });
-  await p.addInitScript(() => { window.__kMode = []; window.SoraKitchenNative = { mode: (m) => { if (!window.__kMode.includes(m)) window.__kMode.push(m); } }; });   // تطبيق الأندرويد
   await pairScreen(p, BASE + 'kitchen.html?sec');
   // أول ما تنفتح: «اختار قسمك» بأقسام المطبخ
   await p.waitForSelector('#pick:not([hidden]) [data-pick="grill"]', { timeout: 15000 });
@@ -541,10 +539,10 @@ test('kitchen sections screen (kitchen.html?sec): each device picks its section 
   const mf = await p.evaluate(async () => (await fetch(document.querySelector('link[rel="manifest"]').href)).json());
   assert.equal(mf.short_name, 'المطبخ — الشوي'); assert.equal(mf.display, 'standalone');
   assert.match(mf.start_url, /\/sora3a-rest2\/kitchen\.html\?sec=grill$/); assert.ok(mf.icons.length >= 2);
-  // كل شاشة بلونها: المطبخ فيروزي (kitchen-*)، والمجهز بنفسجي (prep-*) — وتطبيق الأندرويد يبدّل أيقونته
+  // كل شاشة بلونها: المطبخ فيروزي (kitchen-*)، والمجهز بنفسجي (prep-*)
   assert.ok(mf.icons.every((i) => /\/kitchen-/.test(i.src)), 'kitchen screen keeps the teal icon');
   assert.match(await p.getAttribute('link[rel="icon"]', 'href'), /kitchen-192\.png$/);
-  assert.deepEqual(await p.evaluate(() => window.__kMode || []), ['kitchen']);
+  assert.match(await p.getAttribute('#instApp', 'href'), /kitchen-android\/sora3a-kitchen\.apk$/);
   assert.equal(await p.getAttribute('meta[name="apple-mobile-web-app-title"]', 'content'), 'المطبخ — الشوي');
   // «الشوي جاهز» ← يتعلّم القسم بس، والطلب بعده بالمطبخ (المشروبات ما خلصت)
   await p.click('.card [data-sec="KS1|grill"]');
@@ -835,4 +833,52 @@ test('a delivery order finished by the preparer comes back to the cashier who to
   await b.waitForSelector('#capWaitBox .cap-wait:has-text("#95")', { timeout: 5000 });
   assert.deepEqual(clean(a), []); assert.deepEqual(clean(b), []);
   await a.context().close(); await b.context().close();
+});
+
+test('the kitchen app and the preparer app are separate: each opens only its own screen; an old preparer tablet is told to get the preparer app', async () => {
+  await put('restaurants/RW', { name: 'مطعم الشاشة', userId: U.owner, active: true, features: { kitchen: true, kitchenSec: true } });
+  await put('restaurants/RW/settings/main', { kSecOn: true, updatedAtMs: Date.now(), sections: [{ id: 'grill', name: 'الشوي', emoji: '🔥' }, { id: 'drinks', name: 'المشروبات', emoji: '🥤' }] });
+  const asApp = async (kds, pre) => {
+    const p = await page(B, { w: 1280, h: 800 });
+    await p.addInitScript(([k, ls]) => {
+      const ua = navigator.userAgent + ' SoraKitchenApp/1.49' + (k ? ' SoraKds/' + k : '');
+      Object.defineProperty(Navigator.prototype, 'userAgent', { get: () => ua, configurable: true });
+      if (ls && !sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); Object.entries(ls).forEach(([a, b]) => localStorage.setItem(a, b)); }
+    }, [kds, pre || null]);
+    return p;
+  };
+  // تطبيق «سرعة - المجهز»: حتى لو انفتح رابط القسم يرجع للمجهز، وماكو زر تحويل
+  const prep = await asApp('prep');
+  await prep.goto(BASE + 'kitchen.html?sec=grill');
+  await prep.waitForURL(/kitchen\.html$/, { timeout: 10000 });
+  await prep.waitForSelector('#pairCode', { timeout: 15000 });
+  assert.equal(await prep.title(), 'سرعة — شاشة المجهز');
+  assert.match(await prep.getAttribute('#instApp', 'href'), /prep-android\/sora3a-prep\.apk$/);
+  await prep.context().close();
+  // تطبيق «سرعة - المطبخ»: جهاز كان مجهز بالنسخة القديمة ← يروح لشاشة المطبخ ويطلع تنبيه بتطبيق المجهز
+  const k = await asApp('sec', { kds_mode: 'all' });
+  await pairScreen(k, BASE + 'kitchen.html');
+  await k.waitForURL(/kitchen\.html\?sec/, { timeout: 15000 });
+  // أول شي «اختار قسمك» — وبيها نفس التنبيه
+  await k.waitForSelector('#pick:not([hidden]) #movedP:not([hidden])', { timeout: 15000 });
+  await k.click('#pickG [data-pick] >> nth=0');
+  await k.waitForSelector('#moved:not([hidden])', { timeout: 15000 });
+  assert.match(await k.getAttribute('#moved a', 'href'), /prep-android\/sora3a-prep\.apk$/);
+  await k.click('#menuBtn'); await k.waitForSelector('#menu:not([hidden])');
+  assert.equal(await k.isVisible('#mMode'), false, 'no switch inside the kitchen app');
+  await k.evaluate(() => { document.getElementById('menu').hidden = true; });
+  await k.click('#movedX');
+  assert.equal(await k.isVisible('#moved'), false);
+  await k.reload();
+  await k.waitForURL(/kitchen\.html\?sec/, { timeout: 15000 });
+  await k.waitForTimeout(800);
+  assert.equal(await k.isVisible('#moved'), false, 'the notice stays closed');
+  await k.context().close();
+  // النسخة القديمة (تطبيق واحد للثنين): زر التحويل يبقى مثل قبل
+  const old = await asApp('');
+  await pairScreen(old, BASE + 'kitchen.html');
+  await old.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  await old.click('#menuBtn'); await old.waitForSelector('#menu:not([hidden])');
+  assert.equal(await old.isVisible('#mMode'), true, 'the old single app keeps its switch');
+  await old.context().close();
 });
