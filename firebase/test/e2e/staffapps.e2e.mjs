@@ -679,6 +679,8 @@ test('admin panel «الشاشات»: every screen link in one place — expedit
   assert.match(await url('menu'), /\/menu\.html\?r=RW$/);
   assert.match(await url('screen'), /screen-android\/sora3a-screen\.apk$/);
   assert.match(await url('line'), /line-android\/sora3a-line\.apk$/);
+  assert.match(await url('waiterApk'), /waiter-android\/sora3a-waiter\.apk$/);
+  assert.match(await p.textContent('[data-scr="waiterApk"]'), /بدون نت/);
   assert.match(await url('captain'), /sora3a-captain\/captain\.html$/);
   assert.match(await p.textContent('.scr-intro'), /بدون إيميل/);
   // QR يترسم للمسح بكاميرا التلفون

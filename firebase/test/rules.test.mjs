@@ -907,6 +907,11 @@ test('تلفون الويتر المربوط برمز: يشوف المنيو و�
   await assertSucceeds(getDoc(doc(W, 'restaurants/R1/menuImages/i1')));
   await assertSucceeds(setDoc(doc(W, 'webOrders/W1'), wo('wA')));
   await assertFails(setDoc(doc(W, 'webOrders/W2'), wo('someoneElse')), 'only as itself');
+  // بدون نت: الطلب يوصل للكاشير على الواي فاي، والكاشير يسجّله باسم تلفون الويتر المربوط بنفس المطعم
+  await assertSucceeds(setDoc(doc(as('cash1'), 'webOrders/W5'), wo('wA')), 'cashier records the order of a linked waiter phone');
+  await assertSucceeds(setDoc(doc(as('rest1'), 'webOrders/W8'), wo('wA')), 'owner too');
+  await assertFails(setDoc(doc(as('cash1'), 'webOrders/W6'), wo('sK')), 'not for a kitchen screen');
+  await assertFails(setDoc(doc(as('cash1'), 'webOrders/W7'), wo('nobody')), 'not for an unknown phone');
   await assertSucceeds(getDocs(query(collection(W, 'webOrders'), where('restaurantId', '==', 'R1'), where('waiterUid', '==', 'wA'))));
   await assertFails(getDocs(query(collection(W, 'webOrders'), where('restaurantId', '==', 'R1'))), 'only its own orders');
   await assertFails(getDoc(doc(W, 'orders/K1')), 'waiter phone does not read orders');
@@ -969,7 +974,8 @@ test('شبكة المطعم: الرمز السري يقراه الكاشير و�
   await assertFails(getDoc(doc(as('scrO'), 'restaurants/R1/lan/key')), 'another restaurant screen cannot');
   await assertFails(setDoc(doc(as('scrK'), 'restaurants/R1/lan/key'), KEY), 'screens cannot change it');
   await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'screens/scrW'), { restaurantId: 'R1', kind: 'waiter', approved: true, code: 'ABCDEH' }); });
-  await assertFails(getDoc(doc(as('scrW'), 'restaurants/R1/lan/key')), 'waiter phone does not get the LAN key');
+  await assertSucceeds(getDoc(doc(as('scrW'), 'restaurants/R1/lan/key')), 'linked waiter phone reads the key (orders reach the cashier over WiFi with no internet)');
+  await assertFails(setDoc(doc(as('scrW'), 'restaurants/R1/lan/key'), KEY), 'waiter phone cannot change it');
   // الكابتن بعده يقرا باقي بيانات مطعمه (المنيو والإعدادات) مثل قبل
   await assertSucceeds(getDoc(doc(as('cap1'), 'restaurants/R1/settings/main')));
 });
