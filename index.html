@@ -3603,8 +3603,28 @@ window.lySave=async function(toggleOnly){
   }catch(e){toast('❌ تعذّر الحفظ: '+(e.code||e.message),'error');document.getElementById('lyOn').checked=!!lyCur.on;}
 };
 let mcLast=[];
-function mcRender(list){
+// كل رقم للمطعم يرن عند كاشيريته: perms.lines = ['1','3'] (الشريحة والواتساب لنفس الرقم). بدون تحديد ← كل الأرقام
+const lineNums=()=>[...new Set(mlLines.map(l=>String(l.line)))].sort((a,b)=>(+a||0)-(+b||0));
+const userLines=u=>Array.isArray((u.perms||{}).lines)?u.perms.lines.map(String):null;
+const ringsAt=(u,n)=>{const ls=userLines(u);return (u.perms||{}).oDeliv!==false&&(!ls||ls.includes(String(n)));};
+function mcLinesRow(u){
+  const nums=lineNums();if(!nums.length)return '';
+  const ls=userLines(u);
+  return `<div class="perm-row" id="mcl_${esc(u.id)}"><b style="width:100%;font-size:12px;color:var(--muted)">📞 أرقام المطعم اللي ترن عنده (الشريحة والواتساب):</b>${nums.map(n=>{const l=mlLines.find(x=>String(x.line)===n);
+    return `<label><input type="checkbox" data-ln="${esc(n)}" ${!ls||ls.includes(n)?'checked':''} onchange="mcLines('${esc(u.id)}')"> خط ${esc(n)}${l&&l.label?' — <span dir="ltr">'+esc(l.label)+'</span>':''}</label>`;}).join('')}</div>`;
+}
+window.mcLines=async function(uid){
+  const box=document.getElementById('mcl_'+uid);if(!box)return;
+  const all=[...box.querySelectorAll('input[data-ln]')],on=all.filter(i=>i.checked).map(i=>i.dataset.ln);
+  try{const fb=window._fb,s=await fb.getDoc(fb.doc(fb.db,'users',uid)),perms={...(s.data().perms||{})};
+    if(on.length===all.length)delete perms.lines;else perms.lines=on;   // كلها ← بدون تحديد (والأرقام الجديدة ترن عنده هم)
+    await fb.updateDoc(fb.doc(fb.db,'users',uid),{perms});audit('cashier.lines',{uid,lines:on.join(',')});
+    toast(!on.length?'⚠️ هذا الكاشير ما ترن عنده ولا مكالمة':'✅ صارت ترن عنده: خط '+on.join('، خط '));}
+  catch(e){toast('❌ تعذّر التحديث','error');}
+};
+function mcRender(list,noLines){
   mcLast=list;
+  if(!noLines&&mlLines.length)mlRender(mlLines,true);
   const el=document.getElementById('mcList');
   if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--muted);padding:12px;font-size:12px">لا يوجد كاشيرية بعد</div>';return;}
   el.innerHTML=list.map(u=>{const p=u.perms||{};return `<div class="entity">
@@ -3614,6 +3634,7 @@ function mcRender(list){
       <button class="btn-sm btn-del" onclick="mcDel('${esc(u.id)}')">🗑️</button>`:''}</div>
     <div class="perm-row">${PERMS.map(([k,l])=>`<label><input type="checkbox" ${p[k]?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>
     ${ordPermRow(p,(k,l,c)=>`<label><input type="checkbox" data-op="${k}" ${c?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`)}
+    ${mcLinesRow(u)}
     <div class="perm-row" style="align-items:center">⏰ الدوام من <input type="time" class="form-inp" style="width:auto;padding:6px" id="hf_${esc(u.id)}" value="${u.hours?fromMins(u.hours.from):''}">
       إلى <input type="time" class="form-inp" style="width:auto;padding:6px" id="ht_${esc(u.id)}" value="${u.hours?fromMins(u.hours.to):''}">
       <button class="btn-sm btn-edit" onclick="mcHours('${esc(u.id)}')">💾 حفظ الدوام</button>
@@ -3703,13 +3724,14 @@ let mlLines=[];
 function newToken(){const a='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';const r=crypto.getRandomValues(new Uint8Array(40));return Array.from(r,x=>a[x%a.length]).join('');}
 const FS_URL=`https://firestore.googleapis.com/v1/projects/sora3a-system/databases/(default)/documents/incomingCalls?key=AIzaSyAwlFrbv-c6G0_K0-s0P1m1o_qD95aGGyQ`;
 const lineBody=(l,num)=>JSON.stringify({fields:{token:{stringValue:l.id},restaurantId:{stringValue:l.restaurantId},line:{stringValue:String(l.line)},number:{stringValue:num},status:{stringValue:'ringing'}}});
-function mlRender(list){
+function mlRender(list,noCash){
   mlLines=list;
+  if(!noCash&&mcLast.length)mcRender(mcLast,true);
   const el=document.getElementById('mlList');
   if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--muted);padding:12px;font-size:12px">لا توجد خطوط بعد</div>';return;}
   el.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${toA(list.length)} / ${toA(MAX_LINES)} خطوط</div>`+list.map(l=>`<div class="entity">
     <div class="entity-head"><div class="entity-icon">📞</div>
-      <div style="flex:1"><div class="entity-name">خط ${esc(l.line)} — ${esc(l.label||'')} ${l.active?'<span class="sub-badge sub-active">مفعّل</span>':'<span class="sub-badge sub-off">موقوف</span>'}</div></div>
+      <div style="flex:1"><div class="entity-name">خط ${esc(l.line)} — ${esc(l.label||'')} ${l.active?'<span class="sub-badge sub-active">مفعّل</span>':'<span class="sub-badge sub-off">موقوف</span>'}</div>${mcLast.length?`<div class="entity-sub">🔔 يرن عند: ${(()=>{const at=mcLast.filter(u=>!u.disabled&&ringsAt(u,l.line)).map(u=>esc(u.name||u.email));return at.length?at.join('، '):'<b style="color:var(--red)">ولا كاشير — اختاره من بطاقة الكاشير</b>';})()}</div>`:''}</div>
       <label class="tgl" title="تفعيل/إيقاف"><input type="checkbox" ${l.active?'checked':''} onchange="mlToggle('${esc(l.id)}',this.checked)"><span class="tgl-slider"></span></label></div>
     <div class="entity-actions">
       <button class="btn-sm btn-edit" onclick="mlSetup('${esc(l.id)}')">📋 طريقة الربط</button>

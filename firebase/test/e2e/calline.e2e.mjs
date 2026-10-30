@@ -3,7 +3,7 @@
 // بس يفتح وحده مع تشغيل الجهاز.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { doc, setDoc, getDocs, updateDoc, collection, query, where } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, updateDoc, collection, query, where } from 'firebase/firestore';
 import { serve, env, signUp, clearAuth, browser, page } from './harness.mjs';
 
 let srv, E, B, U = {};
@@ -333,4 +333,63 @@ test('Windows/Mac/Linux app: auto-start option shown and toggled', async () => {
   assert.equal(await p.evaluate(() => window.__auto), false);
   assert.deepEqual(clean(p), []);
   await p.context().close();
+});
+
+// صاحب المطعم عنده أكثر من كاشير دلفري، وكل رقم للمطعم مخصص لكاشير: الاتصال يرن بس عند كاشير رقمه
+test('each restaurant number rings only at its own delivery cashier (owner assigns numbers per cashier in the admin app)', async () => {
+  const mk = async (email, name, perms) => { const uid = await signUp(email, 'secret123');
+    await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'users', uid), { role: 'cashier', restaurantId: 'RL', email, name, perms }); }); return uid; };
+  const ahmed = await mk('ahmed@x.com', 'أحمد', { lines: ['1'] });
+  const ali = await mk('ali2@x.com', 'علي', { lines: ['2'] });
+  await mk('sara@x.com', 'سارة', {});                        // بدون تحديد ← كل الأرقام
+  await mk('hall@x.com', 'كاشير الصالة', { oDeliv: false });  // بدون دلفري ← ولا رقم
+  await E.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'lineTokens/TOK_RL_LINE1_xxxxxxxxxxxxxxxxxxxx'), { restaurantId: 'RL', line: '1', label: '07801111111', active: true, createdAtMs: 1 });
+    await setDoc(doc(db, 'lineTokens/TOK_RL_LINE2_xxxxxxxxxxxxxxxxxxxx'), { restaurantId: 'RL', line: '2', label: '07802222222', active: true, createdAtMs: 2 });
+  });
+  const login = async (email) => { const p = await page(B, { w: 1280, h: 800 });
+    await p.goto('http://localhost:5050/sora3a-rest2/index.html');
+    await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+    await p.fill('#inEmail', email); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
+    await p.waitForSelector('#prods .prod', { timeout: 15000 }); return p; };
+  const pA = await login('ahmed@x.com'), pB = await login('ali2@x.com'), pS = await login('sara@x.com'), pH = await login('hall@x.com');
+  await pA.waitForTimeout(1500);
+  const cards = (p) => p.$$eval('.call-card .call-num', (e) => e.map((x) => x.textContent.trim()));
+  // رقم ٢ ← علي (وسارة اللي عندها كل الأرقام)، مو أحمد
+  assert.equal((await ring('TOK_RL_LINE2_xxxxxxxxxxxxxxxxxxxx', '2', '07712222222')).status, 200);
+  await pB.waitForSelector('.call-card >> text=07712222222');
+  await pS.waitForSelector('.call-card >> text=07712222222');
+  // واتساب رقم ١ ← أحمد (وسارة)، مو علي
+  assert.equal((await ring('TOK_RL_LINE1_xxxxxxxxxxxxxxxxxxxx', 'واتساب 1', '07711111111')).status, 200);
+  await pA.waitForSelector('.call-card >> text=07711111111');
+  await pS.waitForSelector('.call-card >> text=07711111111');
+  await pA.waitForTimeout(1200);
+  assert.deepEqual(await cards(pA), ['07711111111'], 'Ahmed only gets number 1');
+  assert.deepEqual(await cards(pB), ['07712222222'], 'Ali only gets number 2');
+  assert.deepEqual(await cards(pH), [], 'hall cashier gets no calls');
+  // صاحب المطعم من لوحة الإدارة: رقم ١ يرن هم عند علي، وسارة بس رقم ٢
+  const o = await page(B, { w: 1280, h: 900 });
+  await o.goto('http://localhost:5050/sora3a-admin/index.html');
+  await o.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await o.fill('#lEmail', 'line@x.com'); await o.fill('#lPass', 'secret123'); await o.click('#lBtn');
+  await o.waitForSelector('#appPage', { state: 'visible' });
+  await o.click('.dnav-btn[data-screen="scMyRest"]');
+  await o.waitForSelector('#mcl_' + ali + ' input[data-ln="1"]');
+  // بطاقة كل رقم (بالتجارب السابقة ممكن تبقى خطوط ثانية للمطعم)
+  const at = await o.$$eval('#mlList .entity', (es) => ['07801111111', '07802222222'].map((n) => { const e = es.find((x) => x.textContent.includes(n)); return e ? (e.textContent.split('يرن عند:')[1] || '').split('📋')[0] : ''; }));
+  assert.ok(/أحمد/.test(at[0]) && /سارة/.test(at[0]) && !/الصالة/.test(at[0]), 'number 1 rings at Ahmed and Sara: ' + at[0]);
+  assert.ok(!/أحمد/.test(at[1]) && /سارة/.test(at[1]), 'number 2 not at Ahmed: ' + at[1]);
+  assert.equal(await o.isChecked('#mcl_' + ahmed + ' input[data-ln="2"]'), false);
+  await o.check('#mcl_' + ali + ' input[data-ln="1"]');
+  // كل الأرقام مختارة ← بدون تحديد (الأرقام الجديدة ترن عنده هم)؛ وإذا بالمطعم أرقام ثانية ← قائمة بيها ١ و٢
+  const uAli = await until(async () => { let d; await E.withSecurityRulesDisabled(async (c) => { d = (await getDoc(doc(c.firestore(), 'users', ali))).data(); });
+    const ls = (d.perms || {}).lines; return !ls || (ls.includes('1') && ls.includes('2')) ? d : null; });
+  assert.ok(uAli, 'number 1 added to Ali');
+  // علي يستلمها هسه بدون ما يطلع ويدخل
+  assert.equal((await ring('TOK_RL_LINE1_xxxxxxxxxxxxxxxxxxxx', '1', '07713333333')).status, 200);
+  await pB.waitForSelector('.call-card >> text=07713333333', { timeout: 10000 });
+  await pA.waitForSelector('.call-card >> text=07713333333');
+  [pA, pB, pS, pH].forEach((p) => assert.deepEqual(clean(p), []));
+  for (const p of [pA, pB, pS, pH, o]) await p.context().close();
 });
