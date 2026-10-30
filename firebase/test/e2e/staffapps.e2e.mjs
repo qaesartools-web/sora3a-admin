@@ -882,3 +882,65 @@ test('the kitchen app and the preparer app are separate: each opens only its own
   assert.equal(await old.isVisible('#mMode'), true, 'the old single app keeps its switch');
   await old.context().close();
 });
+
+test('many orders: the ready screen shrinks the numbers so none hide behind the QR; the kitchen fits 20+ orders and «ready» reacts at once', async () => {
+  const now = Date.now(), day = bagDay();
+  // نبدأ نظيف: طلبات الاختبارات السابقة لهذا المطعم تتلغى
+  await E.withSecurityRulesDisabled(async (c) => { const db = c.firestore(), q = await getDocs(query(collection(db, 'orders'), where('restaurantId', '==', 'RW')));
+    await Promise.all(q.docs.map((d) => updateDoc(d.ref, { status: 'cancelled' }))); });
+  await put('restaurants/RW', { name: 'مطعم الشاشة', userId: U.owner, active: true, features: { kitchen: true, online: true } });
+  await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: Date.now(), screen: { salon: true, delivery: false, qr: true } });
+  await put('publicMenus/RW', { name: 'برغر الشاشة', on: true, modes: { table: true, pickup: true, delivery: false }, cats: [], updatedAtMs: 1 });
+  // ── شاشة «طلبك جاهز»: طلبين بس ← الحجم الطبيعي
+  for (let i = 0; i < 2; i++) await put('orders/MQ' + i, { restaurantId: 'RW', orderType: i % 2 ? 'salon' : 'takeaway', status: 'delivered', held: false, kitchen: 'new', ticketNo: 100 + i, value: 5000, day, createdAtMs: now - (40 - i) * 60000 });
+  const s = await page(B, { w: 1280, h: 720 });
+  await login(s, BASE + 'screen.html', 'scr@x.com');
+  await s.waitForSelector('#prep .n', { timeout: 15000 });
+  await s.waitForSelector('#qrBox:not([hidden]) svg', { timeout: 15000 });
+  assert.equal(await s.evaluate(() => getComputedStyle(document.getElementById('prep')).getPropertyValue('--z').trim()), '1', 'few orders keep the normal size');
+  // 30 طلب قيد التحضير ← كلها تبين فوق الباركود
+  for (let i = 2; i < 30; i++) await put('orders/MQ' + i, { restaurantId: 'RW', orderType: i % 2 ? 'salon' : 'takeaway', status: 'delivered', held: false, kitchen: 'new', ticketNo: 100 + i, value: 5000, day, createdAtMs: now - (40 - i) * 60000 });
+  await s.waitForFunction(() => document.querySelectorAll('#prep .n').length === 30, null, { timeout: 15000 });
+  await s.waitForTimeout(300);
+  const fitS = await s.evaluate(() => {
+    const box = document.getElementById('prep').getBoundingClientRect(), qr = document.getElementById('qrBox').getBoundingClientRect();
+    const tiles = [...document.querySelectorAll('#prep .n')].map((n) => n.getBoundingClientRect());
+    return { z: +getComputedStyle(document.getElementById('prep')).getPropertyValue('--z'), hidden: tiles.filter((r) => r.bottom > box.bottom + 1 || r.bottom > qr.top + 1).length };
+  });
+  assert.ok(fitS.z < 1, 'numbers got smaller');
+  assert.equal(fitS.hidden, 0, 'no order number hides behind the QR');
+  await s.screenshot({ path: 'shots/ready-screen-many.png' });
+  await s.context().close();
+
+  // ── شاشة المجهز: 24 طلب ← كلها بالشاشة و«جاهز» ينضغط
+  for (let i = 0; i < 30; i++) await write('orders/MQ' + i, { status: 'ready', kitchen: 'ready', kitchenReadyAt: now - 30 * 60000 });
+  for (let i = 0; i < 24; i++) await put('orders/MK' + i, { restaurantId: 'RW', orderType: 'takeaway', status: 'delivered', kitchen: 'new', ticketNo: 200 + i, value: 5000, day, createdAt: '20:05', createdAtMs: now - (30 - i) * 60000,
+    items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1 }, { name: 'بطاطا', variant: 'وحدة', qty: 2 }] });
+  const k = await page(B, { w: 1280, h: 800 });
+  await pairScreen(k, BASE + 'kitchen.html');
+  await k.waitForFunction(() => document.querySelectorAll('#grid .card').length === 24, null, { timeout: 20000 });
+  await k.waitForTimeout(300);
+  const fitK = await k.evaluate(() => {
+    const g = document.getElementById('grid'), box = g.getBoundingClientRect();
+    const cards = [...g.querySelectorAll('.card')].map((c) => c.getBoundingClientRect());
+    return { z: +getComputedStyle(g).getPropertyValue('--z'), out: cards.filter((r) => r.bottom > box.bottom + 1).length, bottom: box.bottom, vh: innerHeight };
+  });
+  assert.ok(fitK.z < 1 && fitK.z >= 0.6, 'cards got smaller (not too small): ' + fitK.z);
+  assert.equal(fitK.out, 0, 'all 24 orders are on the screen');
+  assert.ok(fitK.bottom <= fitK.vh + 1, 'the list ends inside the screen');
+  await k.screenshot({ path: 'shots/kitchen-many.png' });
+  // تحديث ما يغيّر شي بالشاشة ← البطاقات نفسها تبقى (ما تنرسم من جديد، فالضغطة ما تضيع)
+  await k.evaluate(() => { document.querySelector('#grid .card').__keep = 1; });
+  await write('orders/MK0', { printedAt: Date.now() });
+  await k.waitForTimeout(1200);
+  assert.equal(await k.evaluate(() => document.querySelector('#grid .card').__keep), 1, 'no redraw when nothing on screen changed');
+  // «تم التجهيز» ← البطاقة تطلع فوراً
+  const t0 = Date.now();
+  await k.click('#grid .card[data-id="MK3"] .done-b');
+  await k.waitForSelector('#grid .card[data-id="MK3"]', { state: 'detached', timeout: 1500 });
+  assert.ok(Date.now() - t0 < 1500, 'ready reacts at once');
+  await until(async () => (await read('orders/MK3')).kitchen === 'ready');
+  await k.context().close();
+  for (let i = 0; i < 24; i++) await write('orders/MK' + i, { status: 'cancelled' });
+  await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: Date.now() });
+});
