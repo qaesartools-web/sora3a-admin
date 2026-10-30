@@ -24,6 +24,7 @@ after(async () => { await B?.close(); srv?.close(); await E?.cleanup(); setTimeo
 test('cashier updates itself silently only when idle, and returns to the same tab', async () => {
   const f = ROOTS['sora3a-rest2'] + '/index.html';
   const p = await page(B, { w: 1280, h: 800 });
+  await p.addInitScript(() => { window.auIdleMs = 15000; });    // بالتجربة: «محد لمس الكاشير» = 15 ثانية بدل 5 دقايق
   await p.goto('http://localhost:5050/sora3a-rest2/index.html');
   await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
   await p.fill('#inEmail', 'au@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
@@ -35,16 +36,14 @@ test('cashier updates itself silently only when idle, and returns to the same ta
   await touch(f);
   await p.waitForTimeout(13000);
   assert.equal(await p.evaluate(() => window.__mark), 1, 'no reload while cart has items');
-  // السلة فارغة لكن الشاشة أمام المستخدم: ما نحدّث أبداً
+  // السلة فارغة والكاشير يشتغل (يلمس الشاشة): ما نحدّث ولا تطلع أي رسالة
   await p.evaluate(() => { cart.length = 0; renderCart(); goTab('kitchen'); });
-  await p.waitForTimeout(8000);
-  assert.equal(await p.evaluate(() => window.__mark), 1, 'no reload while the app is on screen');
-  // بس يطلع زر «تحديث هسه» (برنامج الحاسبة شاشته دائماً أمام الكاشير) — الضغط عليه يحدّث ويرجع لنفس التبويب
-  await p.waitForSelector('#auBar:has-text("نزل تحديث")', { timeout: 8000 });
-  await p.click('#auBar button');
-  await p.waitForFunction(() => window.__mark === undefined, null, { timeout: 15000 });
+  for (let i = 0; i < 4; i++) { await p.mouse.click(5, 300); await p.waitForTimeout(2500); }
+  assert.equal(await p.evaluate(() => window.__mark), 1, 'no reload while someone is using the cashier');
+  assert.equal(await p.$('#auBar'), null, 'no update message');
+  // محد لمس الكاشير (السلة فارغة): يتحدث وحده بدون رسالة ويرجع لنفس التبويب
+  await p.waitForFunction(() => window.__mark === undefined, null, { timeout: 30000 });
   await p.waitForFunction(() => document.getElementById('kitchenScreen').classList.contains('on'), null, { timeout: 15000 });
-  assert.equal(await p.$('#auBar'), null, 'no button after updating');
   await p.waitForTimeout(2500);                                 // يسجّل الإصدار الجديد
   await p.evaluate(() => { window.__mark = 1; });
   await touch(f);
@@ -98,11 +97,11 @@ test('admin and captain update silently and keep their screen', async () => {
   await c.context().close();
 });
 
-test('Windows/Mac program update: a bar keeps coming back until it is installed — «install now» only when the cart is empty', async () => {
+test('Windows/Mac program update: installs by itself with no message when nobody is using the cashier — never while there is an order, never for the same version', async () => {
   const p = await page(B, { w: 1280, h: 800 });
   await p.addInitScript(() => {
-    window.__installs = 0;
-    window.SoraDesktop = { version: '1.0.15', platform: 'win32', canAutoStart: true, printers: async () => [], print: async () => ({ ok: true }), jobs: async () => [], reprint: async () => ({}),
+    window.__installs = 0; window.deskIdleMs = 4000; window.deskTickMs = 1000;
+    window.SoraDesktop = { version: '1.0.17', platform: 'win32', canAutoStart: true, printers: async () => [], print: async () => ({ ok: true }), jobs: async () => [], reprint: async () => ({}),
       getTestMode: async () => false, setTestMode: async () => false, openSimulator: async () => true, getAutoStart: async () => true, setAutoStart: async () => true,
       onUpdate: (cb) => { window.__upd = cb; }, installUpdate: async () => { window.__installs++; return true; } };
   });
@@ -110,22 +109,18 @@ test('Windows/Mac program update: a bar keeps coming back until it is installed 
   await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
   await p.fill('#inEmail', 'au@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
   await p.waitForSelector('#prods .prod', { timeout: 15000 });
-  // البرنامج نزّل نسخة ← شريط بزر «ثبّت هسه»
-  await p.evaluate(() => window.__upd('1.0.16'));
-  await p.waitForSelector('#deskUpd:has-text("1.0.16") [data-du="go"]');
-  // «لاحقاً» يخفيه — والبرنامج يذكّر من جديد (مثلاً بعد ما تنفتح الصفحة) ← يرجع
-  await p.click('#deskUpd [data-du="later"]');
-  assert.equal(await p.$('#deskUpd'), null);
-  await p.evaluate(() => window.__upd('1.0.16'));
-  await p.waitForSelector('#deskUpd');
-  // السلة بيها طلب ← ما يثبّت، يقول خلّص أول
+  // نفس النسخة المثبّتة ← ولا شي
+  await p.evaluate(() => window.__upd('1.0.17'));
+  await p.waitForTimeout(6000);
+  assert.equal(await p.evaluate(() => window.__installs), 0, 'same version: nothing to install');
+  // نسخة أحدث والسلة بيها طلب ← ما يثبّت، وبدون أي رسالة
   await p.click('#prods .prod >> nth=0');
-  await p.click('#deskUpd [data-du="go"]');
-  await p.waitForSelector('#toast.on:has-text("خلّص الطلب")', { timeout: 5000 });
-  assert.equal(await p.evaluate(() => window.__installs), 0);
-  // السلة فارغة ← يثبّت
+  await p.evaluate(() => window.__upd('1.0.18'));
+  await p.waitForTimeout(6000);
+  assert.equal(await p.evaluate(() => window.__installs), 0, 'not while there is an order in the cart');
+  assert.equal(await p.$('#deskUpd'), null, 'no update message');
+  // السلة فارغة ومحد يلمس ← يتثبت وحده
   await p.evaluate(() => { cart.length = 0; renderCart(); });
-  await p.click('#deskUpd [data-du="go"]');
-  await p.waitForFunction(() => window.__installs === 1, null, { timeout: 5000 });
+  await p.waitForFunction(() => window.__installs === 1, null, { timeout: 15000 });
   await p.context().close();
 });
