@@ -95,28 +95,29 @@ test('ready screen: takeaway/pager orders in two columns, new ready number flash
   await p.context().close();
 });
 
-test('ready screen stays signed in when the TV starts without internet — no password again; only «تسجيل خروج» signs out', async () => {
+test('ready screen stays signed in when the TV starts without internet — opens from its saved copy, no password again; only «تسجيل خروج» signs out', async () => {
   const p = await page(B, { w: 1280, h: 720 });
   await login(p, BASE + 'screen.html', 'scr@x.com');
   await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
-  // التلفزيون انطفى ورجع اشتغل والواي فاي بعده ما متصل: السيرفر ما يوصل
+  await p.waitForTimeout(1500);   // الكاش المحلي ينحفظ
+  // التلفزيون انطفى ورجع اشتغل والواي فاي بدون نت: الشاشة تفتح من النسخة المحفوظة (وتكمل ويا الكاشير على الواي فاي)
   await p.context().route(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/, (r) => r.abort('internetdisconnected'));
   await p.reload();
-  await p.waitForSelector('.gate-hold', { timeout: 30000 });
-  assert.match(await p.textContent('.gate-hold'), /ننتظر الإنترنت|ترجع وحدها/);
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
   assert.equal(await p.locator('#gPass').count(), 0, 'ما يطلب الرمز');
-  // النت رجع: الشاشة ترجع وحدها بدون ما أحد يكتب شي
+  assert.match(await p.textContent('#nm'), /برغر الشاشة/, 'name from the saved copy');
+  // النت رجع: تكمل وحدها بدون ما أحد يكتب شي
   await p.context().unroute(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/);
   await p.evaluate(() => window.dispatchEvent(new Event('online')));
-  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
+  await p.waitForTimeout(1500);
+  assert.equal(await p.isVisible('#scr'), true);
   assert.equal(await p.locator('#gPass').count(), 0);
-  // نفس الشي لو النت انقطع وهي شغّالة: تبقى
+  // زر تسجيل الخروج (الحالة الوحيدة اللي يرجع يطلب الرمز) — حتى بدون نت
   await p.context().route(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/, (r) => r.abort('internetdisconnected'));
   await p.reload();
-  await p.waitForSelector('.gate-hold', { timeout: 30000 });
-  // زر تسجيل الخروج (الحالة الوحيدة اللي يرجع يطلب الرمز)
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
   await p.context().unroute(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/);
-  await p.click('.gate-out');
+  await p.click('#menuBtn'); await p.click('#mOut'); await p.click('#mOut');
   await p.waitForSelector('#gPass', { timeout: 15000 });
   assert.equal(await p.inputValue('#gEmail'), 'scr@x.com', 'الإيميل محفوظ');
   assert.deepEqual(clean(p).filter((e) => !/Could not reach Cloud Firestore backend|client is offline|internetdisconnected|ERR_INTERNET/i.test(e)), []);

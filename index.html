@@ -1266,6 +1266,7 @@ function startListeners(){
     renderDash();
   }));
   if(isRest()){
+    lanKeyEnsure(currentUser.restaurantId);
     unsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',currentUser.restaurantId),snap=>{
       const svcSig=()=>JSON.stringify([(myRestDoc&&myRestDoc.features)||{},(myRestDoc&&myRestDoc.svcOff)||{}]);
       const before=svcSig();
@@ -3222,6 +3223,19 @@ function readHours(fromId,toId){
   if(f==null||t==null||f===t)return {ok:false};
   return {ok:true,hours:{from:f,to:t}};
 }
+// ═══ شبكة المطعم (بنت أو بدون نت): رمز سري للمطعم (lan/key) — الكاشير والشاشات وتلفون الخط يتصافحون بيه على نفس الواي فاي ═══
+// يتسوى مرة وحدة أول ما يفتح صاحب المطعم لوحة الإدارة (والكاشير يسويه هم إذا ما موجود)
+async function lanKeyEnsure(rid){
+  if(!rid)return;
+  try{
+    const fb=window._fb,ref=fb.doc(fb.db,'restaurants',rid,'lan','key');
+    const s=await fb.getDoc(ref);if(s.exists()&&s.data().key)return;
+    await fb.runTransaction(fb.db,async tx=>{
+      const x=await tx.get(ref);if(x.exists()&&x.data().key)return;
+      tx.set(ref,{key:Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join(''),atMs:Date.now()});
+    });
+  }catch(e){console.warn('lan key',e&&e.code);}
+}
 // ═══ الشاشات: كل روابط شاشات المطعم بمكان واحد — كل وحدة تنفتح على جهازها وتنثبّت كتطبيق ═══
 // شاشة المطبخ لكل قسم (من «أقسام المطبخ» بإعدادات الكاشير): الجهاز يبقى على قسمه ويشوف أصنافه بس
 const SCR_R2='https://qaesartools-web.github.io/sora3a-rest2/',SCR_CAP='https://qaesartools-web.github.io/sora3a-captain/',SCR_DL='https://github.com/qaesartools-web/';
@@ -3246,8 +3260,9 @@ function scrItems(rid,r){
     {id:'captain',ic:'🛵',t:'الكابتن (للآيفون أو أي تلفون)',d:'تطبيق الكابتن من المتصفح — وإله تطبيق أندرويد تحت.',url:SCR_CAP+'captain.html',feat:'captain',inst:1},
     {id:'menu',ic:'📱',t:'منيو الباركود',d:'الزبون يفتحه ويطلب — اطبع QR الطاولات من الكاشير.',url:SCR_R2+'menu.html?r='+encodeURIComponent(rid),feat:'online'},
     {g:'تطبيقات تنزّل وتنصّب'},
-    {id:'screen',ic:'📺',t:'شاشة «طلبك جاهز»',d:'تطبيق للتلفزيون أو التيفي بوكس — يتحدث لحاله.',url:SCR_DL+'sora3a-rest2/releases/download/screen-android/sora3a-screen.apk',feat:'screen',app:1},
-    {id:'line',ic:'☎️',t:'خط المطعم',d:'على تلفون شريحة المطعم — رقم المتصل يطلع بالكاشير.',url:SCR_DL+'sora3a-rest2/releases/download/line-android/sora3a-line.apk',feat:'calls',app:1},
+    {id:'kitchenApk',ic:'👨‍🍳',t:'شاشة المطبخ والمجهز (أندرويد) — تشتغل بدون نت',d:'نفس شاشة المجهز وشاشة المطبخ، بس كتطبيق على تابلت أندرويد: إذا انقطع النت تبقى الطلبات و«جاهز» تمشي ويا الكاشير ما دام على نفس الواي فاي. تنربط بالرمز مثل الرابط، وتتحول بين المجهز والأقسام من ⚙️.',url:SCR_DL+'sora3a-rest2/releases/download/kitchen-android/sora3a-kitchen.apk',feat:'kitchen',alt:'kitchenSec',app:1},
+    {id:'screen',ic:'📺',t:'شاشة «طلبك جاهز»',d:'تطبيق للتلفزيون أو التيفي بوكس — يتحدث لحاله، وبدون نت تكمل ويا الكاشير على نفس الواي فاي.',url:SCR_DL+'sora3a-rest2/releases/download/screen-android/sora3a-screen.apk',feat:'screen',app:1},
+    {id:'line',ic:'☎️',t:'خط المطعم',d:'على تلفون شريحة المطعم — رقم المتصل يطلع بالكاشير (حتى بدون نت إذا التلفون على واي فاي المطعم).',url:SCR_DL+'sora3a-rest2/releases/download/line-android/sora3a-line.apk',feat:'calls',app:1},
     {id:'cashierApk',ic:'📲',t:'الكاشير (أندرويد)',d:'تطبيق الكاشير للتابلت أو تلفون الكاشير.',url:SCR_DL+'sora3a-rest2/releases/download/cashier-android/sora3a-cashier.apk',app:1},
     {id:'cashierWin',ic:'💻',t:'الكاشير (ويندوز)',d:'برنامج الكاشير للابتوب — يطبع على الطابعة مباشرة.',url:SCR_DL+'sora3a-rest2/releases/latest/download/sora3a-cashier-setup.exe',app:1},
     {id:'captainApk',ic:'🛵',t:'الكابتن (أندرويد)',d:'تطبيق الكابتن — يوصله الطلب بإشعار حتى لو مسكّر.',url:SCR_DL+'sora3a-captain/releases/latest/download/sora3a-captain.apk',feat:'captain',app:1},
@@ -3268,8 +3283,9 @@ window.scrRender=async function(){
   let html='',open=false;
   for(const it of scrItems(rid,r)){
     if(it.g){if(open)html+='</div>';html+=`<div class="scr-sec">${esc(it.g)}</div><div class="scr-g">`;open=true;continue;}
-    const on=!it.feat||featOf(r,it.feat)||(it.feat==='calls'&&featOf(r,'whatsapp'));
-    const own=!on&&it.feat&&(featBase(r,it.feat)||(it.feat==='calls'&&featBase(r,'whatsapp')));   // البرج مشغّلها وصاحب المطعم موقفها
+    const alt=it.alt||(it.feat==='calls'?'whatsapp':'');
+    const on=!it.feat||featOf(r,it.feat)||(alt&&featOf(r,alt));
+    const own=!on&&it.feat&&(featBase(r,it.feat)||(alt&&featBase(r,alt)));   // البرج مشغّلها وصاحب المطعم موقفها
     const tag=it.none?'':on?`<span class="scr-tag ok">${it.app?'تطبيق':'✅ شغّالة'}</span>`:own?`<span class="scr-tag warn">⏸️ ${isRest()?'موقوفة منك':'موقوفة من صاحب المطعم'}</span>`:'<span class="scr-tag bad">⛔ موقوفة</span>';
     html+=`<div class="scr-c ${on||it.none?'':'off'}" data-scr="${esc(it.id)}"><div class="scr-h"><div class="scr-i">${it.ic}</div><div style="flex:1;min-width:0"><b>${esc(it.t)}</b>${it.inst?'<small>📲 تنثبّت كتطبيق من الرابط</small>':it.app?'<small>⬇️ تنزيل وتنصيب</small>':''}</div>${tag}</div>
       <div class="scr-d">${esc(it.d)}${on||it.none?'':own?(isRest()?' — ترجّعها من «خدمات مطعمك» فوق.':' — صاحب المطعم يرجّعها من لوحة الإدارة.'):' — تتفعّل من إدارة سرعة.'}</div>

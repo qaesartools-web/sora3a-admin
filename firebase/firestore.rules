@@ -237,17 +237,20 @@ service cloud.firestore {
       // المنيو والإعدادات المتزامنة بين أجهزة المطعم
       //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
       //  devices (الأجهزة المعتمدة): يعتمدها المدير الأعلى بس، ويشوفها صاحب المطعم — الكاشيرية ما يشوفون مفاتيحها
+      //  lan (شبكة المطعم — الرمز السري اللي يتصافح بيه الكاشير وشاشات المطبخ والطلب جاهز وتلفون الخط على الواي فاي):
+      //   يقراه الكاشير وصاحب المطعم وشاشة المطبخ المربوطة بس (مو الكابتن ولا تلفون الويتر)
       match /{coll}/{d=**} {
         allow read: if isOffice() || hqView('rests') || (coll == 'devices' && hqView('devices'))
           || (coll == 'devices' && ownsRest(rid))
-          || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid)))
+          || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid && coll != 'lan')))
           || (coll == 'settings' && screenOf(rid))
+          || (coll == 'lan' && kitchenScreenOf(rid))
           || (coll in ['menu', 'menuImages'] && waiterScreenOf(rid));
         allow write: if isAdmin() || hqEdit('rests') || (coll == 'devices' && hqEdit('devices'))
           || (coll != 'devices' && (ownsRest(rid)
           // الكاشير: البيع يحدّث المخزون الجاهز بالمنيو + الورديات + سجل الزبائن
           || (cashierOf(rid) && (coll in ['menu', 'shifts', 'customers', 'counters']
-              || (coll == 'settings' && perm('settings'))
+              || (coll in ['settings', 'lan'] && perm('settings'))
               || (coll == 'menuImages' && perm('menu'))))));
       }
     }
