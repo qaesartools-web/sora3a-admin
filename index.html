@@ -3223,12 +3223,12 @@ function readHours(fromId,toId){
   if(f==null||t==null||f===t)return {ok:false};
   return {ok:true,hours:{from:f,to:t}};
 }
-// ═══ شبكة المطعم (بنت أو بدون نت): رمز سري للمطعم — الكاشير والشاشات وتلفون الخط يتصافحون بيه على نفس الواي فاي ═══
+// ═══ شبكة المطعم (بنت أو بدون نت): رمز سري للمطعم (lan/key) — الكاشير والشاشات وتلفون الخط يتصافحون بيه على نفس الواي فاي ═══
 // يتسوى مرة وحدة أول ما يفتح صاحب المطعم لوحة الإدارة (والكاشير يسويه هم إذا ما موجود)
 async function lanKeyEnsure(rid){
   if(!rid)return;
   try{
-    const fb=window._fb,ref=fb.doc(fb.db,'restaurants',rid,'settings','lan');
+    const fb=window._fb,ref=fb.doc(fb.db,'restaurants',rid,'lan','key');
     const s=await fb.getDoc(ref);if(s.exists()&&s.data().key)return;
     await fb.runTransaction(fb.db,async tx=>{
       const x=await tx.get(ref);if(x.exists()&&x.data().key)return;

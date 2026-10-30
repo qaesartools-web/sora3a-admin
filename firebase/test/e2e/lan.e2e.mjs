@@ -74,7 +74,7 @@ test('no internet: the kitchen and the ready screen keep working with the cashie
   await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
   await c.fill('#inEmail', 'lan@x.com'); await c.fill('#inPass', 'secret123'); await c.click('#loginBtn');
   await c.waitForSelector('#prods .prod', { timeout: 15000 });
-  const key = (await until(() => read('restaurants/RL/settings/lan')))?.key;
+  const key = (await until(() => read('restaurants/RL/lan/key')))?.key;
   assert.match(key || '', /^[0-9a-f]{64}$/, 'the cashier created the restaurant LAN key');
   await until(() => hub.status().on);
   assert.equal(hub.status().rid, 'RL');
