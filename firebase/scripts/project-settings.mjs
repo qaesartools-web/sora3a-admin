@@ -1,7 +1,7 @@
 // إعدادات مشروع Firebase اللي تأثر على الكلفة — يشغّلها GitHub Actions بنفس مفتاح نشر القواعد (FIREBASE_SERVICE_ACCOUNT)
 //   node scripts/project-settings.mjs          ← يفحص بس ويكتب النتيجة
-//   node scripts/project-settings.mjs --apply  ← وفوكها يطوّل مدة رمز الحماية (App Check) لـ12 ساعة
-//   • مدة رمز الحماية: كل تجديد = فحص reCAPTCHA. المجاني 10 آلاف بالشهر، وبعدها 8 دولار. ساعة ← 12 ساعة = فحوصات أقل بهواية
+//   node scripts/project-settings.mjs --apply  ← وفوكها يخلي مدة رمز الحماية (App Check) 24 ساعة إذا أقل (ما يقصّرها أبداً)
+//   • مدة رمز الحماية: كل تجديد = فحص reCAPTCHA. المجاني 10 آلاف بالشهر، وبعدها 8 دولار. كل ما تطول = فحوصات أقل
 //   • الدفع حسب الاستخدام: بدونه المشروع يوكف إذا عبر الحد اليومي المجاني (50 ألف قراءة / 20 ألف كتابة)
 //   • منطقة قاعدة البيانات: تحدد السعر (منطقة وحدة أرخص بالنص من «أكثر من منطقة»)
 import { createSign } from 'node:crypto';
@@ -10,7 +10,7 @@ import { appendFile } from 'node:fs/promises';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const APPLY = process.argv.includes('--apply');
 const WEB_APP = process.env.WEB_APP_ID || '1:516304449260:web:0110ba6c2621d6a16dbfc9';   // تطبيق الويب الوحيد (كل الصفحات وتطبيقات الأندرويد)
-const TTL = '43200s';   // 12 ساعة
+const TTL = 86400;   // 24 ساعة (بالثواني) — الحد الأدنى اللي نخليه، والأطول يبقى مثل ما هو
 
 let SA = null;
 try { SA = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || ''); } catch (e) { SA = null; }
@@ -62,11 +62,12 @@ try {
 const cfgUrl = `https://firebaseappcheck.googleapis.com/v1/projects/${PROJECT}/apps/${WEB_APP}/recaptchaEnterpriseConfig`;
 try {
   let c = await call('GET', cfgUrl);
-  out(`- 🛡️ مدة رمز الحماية هسه: \`${c.tokenTtl || 'الافتراضي (ساعة)'}\``);
-  if (APPLY && c.tokenTtl !== TTL) {
-    c = await call('PATCH', cfgUrl + '?updateMask=tokenTtl', { tokenTtl: TTL });
-    out(`- 🛡️ صارت: \`${c.tokenTtl}\` (12 ساعة) ✅`);
-  } else if (c.tokenTtl === TTL) out('- 🛡️ مضبوطة على 12 ساعة ✅');
+  const secs = parseInt(c.tokenTtl, 10) || 3600, hrs = (x) => Math.round(x / 3600) + ' ساعة';
+  out(`- 🛡️ مدة رمز الحماية هسه: ${hrs(secs)}`);
+  if (APPLY && secs < TTL) {
+    c = await call('PATCH', cfgUrl + '?updateMask=tokenTtl', { tokenTtl: TTL + 's' });
+    out(`- 🛡️ صارت: ${hrs(parseInt(c.tokenTtl, 10))} ✅`);
+  } else if (secs >= TTL) out('- 🛡️ مضبوطة (24 ساعة أو أكثر) ✅');
 } catch (e) { out(`- 🛡️ مدة رمز الحماية: ما گدرنا ${APPLY ? 'نغيّرها' : 'نقراها'} — ${why(e)}`); }
 
 if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
