@@ -1,0 +1,31 @@
+name: إعدادات مشروع Firebase (الكلفة)
+
+# يفحص منطقة قاعدة البيانات والدفع حسب الاستخدام، ويطوّل مدة رمز الحماية (App Check) لـ12 ساعة
+# حتى تقل فحوصات reCAPTCHA وتبقى ضمن المجاني. يشتغل بنفس مفتاح نشر القواعد (FIREBASE_SERVICE_ACCOUNT).
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - firebase/scripts/project-settings.mjs
+      - .github/workflows/project-settings.yml
+
+permissions:
+  contents: read
+
+jobs:
+  settings:
+    name: فحص وضبط
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: firebase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: إعدادات المشروع
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node scripts/project-settings.mjs --apply
