@@ -1044,6 +1044,12 @@ test('Tower picks the ready screen look per restaurant: design + 2 colours + log
     await new Promise((r) => setTimeout(r, 900));   // الخط والحركة
     await p.screenshot({ path: `shots/ready-theme-${design}.png` });
   }
+  // لون كل جزء بروحه: خلفية ذهبية، أرقام «جاهز» بيضاء، وكتابة الشاشة الفارغة حمرة
+  await write('restaurants/RW', { screenTheme: { design: 'board', c1: '#16130e', c2: '#ffc94a', x: { bg: '#d4af37', readyNumFg: '#ffffff', emptyFg: '#ff0000', bad: '#123456', prepFg: 'red' } } });
+  await p.waitForFunction(() => document.documentElement.classList.contains('xs-bg'), null, { timeout: 10000 });
+  const cs = await p.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, rn: getComputedStyle(document.querySelector('#ready .n')).color, prep: document.documentElement.classList.contains('xs-prepFg') }));
+  assert.equal(cs.bg, 'rgb(212, 175, 55)'); assert.equal(cs.rn, 'rgb(255, 255, 255)'); assert.equal(cs.prep, false, 'a wrong colour value is ignored');
+  await p.screenshot({ path: 'shots/ready-theme-gold.png' });
   // البرج يشيل الشعار ← يرجع الحرف
   await E.withSecurityRulesDisabled(async (c) => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(c.firestore(), 'restaurants/RW/theme/logo')); });
   await p.waitForFunction(() => !document.querySelector('#mk img'), null, { timeout: 10000 });
