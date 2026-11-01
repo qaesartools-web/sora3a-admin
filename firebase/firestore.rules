@@ -687,6 +687,19 @@ service cloud.firestore {
     }
 
     // ── config (إعدادات عامة يقرأها كل حساب فعّال، ويكتبها المدير الأعلى فقط — مثل رابط سيرفر الإشعارات) ──
+    // صحة الأجهزة: كل جهاز مسجّل يكتب سجله (ساعة الجهاز، المتصفح، فحص الحماية) — البرج بس يقراها
+    match /devHealth/{id} {
+      allow read: if isAdmin() || hqView('devices');
+      allow create, update: if signedIn() && id.size() <= 40
+        && request.resource.data.keys().hasOnly(['app', 'page', 'ua', 'browser', 'skewSec', 'ac', 'rid', 'rest', 'who', 'atMs', 'v'])
+        && request.resource.data.atMs is number && request.resource.data.ua is string && request.resource.data.ua.size() <= 200
+        && request.resource.data.get('ac', '') is string && request.resource.data.get('ac', '').size() <= 100
+        && request.resource.data.get('rest', '') is string && request.resource.data.get('rest', '').size() <= 80
+        && request.resource.data.get('who', '') is string && request.resource.data.get('who', '').size() <= 60
+        && request.resource.data.get('browser', '') is string && request.resource.data.get('browser', '').size() <= 40
+        && (request.resource.data.get('skewSec', null) == null || request.resource.data.skewSec is int);
+      allow delete: if isAdmin();
+    }
     match /config/{id} {
       // config/brand = رقم وإيميل سرعة اللي يطلعن بشريط الهوية والوصل بكل التطبيقات — عام للقراءة (حتى منيو الزبون)، ويكتبه المدير الأعلى (البرج) بس
       allow read: if active() || id == 'brand';

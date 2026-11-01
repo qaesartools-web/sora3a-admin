@@ -518,6 +518,19 @@ test('config/brand: our phone/email are public to read, only super admin (Tower)
   await assertFails(getDoc(doc(anon(), 'config/other')));
 });
 
+test('devHealth: every signed-in device writes its own health record (clock, browser, protection); only the Tower reads them', async () => {
+  const H = { app: 'screen', page: 'screen.html', ua: 'Mozilla/5.0 (Linux; Android 9; wv) Chrome/70.0', browser: 'Chrome 70 (تطبيق)', skewSec: -600, ac: 'err:appCheck/recaptcha-error', rid: 'R1', rest: 'R1', who: 'شاشة', atMs: Date.now(), v: 1 };
+  await assertSucceeds(setDoc(doc(as('cash1'), 'devHealth/dABC123'), H));
+  await assertSucceeds(setDoc(doc(as('rest1'), 'devHealth/dXYZ'), { ...H, skewSec: null, ac: 'ok' }));
+  await assertFails(setDoc(doc(anon(), 'devHealth/dANON'), H));
+  await assertFails(setDoc(doc(as('cash1'), 'devHealth/dBAD'), { ...H, extra: 'x' }));
+  await assertFails(setDoc(doc(as('cash1'), 'devHealth/dBAD2'), { ...H, skewSec: 1.5 }));
+  await assertFails(setDoc(doc(as('cash1'), 'devHealth/dBAD3'), { ...H, ua: 'x'.repeat(201) }));
+  await assertFails(getDoc(doc(as('rest1'), 'devHealth/dABC123')));
+  await assertFails(getDocs(collection(as('cash1'), 'devHealth')));
+  await assertSucceeds(getDocs(collection(as('admin1'), 'devHealth')));
+});
+
 // ── المنيو الأونلاين وطلبات QR والويتر ──
 const PM = { name: 'R1', on: true, modes: { table: true, pickup: true, delivery: true }, fee: 1000, tables: 10, cats: [{ cat: 'برغر', items: [{ name: 'زنكر', variants: [{ name: 'وحدة', price: 5000 }] }] }], updatedAtMs: 1 };
 const WEB = (o = {}) => ({ restaurantId: 'R1', source: 'qr', mode: 'pickup', items: [{ name: 'زنكر', variant: 'وحدة', qty: 2 }], customer: 'علي', phone: '07701234567', status: 'new', total: 10000, createdAtMs: Date.now(), day: '2026-10-08', ...o });

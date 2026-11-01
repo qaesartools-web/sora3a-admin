@@ -865,7 +865,7 @@ const app = initializeApp({
 // App Check (reCAPTCHA Enterprise / Fraud Defense): السيرفر يعرف إن الطلب جاي من تطبيقاتنا الحقيقية (بدون ما يحس المستخدم) — على الموقع بس، مو بالتجارب المحلية
 const APPCHECK_KEY = '6LdWa_0tAAAAAEWXuLi8yrdnPjQmx-r-ayyoZ07h';
 const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
-  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true })).catch(() => {}); };
+  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && (e.code || e.message)) || e).slice(0, 80); }); }).catch(() => {}); };
 appCheck(app);
 
 // Secondary app for creating users without logout
@@ -1066,6 +1066,7 @@ function enterApp(){
   document.getElementById('hdrName').textContent=currentUser.restaurantName||currentUser.name||currentUser.email;
   document.getElementById('hdrRole').className='hdr-role '+(isAdmin()?'role-admin':isStaff()?'role-staff':'role-rest');
   document.getElementById('hdrRole').textContent=isAdmin()?'👑 إدارة عليا':isStaff()?'👥 موظف':'🍽️ مطعم';
+  if(window.SB&&window._fb)SB.health((hid,hd)=>window._fb.setDoc(window._fb.doc(window._fb.db,'devHealth',hid),hd),{rid:currentUser.restaurantId||'',rest:currentUser.restaurantName||'',who:currentUser.name||''});   // صحة الجهاز
   if(window.SB)SB.welcome({app:'admin',name:currentUser.name||'',rest:currentUser.restaurantName||'',role:isAdmin()?'لوحة الإدارة — الإدارة العليا':isStaff()?'لوحة الإدارة — موظف':'لوحة الإدارة'});
   document.body.classList.toggle('rest-mode',isRest());
   document.body.classList.toggle('staff-mode',isStaff());

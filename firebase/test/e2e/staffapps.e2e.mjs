@@ -1175,7 +1175,7 @@ test('kitchen screen: a cancelled order turns red and stays until «شفته»; 
 
 test('welcome screen on every entry: the cashier login and a linked screen greet with the name/restaurant in the app colour, then it goes away by itself', async () => {
   const p = await page(B, { w: 1280, h: 800 });
-  await p.addInitScript(() => { window.SB_WELCOME_TEST = true; });
+  await p.addInitScript(() => { window.SB_WELCOME_TEST = true; window.SB_HEALTH_TEST = true; });
   await p.goto(BASE + 'index.html');
   await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
   await p.fill('#inEmail', 'scr@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
@@ -1185,6 +1185,9 @@ test('welcome screen on every entry: the cashier login and a linked screen greet
   await p.screenshot({ path: 'shots/welcome-cashier.png' });
   await p.waitForSelector('.sb-welcome', { state: 'detached', timeout: 6000 });
   await p.waitForSelector('#prods .prod', { timeout: 15000 });
+  // صحة الجهاز: سجل بساعة الجهاز والمتصفح (البرج يشوفه)
+  const hl = await until(async () => (await list('devHealth', 'rid', 'RW')).find((x) => x.app === 'cashier'));
+  assert.ok(hl, 'device health record written'); assert.equal(typeof hl.skewSec, 'number'); assert.equal(hl.ac, 'off'); assert.match(hl.browser, /Chrome|HeadlessChrome/);
   // شاشة «طلبك جاهز» بعد الربط
   const s = await page(B, { w: 1280, h: 720 });
   await s.addInitScript(() => { window.SB_WELCOME_TEST = true; });
