@@ -1166,3 +1166,27 @@ test('kitchen screen: a cancelled order turns red and stays until «شفته»; 
   await write('restaurants/RW', { features: { kitchen: false, kitchenSec: false }, svcOff: {} });
   await k.context().close(); await c.context().close();
 });
+
+test('welcome screen on every entry: the cashier login and a linked screen greet with the name/restaurant in the app colour, then it goes away by itself', async () => {
+  const p = await page(B, { w: 1280, h: 800 });
+  await p.addInitScript(() => { window.SB_WELCOME_TEST = true; });
+  await p.goto(BASE + 'index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#inEmail', 'scr@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
+  await p.waitForSelector('.sb-welcome', { timeout: 15000 });
+  const w = await p.textContent('.sb-welcome');
+  assert.match(w, /(صباح الخير|هلا بيك|مساء الخير)/); assert.match(w, /مطعم الشاشة/); assert.match(w, /الكاشير/);
+  await p.screenshot({ path: 'shots/welcome-cashier.png' });
+  await p.waitForSelector('.sb-welcome', { state: 'detached', timeout: 6000 });
+  await p.waitForSelector('#prods .prod', { timeout: 15000 });
+  // شاشة «طلبك جاهز» بعد الربط
+  const s = await page(B, { w: 1280, h: 720 });
+  await s.addInitScript(() => { window.SB_WELCOME_TEST = true; });
+  await pairScreen(s, BASE + 'screen.html', { name: 'شاشة الصالة' });
+  await s.waitForSelector('.sb-welcome', { timeout: 15000 });
+  assert.match(await s.textContent('.sb-welcome'), /مطعم الشاشة[\s\S]*شاشة الصالة/);
+  await s.screenshot({ path: 'shots/welcome-screen.png' });
+  await s.click('.sb-welcome');   // ضغطة تخفيها
+  await s.waitForSelector('.sb-welcome', { state: 'detached', timeout: 3000 });
+  await p.context().close(); await s.context().close();
+});

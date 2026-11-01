@@ -1066,6 +1066,7 @@ function enterApp(){
   document.getElementById('hdrName').textContent=currentUser.restaurantName||currentUser.name||currentUser.email;
   document.getElementById('hdrRole').className='hdr-role '+(isAdmin()?'role-admin':isStaff()?'role-staff':'role-rest');
   document.getElementById('hdrRole').textContent=isAdmin()?'👑 إدارة عليا':isStaff()?'👥 موظف':'🍽️ مطعم';
+  if(window.SB)SB.welcome({app:'admin',name:currentUser.name||'',rest:currentUser.restaurantName||'',role:isAdmin()?'لوحة الإدارة — الإدارة العليا':isStaff()?'لوحة الإدارة — موظف':'لوحة الإدارة'});
   document.body.classList.toggle('rest-mode',isRest());
   document.body.classList.toggle('staff-mode',isStaff());
   buildNavs();
