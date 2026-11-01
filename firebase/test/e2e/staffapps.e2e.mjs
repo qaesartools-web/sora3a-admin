@@ -946,3 +946,18 @@ test('many orders: the ready screen shrinks the numbers so none hide behind the 
   for (let i = 0; i < 24; i++) await write('orders/MK' + i, { status: 'cancelled' });
   await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: Date.now() });
 });
+
+test('a screen on a device with a wrong clock shows how to fix it (otherwise the server rejects its requests)', async () => {
+  const k = await page(B, { w: 1280, h: 800 });
+  await k.context().addInitScript(() => { const N = Date.now; Date.now = () => N() + 3 * 3600000; });   // ساعة الجهاز مقدّمة ٣ ساعات
+  await pairScreen(k, BASE + 'kitchen.html', { name: 'المجهز' });
+  await k.waitForSelector('#clockWarn', { timeout: 15000 });
+  assert.match(await k.textContent('#clockWarn'), /مقدّمة 3 ساعة.*التاريخ والوقت/);
+  await k.context().close();
+  // جهاز ساعته صحيحة: ماكو تنبيه
+  const ok = await page(B, { w: 1280, h: 800 });
+  await pairScreen(ok, BASE + 'kitchen.html', { name: 'المجهز' });
+  await ok.waitForTimeout(2500);
+  assert.equal(await ok.$('#clockWarn'), null);
+  await ok.context().close();
+});
