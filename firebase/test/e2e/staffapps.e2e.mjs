@@ -33,6 +33,8 @@ before(async () => {
 after(async () => { await B?.close(); srv?.close(); await E?.cleanup(); setTimeout(() => process.exit(0), 200).unref(); });
 
 async function login(p, url, email) {
+  // شاشة «طلبك جاهز» ما تدخل بإيميل بعد: تطلع رمز وصاحب المطعم يربطها
+  if (/screen\.html/.test(url)) { await pairScreen(p, url, { name: 'شاشة طلبك جاهز' }); return; }
   await p.goto(url);
   await p.waitForSelector('#gEmail', { timeout: 15000 });
   await p.fill('#gEmail', email); await p.fill('#gPass', 'secret123'); await p.click('#gGo');
@@ -95,7 +97,7 @@ test('ready screen: takeaway/pager orders in two columns, new ready number flash
   await p.context().close();
 });
 
-test('ready screen stays signed in when the TV starts without internet — opens from its saved copy, no password again; only «تسجيل خروج» signs out', async () => {
+test('ready screen stays linked when the TV starts without internet — opens from its saved copy; only «فصل الشاشة» unlinks it', async () => {
   const p = await page(B, { w: 1280, h: 720 });
   await login(p, BASE + 'screen.html', 'scr@x.com');
   await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
@@ -118,24 +120,28 @@ test('ready screen stays signed in when the TV starts without internet — opens
   await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
   await p.context().unroute(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/);
   await p.click('#menuBtn'); await p.click('#mOut'); await p.click('#mOut');
-  await p.waitForSelector('#gPass', { timeout: 15000 });
-  assert.equal(await p.inputValue('#gEmail'), 'scr@x.com', 'الإيميل محفوظ');
+  await p.waitForSelector('#pairCode', { timeout: 15000 });   // «فصل الشاشة» ← رمز جديد للربط
+  assert.equal(await p.locator('#gEmail').count(), 0, 'no email login any more');
   assert.deepEqual(clean(p).filter((e) => !/Could not reach Cloud Firestore backend|client is offline|internetdisconnected|ERR_INTERNET/i.test(e)), []);
   await p.context().close();
 });
 
-test('ready screen opens straight from a signed-in cashier and shows orders made at the cashier', async () => {
+test('ready screen opened from the cashier button links itself to that restaurant (no code, no email), the cashier stays signed in, and it shows the cashier orders', async () => {
   const p = await page(B, { w: 1280, h: 860 });
   await posLogin(p);
-  assert.equal(await p.getAttribute('#readyScrBtn', 'href'), 'screen.html');
+  assert.equal(await p.getAttribute('#readyScrBtn', 'href'), 'screen.html?from=pos');
   await p.evaluate(() => { cart.push({ name: 'برغر لحم', variant: 'وحدة', price: 6000, qty: 1 }); holdOrder({ name: 'سجاد' }); });
   const o = await until(async () => (await list('orders', 'restaurantId', 'RW')).find((x) => x.customer === 'سجاد'));
   assert.equal(o.day, bagDay());
   const s = await p.context().newPage();
   s.errors = []; s.on('pageerror', (e) => s.errors.push(String(e)));
-  await s.goto(BASE + 'screen.html');
+  await s.goto(BASE + 'screen.html?from=pos');
   await s.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
   assert.equal(await s.locator('#gEmail').count(), 0, 'no second login');
+  const linked = (await list('screens', 'restaurantId', 'RW')).find((x) => x.kind === 'ready' && x.pairedBy === 'owner');
+  assert.ok(linked, 'the screen got linked to the restaurant by itself');
+  assert.ok(await p.isVisible('#prods'), 'the cashier window is still signed in');
+  assert.equal(o.byUid, U.owner, 'each order remembers the cashier who took it');
   await s.waitForFunction((n) => [...document.querySelectorAll('#prep .n')].some((e) => e.textContent.startsWith('#' + n)), o.ticketNo);
   assert.deepEqual(s.errors, []);
   await p.context().close();
@@ -271,17 +277,14 @@ test('waiter: opening the link asks to install the app (prompt, close, manifest)
   await w.context().close();
 });
 
-test('ready screen inside the TV app: page reports it works, no fullscreen button, remote arrows move between login fields', async () => {
+test('ready screen inside the TV app: page reports it works, shows a link code (no email), opens once linked, no fullscreen button', async () => {
   const p = await page(B, { w: 1280, h: 720 });
   await p.addInitScript(() => { Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 9; X96) Chrome/120 Mobile Safari/537.36 SoraScreenApp/1.5' }); });
-  await p.goto(BASE + 'screen.html');
-  await p.waitForSelector('#gEmail');
+  const sc = await openScreen(p, BASE + 'screen.html');
+  assert.equal(sc.pair.kind, 'ready');
   assert.equal(await p.evaluate(() => window.__scrOk), true);
-  await p.waitForFunction(() => document.activeElement && document.activeElement.id === 'gEmail');
-  await p.keyboard.press('ArrowDown'); assert.equal(await p.evaluate(() => document.activeElement.id), 'gPass');
-  await p.keyboard.press('ArrowDown'); assert.equal(await p.evaluate(() => document.activeElement.id), 'gGo');
-  await p.keyboard.press('ArrowUp'); assert.equal(await p.evaluate(() => document.activeElement.id), 'gPass');
-  await p.focus('#gEmail'); await p.keyboard.type('scr@x.com'); await p.keyboard.press('ArrowDown'); await p.keyboard.type('secret123'); await p.keyboard.press('Enter');
+  assert.equal(await p.locator('#gEmail').count(), 0, 'no email or password on the TV');
+  await put('screens/' + sc.uid, { restaurantId: 'RW', restName: 'مطعم الشاشة', code: sc.code, kind: 'ready', name: 'الطابق الأول', pairedBy: 'hq', approved: true, atMs: Date.now() });
   await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
   assert.equal(await p.isVisible('#fsBtn'), false);
   assert.deepEqual(clean(p), []);
@@ -321,7 +324,7 @@ test('cashier settings: choose what the ready screen shows (dine-in without page
   await p.context().close();
 });
 
-test('ready screen menu with the remote: sound on/off, and log out needs a second press', async () => {
+test('ready screen menu with the remote: sound on/off, and unlinking needs a second press', async () => {
   const p = await page(B, { w: 1280, h: 720 });
   await login(p, BASE + 'screen.html', 'scr@x.com');
   await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
@@ -341,12 +344,9 @@ test('ready screen menu with the remote: sound on/off, and log out needs a secon
   assert.ok((await p.textContent('#mOut')).includes('متأكد'));
   assert.equal(await p.isVisible('#scr'), true, 'first press only asks');
   await p.keyboard.press('Enter');
-  await p.waitForSelector('#gEmail', { timeout: 10000 });
+  await p.waitForSelector('#pairCode', { timeout: 10000 });   // انفصلت ← رمز جديد
   assert.equal(await p.isVisible('#scr'), false);
   assert.equal(await p.isVisible('#menu'), false);
-  // الإيميل محفوظ على الجهاز: بالريموت يكتب الرمز بس
-  assert.equal(await p.inputValue('#gEmail'), 'scr@x.com');
-  await p.waitForFunction(() => document.activeElement && document.activeElement.id === 'gPass');
   await p.screenshot({ path: 'shots/ready-screen-login.png' });
   assert.deepEqual(clean(p), []);
   await p.context().close();
@@ -960,4 +960,56 @@ test('a screen on a device with a wrong clock shows how to fix it (otherwise the
   await ok.waitForTimeout(2500);
   assert.equal(await ok.$('#clockWarn'), null);
   await ok.context().close();
+});
+
+test('a TV that was signed in with the restaurant email links itself to the restaurant (no code), then the owner login leaves that device', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, screen: true } });
+  const p = await page(B, { w: 1280, h: 720 });
+  await posLogin(p);   // نفس الجهاز جان داخل بإيميل المطعم (قبل الربط بالرمز)
+  const before = (await list('screens', 'restaurantId', 'RW')).length;
+  const s = await p.context().newPage();
+  s.errors = []; s.on('pageerror', (e) => s.errors.push(String(e)));
+  await s.goto(BASE + 'screen.html');
+  await s.waitForSelector('#scr:not([hidden])', { timeout: 20000 });
+  const mine = await until(async () => { const l = await list('screens', 'restaurantId', 'RW'); return l.length > before && l.find((x) => x.kind === 'ready' && x.pairedBy === 'owner' && x.approved === false); });
+  assert.ok(mine, 'linked to the same restaurant by itself');
+  // جلسة صاحب المطعم طلعت من التلفزيون (محد يفتح الكاشير منه)
+  await p.reload();
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  assert.deepEqual(s.errors, []);
+  await p.context().close();
+});
+
+test('a restaurant with two halls: each ready screen shows only its own cashiers orders; the owner picks them in the admin panel and the screen follows live', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, screen: true } });
+  const c1 = 'hallOne', c2 = 'hallTwo', now = Date.now(), today = bagDay();
+  await put('users/' + c1, { role: 'cashier', restaurantId: 'RW', email: 'hall1@x.com', name: 'كاشير الطابق الأول', perms: {} });
+  await put('users/' + c2, { role: 'cashier', restaurantId: 'RW', email: 'hall2@x.com', name: 'كاشير الطابق الثاني', perms: {} });
+  const base = { restaurantId: 'RW', status: 'delivered', value: 5000, day: today, createdAtMs: now - 5 * 60000, orderType: 'takeaway', kitchen: 'ready', kitchenReadyAt: now - 60000 };
+  await put('orders/H1', { ...base, ticketNo: 71, byUid: c1 });
+  await put('orders/H2', { ...base, ticketNo: 72, byUid: c2 });
+  await put('orders/H3', { ...base, ticketNo: 73 });   // طلب قديم بدون اسم كاشير: يطلع بكل الشاشات
+  const one = await page(B, { w: 1280, h: 720 }), two = await page(B, { w: 1280, h: 720 });
+  const s1 = await pairScreen(one, BASE + 'screen.html', { name: 'الطابق الأول', cashiers: [c1] });
+  await pairScreen(two, BASE + 'screen.html', { name: 'الطابق الثاني', cashiers: [c2] });
+  const shown = (p) => p.$$eval('#ready .n, #prep .n', (els) => els.map((e) => e.textContent.trim().replace(/\D.*$/, '').replace('#', '')));
+  const has = (p, n) => p.waitForFunction((n) => [...document.querySelectorAll('#ready .n, #prep .n')].some((e) => e.textContent.trim().startsWith('#' + n)), n, { timeout: 15000 });
+  await has(one, 71); await has(one, 73); await has(two, 72);
+  assert.ok(!(await one.textContent('#ready')).includes('#72'), 'hall 1 does not show hall 2 orders');
+  assert.ok(!(await two.textContent('#ready')).includes('#71'), 'hall 2 does not show hall 1 orders');
+  // صاحب المطعم: لوحة الإدارة ← الشاشات ← «تعرض طلبات» ← يضيف كاشير الطابق الثاني للشاشة الأولى
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.goto('http://localhost:5050/sora3a-admin/index.html');
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await a.fill('#lEmail', 'scr@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#appPage', { state: 'visible', timeout: 15000 });
+  await a.click('.dnav-btn[data-screen="scScreens"]');
+  await a.waitForSelector(`[data-cash="${s1.uid}"]`, { timeout: 15000 });
+  assert.match(await a.textContent(`[data-cash="${s1.uid}"] summary`), /كاشير الطابق الأول/);
+  await a.click(`[data-cash="${s1.uid}"] summary`);
+  await a.check(`[data-cash="${s1.uid}"] input[data-cu="${c2}"]`);
+  await until(async () => ((await read('screens/' + s1.uid)).cashiers || []).length === 2);
+  await has(one, 72);   // الشاشة تتبع فوراً
+  await a.screenshot({ path: 'shots/admin-ready-cashiers.png' });
+  for (const p of [one, two, a]) await p.context().close();
 });

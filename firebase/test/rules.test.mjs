@@ -884,6 +884,31 @@ test('شاشة المطبخ: تطلع رمز، صاحب المطعم يربطه�
   await assertFails(getDoc(doc(S, 'orders/K1')), 'unlinked');
 });
 
+test('شاشة طلبك جاهز: تنربط برمز، تشوف طلبات مطعمها بس وما تغيّر شي، وصاحب المطعم يختار كاشيريتها', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const f = ctx.firestore();
+    await setDoc(doc(f, 'restaurants/R1'), { name: 'R1', userId: 'rest1', active: true, expiryMs: Date.now() + DAY });
+    await setDoc(doc(f, 'orders/RD1'), { restaurantId: 'R1', status: 'preparing', kitchen: 'new', value: 5000, byUid: 'cash1' });
+    await setDoc(doc(f, 'orders/RD2'), { restaurantId: 'R2', status: 'preparing', kitchen: 'new', value: 5000 });
+    await setDoc(doc(f, 'restaurants/R1/lan/key'), { key: 'k' });
+  });
+  const T = as('tvA');
+  await assertSucceeds(setDoc(doc(T, 'screenPairs/TV12AB'), { uid: 'tvA', atMs: Date.now(), platform: 'Android • شاشة طلبك جاهز', kind: 'ready' }));
+  const scr = { restaurantId: 'R1', code: 'TV12AB', kind: 'ready', name: 'الطابق الأول', pairedBy: 'owner', approved: false, atMs: Date.now() };
+  await assertFails(setDoc(doc(as('rest1'), 'screens/tvA'), { ...scr, cashiers: Array.from({ length: 31 }, (_, i) => 'c' + i) }), 'at most 30 cashiers');
+  await assertSucceeds(setDoc(doc(as('rest1'), 'screens/tvA'), scr));
+  await assertSucceeds(getDoc(doc(T, 'orders/RD1')));
+  await assertFails(getDoc(doc(T, 'orders/RD2')), 'other restaurant');
+  await assertSucceeds(getDoc(doc(T, 'restaurants/R1/lan/key')), 'works on the wifi without internet');
+  await assertFails(updateDoc(doc(T, 'orders/RD1'), { kitchen: 'ready', kitchenReadyAt: 1 }), 'a customer-facing screen cannot mark ready');
+  await assertFails(updateDoc(doc(T, 'orders/RD1'), { status: 'cancelled' }));
+  // صاحب المطعم يختار كاشيرية الشاشة (مطعم بيه أكثر من صالة)، والشاشة نفسها ما تغيّرها
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'screens/tvA'), { cashiers: ['cash1'] }));
+  await assertFails(updateDoc(doc(as('rest1'), 'screens/tvA'), { cashiers: 'cash1' }), 'must be a list');
+  await assertFails(updateDoc(doc(T, 'screens/tvA'), { cashiers: [] }));
+  await assertFails(updateDoc(doc(as('cash1'), 'screens/tvA'), { cashiers: [] }));
+});
+
 test('خدمات المطعم: صاحب المطعم يوقف خدمة شغّلها البرج (svcOff) ويرجّعها — وما يكدر يشغّل خدمة البرج طافيها', async () => {
   await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'restaurants/R1'), { features: { captain: true, devices: true } }); });
   await assertSucceeds(updateDoc(doc(as('rest1'), 'restaurants/R1'), { 'svcOff.captain': true }));

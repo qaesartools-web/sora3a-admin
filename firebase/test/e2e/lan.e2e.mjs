@@ -96,8 +96,11 @@ test('no internet: the kitchen and the ready screen keep working with the cashie
   const s = await page(B, { w: 1280, h: 720 });
   await wire(s, sc, 'screen');
   await s.goto(BASE + 'screen.html');
-  await s.waitForSelector('#gEmail', { timeout: 15000 });
-  await s.fill('#gEmail', 'lan@x.com'); await s.fill('#gPass', 'secret123'); await s.click('#gGo');
+  // شاشة «طلبك جاهز» تنربط برمز مثل المطبخ (بدون إيميل)
+  await s.waitForSelector('#pairCode', { timeout: 15000 });
+  const scode = (await s.textContent('#pairCode')).trim();
+  const spr = await until(() => read('screenPairs/' + scode));
+  await put('screens/' + spr.uid, { restaurantId: 'RL', restName: 'مطعم الشبكة', code: scode, kind: 'ready', name: 'طلبك جاهز', pairedBy: 'hq', approved: true, atMs: Date.now() });
   await s.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
   assert.ok(await until(() => hub.status().peers.some((x) => x.role === 'screen')), 'ready screen connected to the cashier');
   await c.waitForTimeout(1500);
