@@ -391,9 +391,14 @@ service cloud.firestore {
         || (kitchenScreenOf(resource.data.restaurantId)
             && onlyChanged(['kitchen','kitchenReadyAt','kSec','status','readyAt','timeline','kitchenSecDoneAt'])
             && (!('kitchenSecDoneAt' in request.resource.data) || request.resource.data.kitchenSecDoneAt is number)
-            && request.resource.data.get('kitchen', null) in [resource.data.get('kitchen', null), 'ready']
+            && (request.resource.data.get('kitchen', null) in [resource.data.get('kitchen', null), 'ready']
+                // «رجّع»: «جاهز» انضغط بالغلط ← يرجع للمطبخ خلال 5 دقايق
+                || (resource.data.get('kitchen', null) == 'ready' && request.resource.data.get('kitchen', null) == 'new'
+                    && resource.data.get('kitchenReadyAt', 0) is number && resource.data.get('kitchenReadyAt', 0) > request.time.toMillis() - 300000))
             && (request.resource.data.get('status', null) == resource.data.get('status', null)
-                || (resource.data.get('status', null) == 'preparing' && request.resource.data.status == 'ready')))
+                || (resource.data.get('status', null) == 'preparing' && request.resource.data.status == 'ready')
+                || (resource.data.get('status', null) == 'ready' && request.resource.data.get('status', null) == 'preparing'
+                    && resource.data.get('readyAt', 0) is number && resource.data.get('readyAt', 0) > request.time.toMillis() - 300000)))
 
         // قبول الطلب: مرة واحدة فقط (يُنفَّذ داخل transaction)
         || (isCaptain()

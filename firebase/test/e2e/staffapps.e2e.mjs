@@ -1098,3 +1098,71 @@ test('old TV browsers (no clamp/min/max/env/gap): the Sora3a bar stays thin on e
     await p.context().close();
   }
 });
+
+test('kitchen screen: a cancelled order turns red and stays until «شفته»; a cashier edit shows what was added/removed; «رجّع» undoes a wrong «جاهز»; item totals, table colours, late times from settings', async () => {
+  const now = Date.now(), day = bagDay(now);
+  await write('restaurants/RW', { features: { kitchen: true, kitchenSec: false }, svcOff: {} });
+  await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: 4, kWarn: 2, kLate: 30 });
+  const base = { restaurantId: 'RW', status: 'preparing', held: true, kitchen: 'new', value: 13500, day, createdAt: '20:15' };
+  await put('orders/KX1', { ...base, orderType: 'salon', tableNo: '5', ticketNo: 61, createdAtMs: now - 3 * 60000, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 2, price: 6000 }] });
+  await put('orders/KX2', { ...base, orderType: 'takeaway', ticketNo: 62, createdAtMs: now - 30000, value: 6750, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1, price: 6000 }, { name: 'لبن', variant: 'وحدة', qty: 1, price: 750 }] });
+  const k = await page(B, { w: 1280, h: 800 });
+  await pairScreen(k, BASE + 'kitchen.html');
+  await k.waitForSelector('.card [data-done="KX1"]', { timeout: 15000 });
+  await k.waitForSelector('.card [data-done="KX2"]', { timeout: 15000 });
+  // أوقات التأخير من الإعدادات (أصفر بعد دقيقتين) + لون الطاولة + مجموع الأصناف
+  assert.ok(await k.$('.card.warn:has([data-done="KX1"])'), 'yellow after 2 minutes (restaurant setting)');
+  assert.ok(await k.$('.card.warn:has([data-done="KX2"])') === null);
+  assert.match(await k.getAttribute('.card:has([data-done="KX1"]) .tbl', 'style'), /background:hsl\(/);
+  assert.match(await k.textContent('#tot'), /3×\s*برغر لحم/);
+  // الكاشير يعدّل الطلب: يضيف 2 لبن وينقص البرغر
+  const c = await page(B, { w: 1280, h: 860 });
+  await posLogin(c);
+  await c.waitForFunction(() => typeof window.ordEdit === 'function' && orders.some((o) => o.id === 'KX2'), null, { timeout: 15000 });
+  await c.evaluate(() => { window.ordEdit('KX2'); edState.work.find((i) => i.name === 'لبن').qty = 3; edState.work = edState.work.filter((i) => i.name !== 'برغر لحم'); window.edSave(); });
+  const o2 = await until(async () => { const x = await read('orders/KX2'); return x.kEdits && x.kEdits.length ? x : null; });
+  assert.deepEqual(o2.kEdits[0].add.map((a) => [a.name, a.qty]), [['لبن', 2]]);
+  assert.deepEqual(o2.kEdits[0].rem.map((a) => [a.name, a.qty]), [['برغر لحم', 1]]);
+  await k.waitForSelector('.card.edited:has([data-done="KX2"])', { timeout: 15000 });
+  const card = await k.textContent('.card.edited:has([data-done="KX2"])');
+  assert.match(card, /انعدل الطلب/); assert.match(card, /\+ انضاف 2× لبن/); assert.match(card, /− انشال 1× برغر لحم/);
+  assert.ok(await k.$('.card:has([data-done="KX2"]) .it.it-add'), 'the added item is highlighted');
+  await k.screenshot({ path: 'shots/kitchen-edited.png' });
+  await k.click('.card [data-ack-e^="KX2|"]');
+  await k.waitForSelector('.card.edited', { state: 'detached', timeout: 8000 });
+  // «جاهز» بالغلط ← «رجّع»
+  await k.click('.card [data-done="KX2"]');
+  await until(async () => (await read('orders/KX2')).kitchen === 'ready');
+  await k.waitForSelector('#undoB:not([hidden])', { timeout: 8000 });
+  assert.match(await k.textContent('#undoB'), /#62/);
+  await k.click('#undoB');
+  const back = await until(async () => { const x = await read('orders/KX2'); return x.kitchen === 'new' ? x : null; });
+  assert.equal(back.status, 'preparing', 'status back to preparing'); assert.equal(back.kitchenReadyAt, undefined);
+  await k.waitForSelector('.card [data-done="KX2"]', { timeout: 15000 });
+  // بعد «جاهز»، الكاشير يضيف صنف ← يرجع للمطبخ ويبين التعديل
+  await k.click('.card [data-done="KX2"]');
+  await until(async () => (await read('orders/KX2')).kitchen === 'ready');
+  await c.waitForFunction(() => orders.some((o) => o.id === 'KX2' && o.kitchen === 'ready'), null, { timeout: 15000 });
+  await c.evaluate(() => { window.ordEdit('KX2'); edState.work.push({ name: 'برغر دجاج', variant: 'عادي', qty: 1, price: 5000 }); window.edSave(); });
+  await until(async () => (await read('orders/KX2')).kitchen === 'new');
+  await k.waitForSelector('.card.edited:has([data-done="KX2"])', { timeout: 15000 });
+  assert.match(await k.textContent('.card.edited:has([data-done="KX2"])'), /\+ انضاف 1× برغر دجاج \(عادي\)/);
+  // الكاشير يلغي طلب الطاولة 5 ← بطاقة حمرة «ملغي» بالسبب، تبقى لحد «شفته» (حتى بعد إعادة التحميل)
+  await write('orders/KX1', { status: 'cancelled', cancelledAt: Date.now(), cancelReason: 'الزبون غيّر رأيه', cancelledBy: 'المطعم' });
+  await k.waitForSelector('.card.canc[data-id="KX1"]', { timeout: 15000 });
+  const cc = await k.textContent('.card.canc[data-id="KX1"]');
+  assert.match(cc, /ملغي — لا تحضّره/); assert.match(cc, /الزبون غيّر رأيه/);
+  assert.equal(await k.locator('[data-done="KX1"]').count(), 0, 'no «ready» button on a cancelled order');
+  await k.screenshot({ path: 'shots/kitchen-cancelled.png' });
+  await k.reload();
+  await k.waitForSelector('.card.canc[data-id="KX1"]', { timeout: 15000 });
+  await k.click('.card.canc [data-ack-c="KX1"]');
+  await k.waitForSelector('.card.canc', { state: 'detached', timeout: 8000 });
+  await k.reload();
+  await k.waitForSelector('.card [data-done="KX2"]', { timeout: 15000 });
+  assert.equal(await k.locator('.card.canc').count(), 0, 'stays dismissed after reload');
+  assert.equal(await k.locator('.card.edited').count(), 1, 'the unseen edit is still flagged after reload');
+  assert.deepEqual(clean(k), []);
+  await write('restaurants/RW', { features: { kitchen: false, kitchenSec: false }, svcOff: {} });
+  await k.context().close(); await c.context().close();
+});
