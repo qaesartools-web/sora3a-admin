@@ -1013,3 +1013,88 @@ test('a restaurant with two halls: each ready screen shows only its own cashiers
   await a.screenshot({ path: 'shots/admin-ready-cashiers.png' });
   for (const p of [one, two, a]) await p.context().close();
 });
+
+test('Tower picks the ready screen look per restaurant: design + 2 colours + logo, the TV follows live; the default stays exactly as before', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, screen: true }, screenTheme: null, screenMax: null });
+  const now = Date.now(), today = bagDay();
+  const base = { restaurantId: 'RW', status: 'delivered', value: 5000, day: today, createdAtMs: now - 5 * 60000, orderType: 'takeaway' };
+  for (const [i, n] of [81, 82, 83].entries()) await put('orders/TH' + n, { ...base, ticketNo: n, kitchen: 'ready', kitchenReadyAt: now - (i + 1) * 30000 });
+  for (const n of [84, 85, 86, 87]) await put('orders/TH' + n, { ...base, ticketNo: n, kitchen: 'new' });
+  const p = await page(B, { w: 1280, h: 720 });
+  await pairScreen(p, BASE + 'screen.html', { name: 'شاشة الثيمات' });
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
+  await p.waitForFunction(() => document.querySelectorAll('#ready .n').length >= 3, null, { timeout: 15000 });
+  const look = () => p.evaluate(() => ({ cls: [...document.documentElement.classList].filter((c) => c.startsWith('th-')), o2: document.documentElement.style.getPropertyValue('--o2'), c2: document.documentElement.style.getPropertyValue('--c2'), logo: !!document.querySelector('#mk img') }));
+  assert.deepEqual(await look(), { cls: ['th-classic'], o2: '', c2: '', logo: false }, 'no Tower setting = the current design untouched');
+  // نفس ألوان التصميم الحالي من البرج = ولا تغيير
+  await write('restaurants/RW', { screenTheme: { design: 'classic', c1: '#f5891f', c2: '#16a34a' } });
+  await new Promise((r) => setTimeout(r, 800));
+  assert.equal((await look()).o2, '', 'the default colours saved from Tower keep the exact original look');
+  // شعار من البرج
+  const png = await p.evaluate(() => { const c = document.createElement('canvas'); c.width = 160; c.height = 160; const g = c.getContext('2d'); g.fillStyle = '#7c3aed'; g.beginPath(); g.arc(80, 80, 76, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = 'bold 90px sans-serif'; g.textAlign = 'center'; g.fillText('و', 80, 112); return c.toDataURL('image/png'); });
+  await put('restaurants/RW/theme/logo', { data: png, atMs: Date.now() });
+  await p.waitForSelector('#mk img', { timeout: 10000 });
+  for (const [design, c1, c2] of [['classic', '#7c3aed', '#0ea5e9'], ['board', '#16130e', '#ffc94a'], ['tickets', '#1f5b57', '#fce7a2'], ['whiteboard', '#f6f8f8', '#2b59c3']]) {
+    await write('restaurants/RW', { screenTheme: { design, c1, c2 } });
+    await p.waitForFunction((d) => document.documentElement.classList.contains('th-' + d), design, { timeout: 10000 });
+    const l = await look();
+    assert.equal(l.c2.trim().toLowerCase(), c2, design + ': colours applied');
+    if (design === 'classic') assert.equal(l.o2.trim().toLowerCase(), c1, 'classic with own colours recolours the orange');
+    assert.ok(l.logo, design + ': logo stays');
+    await new Promise((r) => setTimeout(r, 900));   // الخط والحركة
+    await p.screenshot({ path: `shots/ready-theme-${design}.png` });
+  }
+  // البرج يشيل الشعار ← يرجع الحرف
+  await E.withSecurityRulesDisabled(async (c) => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(c.firestore(), 'restaurants/RW/theme/logo')); });
+  await p.waitForFunction(() => !document.querySelector('#mk img'), null, { timeout: 10000 });
+  assert.deepEqual(clean(p), []);
+  await write('restaurants/RW', { screenTheme: null });
+  await p.context().close();
+});
+
+test('Tower limits how many ready screens a restaurant links: the admin panel refuses one more, and the cashier button stops self-linking', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, screen: true, devices: false }, screenMax: 1 });
+  for (const s of await list('screens', 'restaurantId', 'RW')) if (s.kind === 'ready') await E.withSecurityRulesDisabled(async (c) => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(c.firestore(), 'screens/' + s.id)); });
+  await pairScreen(await page(B, { w: 800, h: 600 }), BASE + 'screen.html', { name: 'الأولى' });
+  // لوحة الإدارة: شاشة ثانية ← «وصلت الحد»
+  const p2 = await page(B, { w: 1280, h: 720 });
+  const sc = await openScreen(p2, BASE + 'screen.html');
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.goto('http://localhost:5050/sora3a-admin/index.html?pair=' + sc.code);
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await a.fill('#lEmail', 'scr@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#scScreens.on #scrCode', { timeout: 15000 });
+  await a.waitForFunction(() => /شاشات «طلبك جاهز»: 1 من 1/.test(document.body.textContent), null, { timeout: 15000 });
+  await until(async () => (await a.inputValue('#scrCode')) === sc.code);
+  await a.click('#scrPairBtn');
+  await a.waitForFunction(() => /وصلت حد شاشات/.test(document.body.textContent), null, { timeout: 10000 });
+  assert.equal(await read('screens/' + sc.uid), null, 'not linked');
+  // زر الكاشير: ما تنربط وحدها، تبقى على الرمز
+  const p = await page(B, { w: 1280, h: 860 });
+  await posLogin(p);
+  const s = await p.context().newPage();
+  await s.goto(BASE + 'screen.html?from=pos');
+  await s.waitForSelector('#pairCode', { timeout: 15000 });
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal((await list('screens', 'restaurantId', 'RW')).filter((x) => x.kind === 'ready').length, 1, 'still one ready screen');
+  await write('restaurants/RW', { screenMax: null });
+  for (const x of [p2, a, p]) await x.context().close();
+});
+
+test('old TV browsers (no clamp/min/max/env/gap): the Sora3a bar stays thin on every screen — it once grew to a third of the TV', async () => {
+  const oldCss = (css) => css.replace(/clamp\(/g, 'clampx(').replace(/\bmin\(/g, 'minx(').replace(/\bmax\(/g, 'maxx(').replace(/env\(/g, 'envx(').replace(/dvh/g, 'dvhx').replace(/\binset:/g, 'insetx:').replace(/([;{\s])gap:/g, '$1gapx:');
+  const { readFileSync } = await import('node:fs');
+  for (const [url, w, h] of [['screen.html', 960, 540], ['kitchen.html', 1280, 720], ['index.html', 1280, 800], ['waiter.html', 400, 800]]) {
+    const p = await page(B, { w, h });
+    await p.route('**/sora3a-rest2/brand.css', (r) => r.fulfill({ contentType: 'text/css', body: oldCss(readFileSync(new URL('../../../../sora3a-rest2/brand.css', import.meta.url), 'utf8')) }));
+    await p.goto(BASE + url);
+    await p.waitForSelector('.sb-bar', { timeout: 15000 });
+    await p.waitForTimeout(600);
+    const m = await p.evaluate(() => { const r = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().height) : 0; }; return { bar: r('.sb-bar'), mark: r('.sb-bar .sb-m'), foot: r('.sb-foot') }; });
+    assert.ok(m.bar >= 40 && m.bar <= 60, `${url}: bar ${m.bar}px`);
+    assert.ok(m.mark > 0 && m.mark <= m.bar, `${url}: logo ${m.mark}px inside the bar`);
+    assert.ok(m.foot <= 40, `${url}: footer ${m.foot}px`);
+    if (url === 'screen.html') await p.screenshot({ path: 'shots/old-tv-screen.png' });
+    await p.context().close();
+  }
+});
