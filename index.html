@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#f3f7f4">
+<meta name="theme-color" content="#1E3A8A">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="إدارة سرعة">
@@ -11,16 +11,17 @@
 <link rel="icon" type="image/svg+xml" href="logo.svg">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>سرعة — الإدارة</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="brand.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js" integrity="sha384-G436+Z2nlA8+PNoeRvWdxKbvOf8E/y+lYxqht2iBwNHTQDV5CJr3+AGVj8fGZi5t" crossorigin="anonymous"></script>
 <style>
 :root{
   --bg:#f3f7f4; --panel:#ffffff; --panel2:#eef3ef; --line:#e1e8e3;
-  --text:#16241c; --muted:#6b7d72; --accent:#008b2c; --accent2:#00b84a;
+  --text:#16241c; --muted:#6b7d72; --accent:#3B5BDB; --accent2:#4F6BED;
   --green:#00a83e; --red:#e5484d; --blue:#2f80ed; --yellow:#f2994a; --purple:#8b5cf6;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 
 /* ── SPLASH ── */
 #splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -51,10 +52,10 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .l-badge{display:flex;align-items:center;justify-content:center;gap:8px;background:rgba(46,204,113,.1);border:1px solid rgba(46,204,113,.3);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;color:var(--green);margin-bottom:20px;}
 .l-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:blink 1.5s infinite;}
 @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
-.l-inp{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:14px;outline:none;transition:border-color .2s;margin-bottom:10px;}
+.l-inp{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;color:var(--text);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:14px;outline:none;transition:border-color .2s;margin-bottom:10px;}
 .l-inp:focus{border-color:var(--accent);}
 .l-err{background:rgba(255,71,87,.1);border:1px solid var(--red);color:var(--red);padding:10px 12px;border-radius:10px;font-size:12px;margin-bottom:10px;display:none;}
-.l-btn{width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:'Tajawal',sans-serif;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,139,44,.35);}
+.l-btn{width:100%;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,139,44,.35);}
 .l-hint{text-align:center;color:var(--muted);font-size:11px;margin-top:12px;}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
@@ -63,7 +64,10 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 #appPage{display:none;}
 
 /* Header */
-.hdr{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(16,36,24,.05);}
+.hdr{background:var(--panel);border-bottom:1px solid var(--line);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:var(--sbH,0px);z-index:100;box-shadow:0 2px 12px rgba(16,36,24,.05);}
+/* شعار سرعة صار بشريط الهوية فوق؛ الهيدر يبقى لاسم الحساب والخروج */
+html.sb-on .hdr-logo{display:none}
+html.sb-on .hdr{justify-content:flex-end}
 .hdr-logo{font-size:20px;font-weight:900;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .hdr-user{display:flex;align-items:center;gap:10px;}
 .hdr-name{font-size:12px;color:var(--muted);}
@@ -84,26 +88,26 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .br-tbl tr.cur td{background:rgba(61,240,139,.08);}
 .br-tbl tr.tot td{font-weight:900;border-bottom:none;}
 .br-tbl .br-err{color:var(--red);}
-.logout-btn{background:transparent;border:1px solid var(--line);color:var(--red);padding:5px 12px;border-radius:8px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:11px;}
+.logout-btn{background:transparent;border:1px solid var(--line);color:var(--red);padding:5px 12px;border-radius:8px;cursor:pointer;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:11px;}
 
 /* Desktop Nav */
 .dnav{background:var(--panel2);border-bottom:1px solid var(--line);display:flex;overflow-x:auto;padding:0 16px;}
 .dnav::-webkit-scrollbar{height:0;}
-.dnav-btn{flex-shrink:0;padding:13px 18px;background:transparent;border:none;border-bottom:3px solid transparent;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;white-space:nowrap;}
+.dnav-btn{flex-shrink:0;padding:13px 18px;background:transparent;border:none;border-bottom:3px solid transparent;color:var(--muted);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;white-space:nowrap;}
 .dnav-btn.on{color:var(--accent);border-bottom-color:var(--accent);}
 .dnav-btn:hover{color:var(--text);}
 
 /* Mobile Nav */
 @media(max-width:899px){body.nav-many .mnav{display:none;}body:not(.nav-many) .dnav{display:none;}}
-.mnav{position:fixed;bottom:0;left:0;right:0;background:var(--panel);border-top:1px solid var(--line);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);}
+.mnav{position:fixed;bottom:var(--sbF,0px);left:0;right:0;background:var(--panel);border-top:1px solid var(--line);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);}
 @media(min-width:900px){.mnav{display:none;}}
-.mnav-btn{flex:1;padding:9px 4px;background:transparent;border:none;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:10px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.mnav-btn{flex:1;padding:9px 4px;background:transparent;border:none;color:var(--muted);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:10px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;}
 .mnav-btn.on{color:var(--accent);}
 .mnav-icon{font-size:18px;}
 
 /* Main content */
-.main{padding:16px;max-width:1200px;margin:0 auto;padding-bottom:80px;}
-@media(min-width:900px){.main{padding-bottom:20px;}}
+.main{padding:16px;max-width:1200px;margin:0 auto;padding-bottom:calc(80px + var(--sbF,0px));}
+@media(min-width:900px){.main{padding-bottom:calc(20px + var(--sbF,0px));}}
 
 /* Screen */
 .screen{display:none;}
@@ -157,12 +161,12 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 /* Form */
 .form-group{margin-bottom:12px;}
 .form-group label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:700;}
-.form-inp{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:10px 13px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;transition:border-color .2s;}
+.form-inp{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:10px 13px;color:var(--text);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:13px;outline:none;transition:border-color .2s;}
 .form-inp:focus{border-color:var(--accent);}
-.form-sel{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:10px 13px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;}
+.form-sel{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:10px;padding:10px 13px;color:var(--text);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:13px;outline:none;}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
 @media(max-width:500px){.form-row{grid-template-columns:1fr;}}
-.btn-primary{width:100%;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:'Tajawal',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-primary{width:100%;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;}
 .btn-primary:hover{opacity:.9;transform:translateY(-1px);}
 .btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;}
 
@@ -177,7 +181,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .meta-item{background:var(--panel);border-radius:8px;padding:6px 8px;font-size:11px;color:var(--muted);}
 .meta-item strong{color:var(--text);display:block;}
 .entity-actions{display:flex;gap:6px;flex-wrap:wrap;}
-.btn-sm{padding:6px 12px;border-radius:8px;border:none;font-family:'Tajawal',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;}
+.btn-sm{padding:6px 12px;border-radius:8px;border:none;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;}
 .btn-edit{background:rgba(77,171,247,.15);color:var(--blue);}
 .btn-edit:hover{background:rgba(77,171,247,.3);}
 .btn-del{background:rgba(255,71,87,.15);color:var(--red);}
@@ -212,13 +216,13 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 /* Filters */
 .filter-row{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px;}
 .filter-row::-webkit-scrollbar{height:0;}
-.filter-btn{flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid var(--line);background:transparent;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:11px;font-weight:700;cursor:pointer;}
+.filter-btn{flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid var(--line);background:transparent;color:var(--muted);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:11px;font-weight:700;cursor:pointer;}
 .filter-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
 
 /* Date filter */
 .date-filter{display:flex;gap:8px;margin-bottom:12px;}
-.date-filter input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:12px;outline:none;}
-.date-filter button{padding:7px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
+.date-filter input{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;color:var(--text);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:12px;outline:none;}
+.date-filter button{padding:7px 14px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
 
 /* Modal */
 .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:5000;display:none;align-items:center;justify-content:center;padding:20px;}
@@ -246,8 +250,8 @@ body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min
 .modal{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;}
 .modal-title{font-size:16px;font-weight:900;margin-bottom:16px;}
 .modal-btns{display:flex;gap:8px;margin-top:16px;}
-.modal-btns .btn-save{flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;}
-.modal-btns .btn-cancel{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:'Tajawal',sans-serif;font-size:13px;cursor:pointer;}
+.modal-btns .btn-save{flex:2;padding:11px;border-radius:10px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:13px;font-weight:700;cursor:pointer;}
+.modal-btns .btn-cancel{flex:1;padding:11px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:13px;cursor:pointer;}
 
 /* Toast */
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--panel);border:1px solid var(--green);color:var(--green);border-radius:12px;padding:10px 20px;font-size:13px;font-weight:700;z-index:9999;transition:transform .3s,opacity .3s,visibility .3s;white-space:nowrap;opacity:0;visibility:hidden;pointer-events:none;}
@@ -269,7 +273,7 @@ body:not(.rest-mode) #mcOwnerNote{display:none;}
 .mc-note{font-size:12.5px;line-height:1.8;background:color-mix(in srgb,#4f6bed 8%,var(--panel));border:1px solid color-mix(in srgb,#4f6bed 30%,var(--line));border-radius:10px;padding:8px 12px;margin-bottom:10px;}
 
 /* Install btn */
-#installBtn{display:none;position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;border:none;border-radius:20px;padding:8px 18px;font-family:'Tajawal',sans-serif;font-size:13px;font-weight:700;cursor:pointer;z-index:7000;box-shadow:0 4px 20px rgba(0,139,44,.5);}
+#installBtn{display:none;position:fixed;top:70px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;border:none;border-radius:20px;padding:8px 18px;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:13px;font-weight:700;cursor:pointer;z-index:7000;box-shadow:0 4px 20px rgba(0,139,44,.5);}
 
 /* ── STAFF MODE ── */
 body.staff-mode .manage-only{display:none!important;}
@@ -294,14 +298,14 @@ body.staff-mode .staff-banner{display:block;}
 
 /* ── SEARCH BOX ── */
 .search-box{position:relative;margin-bottom:12px;}
-.search-box input{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;color:var(--text);font-family:'Tajawal',sans-serif;font-size:13px;outline:none;transition:border-color .2s;}
+.search-box input{width:100%;background:var(--panel2);border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;color:var(--text);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:13px;outline:none;transition:border-color .2s;}
 .search-box input:focus{border-color:var(--accent);}
 
 /* ── CHART CARD ── */
 .chart-wrap{position:relative;height:240px;margin-top:4px;}
 
 /* ── EXPORT BTN ── */
-.btn-export{background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.3);padding:8px 16px;border-radius:10px;font-family:'Tajawal',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s;}
+.btn-export{background:rgba(46,204,113,.12);color:var(--green);border:1px solid rgba(46,204,113,.3);padding:8px 16px;border-radius:10px;font-family:'IBM Plex Sans Arabic',sans-serif;font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .2s;}
 .btn-export:hover{background:rgba(46,204,113,.22);}
 
 /* ── NOTIF PULSE ── */
@@ -428,6 +432,8 @@ body.staff-mode .staff-banner{display:block;}
   <div class="sp-sub">لوحة الإدارة المتقدمة</div>
   <div class="sp-bar"><div class="sp-bar-fill"></div></div>
 </div>
+<script src="brand.js"></script>
+<script>window.SB && SB.mount('admin')</script>
 
 <button id="installBtn" onclick="doInstall()">📲 تثبيت التطبيق</button>
 
@@ -968,6 +974,8 @@ window.addEventListener('fbReady',()=>{
         // الصلاحية من users/{uid} فقط — لا بحث بالإيميل ولا إعادة ربط تلقائية
         const udoc=await fb.getDoc(fb.doc(fb.db,'users',user.uid));
         const ud=udoc.exists()?udoc.data():null;
+        // رقمنا وإيميلنا من البرج (config/brand) لشريط الهوية والفاتورة — مرة كل ٦ ساعات بالأكثر
+        if(window.SB)SB.sync(async()=>{const s=await fb.getDoc(fb.doc(fb.db,'config','brand'));return s.exists()?s.data():null;});
         if(!ud||ud.disabled||!['admin','restaurant','staff'].includes(ud.role)){
           await fb.signOut(fb.auth);
           showErr('❌ هذا الحساب غير مصرح له');return;
@@ -1550,7 +1558,7 @@ window.printOrder=function(id){
   <div class="tot"><span>الإجمالي</span><span>${fmt(d.total)} د.ع</span></div>
   ${d.type==='delivery'&&d.fee!=null?row(d.fee?'أجور التوصيل':'التوصيل مجاني',fmt(d.fee))+`<div class="r" style="font-weight:900;font-size:13.5px"><span>المطلوب من الزبون</span><span>${fmt(d.total+(d.fee||0))} د.ع</span></div>`:''}
   ${d.p.method?`<div class="hr"></div>`+row('طريقة الدفع',esc(OD_PAY[d.p.method]||d.p.method)):''}
-  <div class="f">سرعة 🚀</div>
+  ${window.SB?SB.receipt():'<div class="f">سرعة 🚀</div>'}
   <script>window.onload=()=>{window.print();};<\/script></body></html>`);
   w.document.close();
 };
@@ -3140,8 +3148,8 @@ function renderChart(fil){
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false}},
       scales:{
-        x:{ticks:{color:'#6b7d72',font:{family:'Tajawal'}},grid:{color:'rgba(16,36,24,.06)'}},
-        y:{ticks:{color:'#6b7d72',font:{family:'Tajawal'},precision:0},grid:{color:'rgba(16,36,24,.06)'}}
+        x:{ticks:{color:'#6b7d72',font:{family:'IBM Plex Sans Arabic'}},grid:{color:'rgba(16,36,24,.06)'}},
+        y:{ticks:{color:'#6b7d72',font:{family:'IBM Plex Sans Arabic'},precision:0},grid:{color:'rgba(16,36,24,.06)'}}
       }}
   });
 }

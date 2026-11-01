@@ -676,7 +676,8 @@ service cloud.firestore {
 
     // ── config (إعدادات عامة يقرأها كل حساب فعّال، ويكتبها المدير الأعلى فقط — مثل رابط سيرفر الإشعارات) ──
     match /config/{id} {
-      allow read: if active();
+      // config/brand = رقم وإيميل سرعة اللي يطلعن بشريط الهوية والوصل بكل التطبيقات — عام للقراءة (حتى منيو الزبون)، ويكتبه المدير الأعلى (البرج) بس
+      allow read: if active() || id == 'brand';
       allow write: if isAdmin();
     }
 
