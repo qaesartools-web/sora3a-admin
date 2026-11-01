@@ -233,8 +233,9 @@ service cloud.firestore {
         || (hqEdit('money') && onlyChanged(['expiry','expiryMs','active','paidUntilMs']))
         || (hqEdit('trials') && resource.data.get('trial', false) == true && onlyChanged(['expiry','expiryMs','active','trial']))
         // المطعم لا يستطيع تعديل الاشتراك أو التفعيل أو ربط الحساب
+        //  وشكل شاشة «طلبك جاهز» (screenTheme) وعدد شاشاتها (screenMax) يختارهن البرج بس
         || (ownsRest(rid) && !changed().hasAny(
-             ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs','features']));
+             ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs','features','screenTheme','screenMax']));
 
       // المنيو والإعدادات المتزامنة بين أجهزة المطعم
       //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
@@ -245,11 +246,12 @@ service cloud.firestore {
         allow read: if isOffice() || hqView('rests') || (coll == 'devices' && hqView('devices'))
           || (coll == 'devices' && ownsRest(rid))
           || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid && coll != 'lan')))
-          || (coll == 'settings' && screenOf(rid))
+          || (coll in ['settings', 'theme'] && screenOf(rid))
           || (coll == 'lan' && (kitchenScreenOf(rid) || waiterScreenOf(rid) || readyScreenOf(rid)))
           || (coll in ['menu', 'menuImages'] && waiterScreenOf(rid));
+        //  theme (شعار المطعم بشاشة «طلبك جاهز»): يحطه البرج بس
         allow write: if isAdmin() || hqEdit('rests') || (coll == 'devices' && hqEdit('devices'))
-          || (coll != 'devices' && (ownsRest(rid)
+          || (!(coll in ['devices', 'theme']) && (ownsRest(rid)
           // الكاشير: البيع يحدّث المخزون الجاهز بالمنيو + الورديات + سجل الزبائن
           || (cashierOf(rid) && (coll in ['menu', 'shifts', 'customers', 'counters']
               || (coll in ['settings', 'lan'] && perm('settings'))

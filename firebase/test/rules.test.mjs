@@ -907,6 +907,14 @@ test('شاشة طلبك جاهز: تنربط برمز، تشوف طلبات مط
   await assertFails(updateDoc(doc(as('rest1'), 'screens/tvA'), { cashiers: 'cash1' }), 'must be a list');
   await assertFails(updateDoc(doc(T, 'screens/tvA'), { cashiers: [] }));
   await assertFails(updateDoc(doc(as('cash1'), 'screens/tvA'), { cashiers: [] }));
+  // شكل الشاشة وعددها وشعار المطعم: البرج بس يغيّرهن، والشاشة تقرا الشعار
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'restaurants/R1/theme/logo'), { data: 'data:image/png;base64,AAAA' }); });
+  await assertSucceeds(getDoc(doc(T, 'restaurants/R1/theme/logo')));
+  await assertFails(updateDoc(doc(as('rest1'), 'restaurants/R1'), { screenTheme: { design: 'board' } }), 'owner cannot pick the screen look');
+  await assertFails(updateDoc(doc(as('rest1'), 'restaurants/R1'), { screenMax: 9 }), 'owner cannot raise the screen limit');
+  await assertFails(setDoc(doc(as('rest1'), 'restaurants/R1/theme/logo'), { data: 'data:image/png;base64,BBBB' }), 'owner cannot change the logo here');
+  await assertSucceeds(updateDoc(doc(as('admin1'), 'restaurants/R1'), { screenTheme: { design: 'board', c1: '#16130E', c2: '#FFC94A' }, screenMax: 3 }));
+  await assertSucceeds(setDoc(doc(as('admin1'), 'restaurants/R1/theme/logo'), { data: 'data:image/png;base64,CCCC' }));
 });
 
 test('خدمات المطعم: صاحب المطعم يوقف خدمة شغّلها البرج (svcOff) ويرجّعها — وما يكدر يشغّل خدمة البرج طافيها', async () => {
