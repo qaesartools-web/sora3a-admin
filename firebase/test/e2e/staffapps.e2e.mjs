@@ -1036,7 +1036,7 @@ test('Tower picks the ready screen look per restaurant: design + 2 colours + log
   await p.waitForSelector('#mk img', { timeout: 10000 });
   for (const [design, c1, c2] of [['classic', '#7c3aed', '#0ea5e9'], ['board', '#16130e', '#ffc94a'], ['tickets', '#1f5b57', '#fce7a2'], ['whiteboard', '#f6f8f8', '#2b59c3']]) {
     await write('restaurants/RW', { screenTheme: { design, c1, c2 } });
-    await p.waitForFunction((d) => document.documentElement.classList.contains('th-' + d), design, { timeout: 10000 });
+    await p.waitForFunction(([d, c]) => document.documentElement.classList.contains('th-' + d) && document.documentElement.style.getPropertyValue('--c2').trim().toLowerCase() === c, [design, c2], { timeout: 10000 });
     const l = await look();
     assert.equal(l.c2.trim().toLowerCase(), c2, design + ': colours applied');
     if (design === 'classic') assert.equal(l.o2.trim().toLowerCase(), c1, 'classic with own colours recolours the orange');
