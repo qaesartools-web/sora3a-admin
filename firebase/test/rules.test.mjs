@@ -508,6 +508,16 @@ test('config: any active account reads, only super admin writes', async () => {
   await assertFails(setDoc(doc(as('cash1'), 'config/push'), { url: 'https://evil' }));
 });
 
+test('config/brand: our phone/email are public to read, only super admin (Tower) changes them', async () => {
+  await assertSucceeds(setDoc(doc(as('admin1'), 'config/brand'), { phone: '0771 139 1715', email: 'x@y.com' }));
+  await assertSucceeds(getDoc(doc(anon(), 'config/brand')));   // منيو الزبون وصفحة التتبع بدون حساب
+  await assertSucceeds(getDoc(doc(as('cash1'), 'config/brand')));
+  await assertFails(setDoc(doc(as('rest1'), 'config/brand'), { phone: '0770 000 0000', email: 'owner@x.com' }));
+  await assertFails(setDoc(doc(as('cash1'), 'config/brand'), { phone: '0770 000 0000', email: 'c@x.com' }));
+  await assertFails(setDoc(doc(anon(), 'config/brand'), { phone: '1', email: 'a@b.c' }));
+  await assertFails(getDoc(doc(anon(), 'config/other')));
+});
+
 // ── المنيو الأونلاين وطلبات QR والويتر ──
 const PM = { name: 'R1', on: true, modes: { table: true, pickup: true, delivery: true }, fee: 1000, tables: 10, cats: [{ cat: 'برغر', items: [{ name: 'زنكر', variants: [{ name: 'وحدة', price: 5000 }] }] }], updatedAtMs: 1 };
 const WEB = (o = {}) => ({ restaurantId: 'R1', source: 'qr', mode: 'pickup', items: [{ name: 'زنكر', variant: 'وحدة', qty: 2 }], customer: 'علي', phone: '07701234567', status: 'new', total: 10000, createdAtMs: Date.now(), day: '2026-10-08', ...o });
