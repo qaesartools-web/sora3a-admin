@@ -194,11 +194,7 @@ service cloud.firestore {
         || (hqEdit('rests') && resource.data.get('role', '') == 'captain' && onlyChanged(['name','email','disabled']));
       allow delete: if hqEdit('rests') && resource.data.get('role', '') in ['restaurant', 'cashier', 'captain'];
 
-      // المطعم ينشئ حسابات الكباتن التابعين له فقط
-      allow create: if ownsRest(request.resource.data.restaurantId)
-        && request.resource.data.role == 'captain'
-        && str(request.resource.data.captainId, 64)
-        && request.resource.data.keys().hasOnly(['email','role','name','restaurantId','captainId','createdAtMs']);
+      // إضافة الكباتن من برج سرعة بس (فوق) — صاحب المطعم يوقف كباتنه ويعدّل اسمهم ويحذفهم
       allow update: if ownsRest(resource.data.restaurantId)
         && resource.data.role == 'captain'
         && onlyChanged(['name','email','disabled']);
@@ -363,8 +359,7 @@ service cloud.firestore {
       allow read: if isOffice() || hqView('rests')
         || (staffOf(resource.data.restaurantId))
         || (isCaptain() && cid == myCap());
-      allow create: if isAdmin() || hqEdit('rests')
-        || (ownsRest(request.resource.data.restaurantId));
+      allow create: if isAdmin() || hqEdit('rests');   // إضافة الكابتن من البرج بس
       allow update: if isAdmin() || hqEdit('rests')
         || (ownsRest(resource.data.restaurantId)
             && request.resource.data.restaurantId == resource.data.restaurantId)

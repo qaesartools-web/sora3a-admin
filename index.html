@@ -542,19 +542,9 @@ body.staff-mode .staff-banner{display:block;}
         <button onclick="renderCapStats(true)">🔍 بحث</button>
       </div>
       <div id="capStatsList"></div>
-      <!-- Add Captain Form -->
-      <div class="card manage-only" id="addCapForm">
-        <div class="card-title"><span class="dot"></span> ➕ إضافة كابتن</div>
-        <div class="form-group admin-only"><label>المطعم *</label><select class="form-sel" id="ncRest"><option value="">-- اختر --</option></select></div>
-        <div class="form-row">
-          <div class="form-group"><label>الاسم *</label><input class="form-inp" id="ncName" placeholder="اسم الكابتن"></div>
-          <div class="form-group"><label>الهاتف *</label><input class="form-inp" id="ncPhone" placeholder="07xxxxxxxxx" type="tel"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>الإيميل *</label><input class="form-inp" id="ncEmail" type="email" placeholder="captain@sora3a.com"></div>
-          <div class="form-group"><label>كلمة المرور *</label><input class="form-inp" id="ncPass" type="password" placeholder="••••••"></div>
-        </div>
-        <button class="btn-primary" onclick="addCaptain()">➕ إضافة الكابتن</button>
+      <!-- إضافة الكباتن صارت من برج سرعة بس -->
+      <div class="card" id="capAddNote"><div class="card-title"><span class="dot"></span> ➕ إضافة كابتن</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.9">إضافة الكباتن صارت من <b>إدارة سرعة</b> بس — تواصل وياهم وينضاف الكابتن لمطعمك ويوصله إيميله وكلمة سرّه. انت تكدر توقف أي كابتن أو تحذفه من هنا.</div>
       </div>
     </div>
 
