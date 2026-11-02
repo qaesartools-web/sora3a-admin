@@ -1193,7 +1193,7 @@ test('kitchen screen: a cancelled order turns red and stays until «شفته»; 
   await k.context().close(); await c.context().close();
 });
 
-test('welcome screen on every entry: the cashier login and a linked screen greet with the name/restaurant in the app colour, then it goes away by itself', async () => {
+test('welcome screen «النفق» on every entry: Sora3a logo + «سرعة / SORA3A» + app name (Arabic and English) in the app colour, star tunnel, no greeting or name; goes away by itself or on a tap', async () => {
   const p = await page(B, { w: 1280, h: 800 });
   await p.addInitScript(() => { window.SB_WELCOME_TEST = true; window.SB_HEALTH_TEST = true; });
   await p.goto(BASE + 'index.html');
@@ -1201,7 +1201,16 @@ test('welcome screen on every entry: the cashier login and a linked screen greet
   await p.fill('#inEmail', 'scr@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
   await p.waitForSelector('.sb-welcome', { timeout: 15000 });
   const w = await p.textContent('.sb-welcome');
-  assert.match(w, /(صباح الخير|هلا بيك|مساء الخير)/); assert.match(w, /مطعم الشاشة/); assert.match(w, /الكاشير/);
+  assert.match(w, /سرعة/); assert.match(w, /SORA3A/); assert.match(w, /الكاشير/); assert.match(w, /CASHIER/);
+  assert.doesNotMatch(w, /صباح الخير|هلا بيك|مساء الخير|👋|مطعم الشاشة/, 'no greeting, no name');
+  const look = await p.evaluate(() => { const t = document.querySelector('.sb-welcome .sb-w-t'), cv = document.querySelector('.sb-welcome canvas');
+    return { tile: getComputedStyle(t).backgroundImage, cv: !!cv && cv.width > 0 && cv.height > 0 }; });
+  assert.match(look.tile, /rgb\(43, 196, 106\)/, 'cashier green'); assert.ok(look.cv, 'star tunnel canvas');
+  await p.waitForTimeout(1600);
+  // النجوم تتحرك (مو صورة ثابتة) — نقارن لقطتين للـ canvas
+  const px = () => p.evaluate(() => { const c = document.querySelector('.sb-welcome canvas'); return c ? c.toDataURL().length + ':' + c.toDataURL().slice(-60) : ''; });
+  const a1 = await px(); await p.waitForTimeout(120); const a2 = await px();
+  assert.notEqual(a1, a2, 'stars move');
   await p.screenshot({ path: 'shots/welcome-cashier.png' });
   await p.waitForSelector('.sb-welcome', { state: 'detached', timeout: 6000 });
   await p.waitForSelector('#prods .prod', { timeout: 15000 });
@@ -1213,7 +1222,10 @@ test('welcome screen on every entry: the cashier login and a linked screen greet
   await s.addInitScript(() => { window.SB_WELCOME_TEST = true; });
   await pairScreen(s, BASE + 'screen.html', { name: 'شاشة الصالة' });
   await s.waitForSelector('.sb-welcome', { timeout: 15000 });
-  assert.match(await s.textContent('.sb-welcome'), /مطعم الشاشة[\s\S]*شاشة الصالة/);
+  const sw = await s.textContent('.sb-welcome');
+  assert.match(sw, /سرعة/); assert.match(sw, /SORA3A/); assert.match(sw, /ORDER READY/);
+  assert.match(await s.evaluate(() => getComputedStyle(document.querySelector('.sb-welcome .sb-w-t')).backgroundImage), /rgb\(250, 204, 21\)/, 'ready screen gold');
+  await s.waitForTimeout(1700);
   await s.screenshot({ path: 'shots/welcome-screen.png' });
   await s.click('.sb-welcome');   // ضغطة تخفيها
   await s.waitForSelector('.sb-welcome', { state: 'detached', timeout: 3000 });
