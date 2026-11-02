@@ -990,6 +990,46 @@ test('تلفون الويتر المربوط برمز: يشوف المنيو و�
   await assertFails(setDoc(doc(W, 'webOrders/W3'), wo('wA')), 'waiter paused by owner');
 });
 
+test('طلبات الويتر على طلبه (تعديل/إلغاء/تم التقديم): التلفون يكتب الطلب بس على طلبه، والكاشير يطبّقه — والأصناف والمبلغ ما يتغيرون إلا ويا نتيجة تعديل', async () => {
+  const day = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'screens/wA'), { restaurantId: 'R1', code: 'WA23CD', kind: 'waiter', name: 'علي', pairedBy: 'hq', approved: true, atMs: 1 });
+    await setDoc(doc(db, 'screens/wB'), { restaurantId: 'R1', code: 'WB23CD', kind: 'waiter', name: 'حسن', pairedBy: 'hq', approved: true, atMs: 1 });
+    const wo = { restaurantId: 'R1', source: 'waiter', mode: 'table', table: '5', items: [{ name: 'برغر', qty: 1, price: 6000 }], status: 'new', total: 6000, createdAtMs: Date.now(), waiter: 'علي', waiterUid: 'wA', day };
+    await setDoc(doc(db, 'webOrders/RQ1'), wo);
+    await setDoc(doc(db, 'webOrders/RQ2'), { ...wo, status: 'accepted', stage: 'preparing', orderId: 'O1' });
+    await setDoc(doc(db, 'webOrders/RQ3'), { ...wo, status: 'rejected', reason: 'x' });
+  });
+  const W = as('wA'), B = as('wB');
+  const its = [{ name: 'برغر', variant: 'وحدة', qty: 2, price: 6000 }];
+  const R = (id, type, x = {}) => ({ id, type, atMs: Date.now(), ...(type === 'edit' ? { items: its } : {}), ...x });
+  await assertSucceeds(updateDoc(doc(W, 'webOrders/RQ1'), { req: R('r1', 'edit') }), 'waiter edits his new order');
+  await assertSucceeds(updateDoc(doc(W, 'webOrders/RQ2'), { req: R('r2', 'cancel') }), 'waiter cancels his accepted order');
+  await assertSucceeds(updateDoc(doc(W, 'webOrders/RQ2'), { req: R('r3', 'served') }));
+  await assertFails(updateDoc(doc(B, 'webOrders/RQ1'), { req: R('r4', 'cancel') }), 'another waiter phone cannot');
+  await assertFails(updateDoc(doc(W, 'webOrders/RQ3'), { req: R('r5', 'cancel') }), 'not on a rejected order');
+  await assertFails(updateDoc(doc(W, 'webOrders/RQ1'), { req: R('r6', 'edit'), total: 1 }), 'the phone cannot change the amount');
+  await assertFails(updateDoc(doc(W, 'webOrders/RQ1'), { req: R('r7', 'pay') }), 'unknown request');
+  await assertFails(updateDoc(doc(W, 'webOrders/RQ1'), { req: { id: 'r8', type: 'edit', atMs: 1, items: [] } }), 'edit needs items');
+  await assertFails(updateDoc(doc(W, 'webOrders/RQ1'), { req: R('r9', 'edit', { items: Array.from({ length: 41 }, () => its[0]) }) }), 'at most 40 items');
+  await assertFails(updateDoc(doc(W, 'webOrders/RQ1'), { req: R('r10', 'cancel', { by: 'x' }) }), 'no extra keys');
+  await assertFails(updateDoc(doc(W, 'webOrders/RQ1'), { req: R('x'.repeat(30), 'cancel') }), 'short id');
+  await assertFails(updateDoc(doc(W, 'webOrders/RQ1'), { reqDone: 'r1', reqRes: 'ok' }), 'the phone cannot write the result');
+  // الكاشير: يحجز ويطبّق تعديل الطلب الجديد (الأصناف والمبلغ ويا النتيجة)
+  await assertSucceeds(updateDoc(doc(as('cash1'), 'webOrders/RQ1'), { reqBy: 'dev1', reqByAt: 1 }));
+  await assertFails(updateDoc(doc(as('cash1'), 'webOrders/RQ1'), { total: 1 }), 'amount only with a request result');
+  await assertSucceeds(updateDoc(doc(as('cash1'), 'webOrders/RQ1'), { reqDone: 'r1', reqRes: 'ok', items: its, total: 12000 }));
+  await assertFails(updateDoc(doc(as('cash1'), 'webOrders/RQ1'), { items: [], total: 0 }), 'no change after it is done');
+  // على الواي فاي بدون نت: الكاشير يكتب الطلب ونتيجته سوية
+  await assertSucceeds(updateDoc(doc(as('cash1'), 'webOrders/RQ1'), { req: R('r11', 'edit'), reqBy: 'dev1', reqByAt: 2, reqDone: 'r11', reqRes: 'ok', items: its, total: 12000 }));
+  await assertFails(updateDoc(doc(as('cash1'), 'webOrders/RQ1'), { req: R('r12', 'cancel'), reqDone: 'r12', reqRes: 'ok', total: 5 }), 'a cancel does not change the amount');
+  await assertSucceeds(updateDoc(doc(as('cash1'), 'webOrders/RQ1'), { req: R('r13', 'cancel'), reqDone: 'r13', reqRes: 'ok', status: 'rejected', reason: 'ألغاه الويتر' }));
+  // المقبول: النتيجة بدون تغيير الحالة
+  await assertSucceeds(updateDoc(doc(as('cash2'), 'webOrders/RQ2'), { reqDone: 'r3', reqRes: 'rejected', reqReason: 'الطلب بعده يتحضر' }));
+  await assertFails(updateDoc(doc(as('rest2'), 'webOrders/RQ2'), { reqDone: 'r3', reqRes: 'ok' }), 'another restaurant');
+});
+
 test('صورة التسليم: الكابتن يعيد «تم التسليم» إذا انقطع بالنص (الصورة انحفظت والطلب ما تحدّث) — بس قبل ما يتسلّم الطلب، وبس كابتن الطلب', async () => {
   await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'orders/O3'), { status: 'delivering' }); });
   const img = (s) => ({ image: 'data:image/jpeg;base64,' + s, capturedAtMs: Date.now(), captainId: 'C2', captainName: 'c2' });

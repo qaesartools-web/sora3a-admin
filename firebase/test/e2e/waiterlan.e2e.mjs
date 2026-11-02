@@ -253,3 +253,134 @@ test('waiter phone HAS internet (mobile data) but the cashier has none: the new 
   wc.stop(); hub2.stop();
   await c.context().close(); await w.context().close();
 });
+
+// الويتر على طلبه: تعديل (المطبخ يشوف شنو انضاف ومنو عدّل)، إلغاء (قبل وبعد القبول)، «تم التقديم» بعد ما يجهز، والمبلغ الكلي
+//  بالنت، وبدون نت على الواي فاي — والنتيجة تترفع للسيرفر مرة وحدة
+test('waiter edits, cancels and completes (served) his orders — online and over WiFi with no internet; the kitchen sees what was added and by whom; totals are shown', async () => {
+  const UDP3 = UDP + 2;
+  const hub3 = createHub({ udpPort: UDP3, tcpPort: 0, host: '127.0.0.1', bcast: ['127.0.0.1'] });
+  const c = await page(B, { w: 1280, h: 860 });
+  await wire(c, hub3, 'hub');
+  await c.goto(BASE + 'index.html');
+  await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await c.fill('#inEmail', 'wl@x.com'); await c.fill('#inPass', 'secret123'); await c.click('#loginBtn');
+  await c.waitForSelector('#prods .prod', { timeout: 15000 });
+  await until(() => hub3.status().on);
+  const kc = createClient({ role: 'kitchen', udpPort: UDP3, targets: ['127.0.0.1'] });
+  const k = await page(B, { w: 1100, h: 800 });
+  await wire(k, kc, 'kitchen');
+  await pair(k, BASE + 'kitchen.html', 'kitchen', 'المجهز');
+  await k.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  const wc = createClient({ role: 'waiter', udpPort: UDP3, targets: ['127.0.0.1'] });
+  const w = await page(B, { w: 390, h: 844 });
+  await wire(w, wc, 'waiter');
+  const wuid = await pair(w, BASE + 'waiter.html', 'waiter', 'سجاد');
+  await w.waitForSelector('.tb', { timeout: 15000 });
+  await until(() => hub3.status().peers.some((x) => x.role === 'waiter') && hub3.status().peers.some((x) => x.role === 'kitchen'));
+  const card = (t) => w.locator('#ords .od').filter({ has: w.locator('.tn', { hasText: '🪑 ' + t }) }).first();
+  const webOf = async (t) => (await list('webOrders')).find((d) => d.table === t && d.waiterUid === wuid);
+  const accept = async (t) => {
+    await c.waitForSelector(`#webBox .web-card:has-text("طاولة ${t}")`, { timeout: 15000 });
+    await c.click(`#webBox .web-card:has-text("طاولة ${t}") .call-go`);
+    const id = (await until(() => webOf(t))).id;
+    return (await c.waitForFunction((wid) => { const o = orders.find((x) => x.webId === wid); return o && o.id; }, id, { timeout: 10000 })).jsonValue();
+  };
+
+  // ── بالنت: طلب طاولة 1 (فلافل) ← الكاشير يقبله ← الويتر يعدّله ويضيف شاورما
+  await order(w, '1', ['فلافل']);
+  const o1 = await accept('1');
+  await k.waitForSelector(`.card[data-id="${o1}"]`, { timeout: 10000 });
+  await card('1').locator('.st', { hasText: 'يتحضر' }).waitFor({ timeout: 10000 });
+  assert.match(await card('1').textContent(), /1,500 د\.ع/, 'the order shows its amount');
+  await card('1').locator('[data-act="edit"]').click();
+  await w.waitForSelector('#vMenu:not([hidden])');
+  assert.match(await w.textContent('#curTable'), /تعديل طلب طاولة 1/);
+  await w.click('.it >> text=شاورما');
+  await w.click('#barBtn'); await w.waitForSelector('#cartSh.on');
+  const sh = await w.textContent('#cartSh');
+  assert.match(sh, /المبلغ قبل التعديل\s*1,500/); assert.match(sh, /المبلغ بعد التعديل\s*4,500/);
+  assert.match(await w.textContent('#cSend'), /حفظ التعديل/);
+  await w.screenshot({ path: 'shots/waiter-edit-sheet.png' });
+  await w.click('#cSend');
+  await w.waitForSelector('#vOrders:not([hidden])');
+  // الكاشير يطبّقه وحده ← المطبخ يشوف «انعدل الطلب — سجاد» و«+ انضاف 1× شاورما»
+  const kc1 = k.locator(`.card[data-id="${o1}"]`);
+  await kc1.locator('.edit-h').waitFor({ timeout: 15000 });
+  const kt = await kc1.textContent();
+  assert.match(kt, /انعدل الطلب/); assert.match(kt, /سجاد/); assert.match(kt, /\+ انضاف 1× شاورما/);
+  const co1 = await c.evaluate((id) => { const o = orders.find((x) => x.id === id); return { v: o.value, n: o.items.map((i) => i.name + '×' + i.qty).sort().join(',') }; }, o1);
+  assert.equal(co1.v, 4500); assert.equal(co1.n, 'شاورما×1,فلافل×1');
+  const wo1 = await until(async () => { const x = await webOf('1'); return x && x.reqDone && x.reqDone === x.req.id ? x : null; });
+  assert.equal(wo1.reqRes, 'ok'); assert.equal(wo1.total, 4500);
+  await card('1').locator('.od-ok').waitFor({ timeout: 10000 });
+  assert.match(await card('1').textContent(), /4,500 د\.ع/, 'the new total');
+  await w.screenshot({ path: 'shots/waiter-edit-done.png' });
+  // جدول الطاولات: مبلغ الطاولة
+  await w.click('.tab[data-tab="tables"]');
+  assert.match(await w.textContent('.tb[data-t="1"]'), /4,500/);
+  await w.click('.tab[data-tab="orders"]');
+
+  // ── جاهز ← «تم التقديم» (الإلغاء ما يطلع بعد ما يجهز)
+  await k.click(`[data-done="${o1}"]`);
+  await card('1').locator('.st', { hasText: 'جاهز' }).waitFor({ timeout: 10000 });
+  assert.equal(await card('1').locator('[data-act="cancel"]').count(), 0, 'no cancel once ready');
+  await card('1').locator('[data-act="served"]').click();
+  await card('1').locator('.st', { hasText: 'تم' }).waitFor({ timeout: 15000 });
+  assert.ok(await until(async () => (await read('orders/' + o1))?.servedAtMs), 'served time saved on the order');
+
+  // ── طلب طاولة 2 ما انقبل بعد ← الويتر يلغيه ← يختفي من الكاشير
+  await order(w, '2', ['شاورما']);
+  await c.waitForSelector('#webBox .web-card:has-text("طاولة 2")', { timeout: 15000 });
+  await card('2').locator('[data-act="cancel"]').click();
+  await c.waitForSelector('#webBox .web-card:has-text("طاولة 2")', { state: 'detached', timeout: 15000 });
+  await card('2').locator('.st', { hasText: 'انلغى' }).waitFor({ timeout: 10000 });
+  const wo2 = await until(async () => { const x = await webOf('2'); return x && x.status === 'rejected' ? x : null; });
+  assert.equal(wo2.reason, 'ألغاه الويتر');
+  assert.equal((await list('orders')).filter((o) => o.webId === wo2.id).length, 0, 'never reached the kitchen');
+
+  // ── طلب طاولة 3 انقبل وبالمطبخ ← الويتر يلغيه ← المطبخ يشوف «ملغي»، ومنو ألغاه بالطلب
+  await order(w, '3', ['فلافل']);
+  const o3 = await accept('3');
+  await k.waitForSelector(`.card[data-id="${o3}"]`, { timeout: 10000 });
+  await card('3').locator('.st', { hasText: 'يتحضر' }).waitFor({ timeout: 10000 });
+  await card('3').locator('[data-act="cancel"]').click();
+  await k.waitForSelector(`.card.canc[data-id="${o3}"]`, { timeout: 15000 });
+  const x3 = await until(async () => { const o = await read('orders/' + o3); return o && o.status === 'cancelled' ? o : null; });
+  assert.equal(x3.cancelledByName, 'سجاد'); assert.equal(x3.cancelledBy, 'الويتر');
+  await card('3').locator('.st', { hasText: 'انلغى' }).waitFor({ timeout: 10000 });
+  await w.screenshot({ path: 'shots/waiter-requests.png' });
+
+  // ── بدون نت (الواي فاي باقي): طلب طاولة 4 ← يقبله الكاشير ← الويتر يعدّله (فلافل ثاني) ← المطبخ يشوفه، والويتر يشوف النتيجة
+  await offline(c); await offline(k); await offline(w);
+  await w.waitForFunction(() => /على الواي فاي/.test(document.getElementById('net').textContent), null, { timeout: 20000 });
+  await order(w, '4', ['شاورما']);
+  await c.waitForSelector('#webBox .web-card:has-text("طاولة 4")', { timeout: 10000 });
+  const id4 = await c.evaluate(() => [...document.querySelectorAll('#webBox .web-card')].find((e) => /طاولة 4/.test(e.textContent)).querySelector('.call-go').getAttribute('onclick').match(/webAccept\('([^']+)'/)[1]);
+  await c.click('#webBox .web-card:has-text("طاولة 4") .call-go');
+  const o4 = await (await c.waitForFunction((wid) => { const o = orders.find((x) => x.webId === wid); return o && o.id; }, id4, { timeout: 10000 })).jsonValue();
+  await k.waitForSelector(`.card[data-id="${o4}"]`, { timeout: 10000 });
+  await card('4').locator('.st', { hasText: 'يتحضر' }).waitFor({ timeout: 10000 });
+  await card('4').locator('[data-act="edit"]').click();
+  await w.click('.it >> text=فلافل');
+  await w.click('#barBtn'); await w.waitForSelector('#cartSh.on');
+  await w.click('#cSend');
+  await k.locator(`.card[data-id="${o4}"] .edit-h`).waitFor({ timeout: 15000 });
+  assert.match(await k.textContent(`.card[data-id="${o4}"]`), /\+ انضاف 1× فلافل/);
+  await card('4').locator('.od-ok').waitFor({ timeout: 15000 });
+  assert.match(await card('4').textContent(), /4,500 د\.ع/);
+  assert.equal(await c.evaluate((id) => orders.find((x) => x.id === id).value, o4), 4500);
+  assert.equal((await list('orders')).filter((o) => o.webId === id4).length, 0, 'nothing on the server yet');
+
+  // ── يرجع النت: كلشي يترفع مرة وحدة
+  await online(c); await online(k); await online(w);
+  const s4 = await until(async () => { const o = (await list('orders')).find((x) => x.id === o4); return o && o.value === 4500 && (o.kEdits || []).length ? o : null; }, 30000);
+  assert.ok(s4, 'the edited order reached the server');
+  const wo4 = await until(async () => { const x = await read('webOrders/' + id4); return x && x.reqDone && x.req && x.reqDone === x.req.id && x.total === 4500 ? x : null; }, 30000);
+  assert.ok(wo4, 'the request and its result reached the server');
+  await c.waitForTimeout(3000);
+  assert.equal((await list('orders')).filter((o) => o.webId === id4).length, 1, 'one kitchen order — no duplicate');
+  assert.equal((await read('orders/' + o4)).kEdits.length, 1, 'the edit applied once');
+  assert.deepEqual(clean(c), []); assert.deepEqual(clean(k), []); assert.deepEqual(clean(w), []);
+  wc.stop(); kc.stop(); hub3.stop();
+  await c.context().close(); await k.context().close(); await w.context().close();
+});
