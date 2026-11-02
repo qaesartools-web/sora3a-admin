@@ -693,11 +693,28 @@ service cloud.firestore {
       allow list: if isOffice() || staffOf(resource.data.restaurantId)
         // تلفون الويتر المربوط: طلباته بس
         || (waiterScreenOf(resource.data.restaurantId) && resource.data.get('waiterUid', '') == request.auth.uid);
-      // الاستلام مرة وحدة (new ← accepted/rejected)، وبعدها تتحدث المرحلة بس
+      // طلب الويتر على طلبه: تعديل / إلغاء / تم التقديم — يكتبه تلفون الويتر صاحب الطلب بس، والكاشير يطبّقه
+      function okReq(r) {
+        return r is map && r.keys().hasOnly(['id','type','atMs','items']) && str(r.get('id', ''), 24) && r.get('id', '') != ''
+          && r.get('type', '') in ['edit', 'cancel', 'served'] && r.get('atMs', null) is int
+          && (r.type != 'edit' || (r.get('items', null) is list && r.items.size() >= 1 && r.items.size() <= 40));
+      }
+      allow update: if waiterScreenOf(resource.data.restaurantId) && resource.data.get('source', '') == 'waiter'
+        && resource.data.get('waiterUid', '') == request.auth.uid
+        && resource.data.status in ['new', 'accepted']
+        && onlyChanged(['req']) && okReq(request.resource.data.req);
+      // الاستلام مرة وحدة (new ← accepted/rejected)، وبعدها تتحدث المرحلة بس — ونتيجة طلبات الويتر (التعديل يغيّر الأصناف والمبلغ)
       allow update: if staffOf(resource.data.restaurantId) && (
           (resource.data.status == 'new' && request.resource.data.status in ['accepted', 'rejected']
-            && onlyChanged(['status','orderId','acceptedBy','acceptedAtMs','reason','stage','stageAtMs','ticket','trackId']))
-          || (resource.data.status == 'accepted' && onlyChanged(['stage','stageAtMs','orderId','ticket','trackId'])));
+            && onlyChanged(['status','orderId','acceptedBy','acceptedAtMs','reason','stage','stageAtMs','ticket','trackId','req','reqBy','reqByAt','reqDone','reqRes','reqReason','items','total']))
+          || (resource.data.status == 'accepted' && onlyChanged(['stage','stageAtMs','orderId','ticket','trackId','req','reqBy','reqByAt','reqDone','reqRes','reqReason','items','total']))
+          || (resource.data.status == 'new' && request.resource.data.status == 'new' && onlyChanged(['req','reqBy','reqByAt','reqDone','reqRes','reqReason','items','total'])))
+        && (!('items' in request.resource.data) || (request.resource.data.items is list && request.resource.data.items.size() <= 40))
+        && (!('req' in request.resource.data) || request.resource.data.req == resource.data.get('req', null) || okReq(request.resource.data.req))
+        // الأصناف والمبلغ ما يتغيرون إلا ويا نتيجة طلب تعديل جديد من الويتر
+        && ((request.resource.data.get('items', null) == resource.data.get('items', null) && request.resource.data.get('total', null) == resource.data.get('total', null))
+          || (request.resource.data.get('req', null) is map && request.resource.data.get('reqDone', '') == request.resource.data.req.get('id', '')
+            && resource.data.get('reqDone', '') != request.resource.data.req.get('id', '') && request.resource.data.req.get('type', '') == 'edit'));
       allow delete: if isAdmin() || ownsRest(resource.data.restaurantId);
     }
 
