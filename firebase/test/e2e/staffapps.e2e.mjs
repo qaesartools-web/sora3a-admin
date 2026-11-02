@@ -920,7 +920,7 @@ test('many orders: the ready screen shrinks the numbers so none hide behind the 
     items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1 }, { name: 'بطاطا', variant: 'وحدة', qty: 2 }] });
   const k = await page(B, { w: 1280, h: 800 });
   await pairScreen(k, BASE + 'kitchen.html');
-  await k.waitForFunction(() => document.querySelectorAll('#grid .card').length === 24, null, { timeout: 20000 });
+  await k.waitForFunction(() => document.querySelectorAll('#grid .card:not(.canc)').length === 24, null, { timeout: 20000 });   // (الملغية من الاختبارات القديمة تطلع بطاقات حمرة)
   await k.waitForTimeout(300);
   const fitK = await k.evaluate(() => {
     const g = document.getElementById('grid'), box = g.getBoundingClientRect();
@@ -1109,6 +1109,8 @@ test('kitchen screen: a cancelled order turns red and stays until «شفته»; 
   const now = Date.now(), day = bagDay(now);
   await write('restaurants/RW', { features: { kitchen: true, kitchenSec: false }, svcOff: {} });
   await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: 4, kWarn: 2, kLate: 30 });
+  // طلبات الاختبارات القديمة تطلع من المطبخ حتى المجموع يكون لطلبات هذا الاختبار بس
+  for (const x of await list('orders', 'restaurantId', 'RW')) if (x.kitchen === 'new') await write('orders/' + x.id, { kitchen: 'ready', kitchenReadyAt: now - 3600000, status: x.status === 'cancelled' ? 'cancelled' : 'delivered', cancelledAt: x.status === 'cancelled' ? now - 3 * 3600000 : null });
   const base = { restaurantId: 'RW', status: 'preparing', held: true, kitchen: 'new', value: 13500, day, createdAt: '20:15' };
   await put('orders/KX1', { ...base, orderType: 'salon', tableNo: '5', ticketNo: 61, createdAtMs: now - 3 * 60000, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 2, price: 6000 }] });
   await put('orders/KX2', { ...base, orderType: 'takeaway', ticketNo: 62, createdAtMs: now - 30000, value: 6750, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1, price: 6000 }, { name: 'لبن', variant: 'وحدة', qty: 1, price: 750 }] });
@@ -1224,5 +1226,16 @@ test('who cancelled an order: the cashier name and email are saved and shown in 
   await a.waitForFunction(() => typeof odHTML === 'function', null, { timeout: 10000 });
   const html = await a.evaluate((x) => odHTML({ id: 'CN1', ...x }), o);
   assert.match(html, /ألغاه: <b>علي ضياء<\/b> — <bdi>waiter@x\.com<\/bdi>/);
+  // الطلبات الملغية + إكسل بكل التفاصيل لأي فترة
+  await a.click('.dnav-btn[data-screen="scOrders"]').catch(() => a.evaluate(() => showScreen && showScreen('scOrders')));
+  await a.waitForSelector('#scOrders.on', { timeout: 10000 });
+  await a.selectOption('#ordRange', 'today');
+  await a.click('#ordersFilter .filter-btn:has-text("ملغية")');
+  await a.waitForFunction(() => /#CN1|CN1/i.test(document.getElementById('ordersList').textContent), null, { timeout: 15000 });
+  const [dl] = await Promise.all([a.waitForEvent('download', { timeout: 15000 }), a.click('#ordXlsBtn')]);
+  const fp = '/tmp/claude-0/orders-export.xlsx'; await dl.saveAs(fp);
+  const { execSync } = await import('node:child_process');
+  const xml = execSync(`unzip -p ${fp} 'xl/*'`).toString();
+  for (const w of ['علي ضياء', 'waiter@x.com', 'الطلبات', 'الأصناف', 'مراحل الطلب', 'سبب الإلغاء']) assert.ok(xml.includes(w), 'excel has ' + w);
   await c.context().close(); await a.context().close();
 });

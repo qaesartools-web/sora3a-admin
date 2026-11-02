@@ -221,6 +221,7 @@ html.sb-on .hdr{justify-content:flex-end}
 .filter-row{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px;}
 .filter-row::-webkit-scrollbar{height:0;}
 .filter-btn{flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid var(--line);background:transparent;color:var(--muted);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:11px;font-weight:700;cursor:pointer;}
+.filter-btn.ord-xls{margin-right:auto;border-color:var(--green);color:var(--green);font-weight:700}
 .filter-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
 
 /* Date filter */
@@ -519,6 +520,8 @@ body.staff-mode .staff-banner{display:block;}
         <button class="filter-btn" onclick="setOF('takeaway',this)">🥡 سفري</button>
         <button class="filter-btn" onclick="setOF('pending',this)">🟡 ينتظر</button>
         <button class="filter-btn" onclick="setOF('delivered',this)">✅ مسلّمة</button>
+        <button class="filter-btn" onclick="setOF('cancelled',this)">❌ ملغية</button>
+        <button class="filter-btn ord-xls" id="ordXlsBtn" onclick="ordExport(this)" title="كل تفاصيل الطلبات المعروضة (حسب الفترة والفلتر) بملف إكسل">📥 إكسل بكل التفاصيل</button>
       </div>
       <div id="ordersList"></div>
     </div>
@@ -1606,6 +1609,7 @@ function ordersTabList(rerender){
   else if(orderFilter==='takeaway')fil=fil.filter(o=>o.orderType==='takeaway');
   else if(orderFilter==='pending')fil=fil.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
   else if(orderFilter==='delivered')fil=fil.filter(o=>o.status==='delivered');
+  else if(orderFilter==='cancelled')fil=fil.filter(o=>o.status==='cancelled'||o.status==='rejected');
   const q=(document.getElementById('orderSearch')?.value||'').trim().toLowerCase();
   if(q)fil=fil.filter(o=>(o.customer||'').toLowerCase().includes(q)||(o.phone||'').includes(q));
   return fil;
@@ -1622,6 +1626,48 @@ function renderOrders(){
   const shown=fil.slice(0,300);
   el.innerHTML=shown.length?shown.map(o=>orderCard(o)).join('')+(fil.length>shown.length?`<div style="text-align:center;color:var(--muted);padding:10px;font-size:12px">يبين أول ${toA(shown.length)} من ${toA(fil.length)} — ضيّق البحث أو الفترة</div>`:''):'<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد طلبات</div>';
 }
+
+// ── إكسل الطلبات بكل التفاصيل (حسب الفترة والفلتر المختارين): الطلب، الزبون وأرقامه، الأصناف، الدفع، ومنو ألغى ووكت وليش ──
+window.ordExport=async function(btn){
+  const fil=ordersTabList(()=>{});
+  if(!fil){toast('⏳ دا تنجاب طلبات الفترة — جرّب بعد ثواني');return;}
+  if(!fil.length){toast('⚠️ ماكو طلبات بهذي الفترة والفلتر');return;}
+  if(btn)btn.disabled=true;
+  try{
+    const L=fil.slice().sort((a,b)=>(a.createdAtMs||0)-(b.createdAtMs||0));
+    const day=ms=>ms?new Date(ms+3*3600000).toISOString().slice(0,10):'';
+    const hm=ms=>{if(!ms)return '';const d=new Date(ms+3*3600000),h=d.getUTCHours(),m=String(d.getUTCMinutes()).padStart(2,'0');return ((h%12)||12)+':'+m+' '+(h<12?'ص':'م');};
+    const TY={delivery:'دلفري',salon:'صالة',takeaway:'سفري'},PMN={cash:'نقداً',card:'بطاقة',later:'آجل',credit:'دين',cod:'عند الاستلام',mixed:'مختلط'};
+    const stName=s=>(OD_ST[s]||s||'').replace(/^[^؀-ۿ]+/,'');
+    const money=v=>({v:Math.round(Number(v)||0),t:'money'});
+    const rows=[],iRows=[],tRows=[];
+    L.forEach(o=>{
+      const d=odData(o),num=odNum(o),id=o.id.substring(0,6).toUpperCase(),pm=(o.payment||{}).method||'';
+      rows.push([id,...(isAdmin()?[o.restaurantName||'']:[]),day(o.createdAtMs),hm(o.createdAtMs),TY[d.type]||d.type,stName(o.status),num,o.customer||'',o.phone||'',o.phone2||'',o.address||'',
+        d.items.map(i=>i.qty+'× '+i.name+(i.variant&&i.variant!=='وحدة'?' ('+i.variant+')':'')).join('، '),{v:d.items.reduce((s,i)=>s+i.qty,0),t:'num'},
+        money(d.sub),money(d.disc),d.fee==null?'':money(d.fee),money((d.total||0)+(d.fee||0)),PMN[pm]||pm,o.captainName||'',o.byName||'',o.note||'',
+        o.cancelReason||'',o.cancelNote||'',o.cancelledByName||o.cancelledBy||'',o.cancelledByEmail||'',o.cancelledAt?day(o.cancelledAt)+' '+hm(o.cancelledAt):'',o.cancelledFrom?stName(o.cancelledFrom):'']);
+      d.items.forEach(i=>iRows.push([id,day(o.createdAtMs),stName(o.status),i.name,i.variant||'',{v:i.qty,t:'num'},money(i.price),money(i.price*i.qty),i.note||'']));
+      (Array.isArray(o.timeline)?o.timeline:[]).forEach(e=>tRows.push([id,day(o.createdAtMs),t12(e.time||''),stName(e.status),e.text||'']));
+    });
+    const v=(document.getElementById('ordRange')||{}).value||'live',fl={all:'كل الطلبات',delivery:'دلفري',salon:'صالة',takeaway:'سفري',pending:'ينتظر',delivered:'مسلّمة',cancelled:'الملغية'}[orderFilter]||'';
+    const from=day(L[0].createdAtMs),to=day(L[L.length-1].createdAtMs),rn=isRest()?(myRestDoc&&myRestDoc.name)||'':(document.getElementById('ordRest').selectedOptions[0]||{}).text||'';
+    const meta=['الفترة: '+(from===to?from:from+' ← '+to),'الفلتر: '+fl,'عدد الطلبات: '+L.length];
+    const {xlsxBytes}=await import('./xlsx.js?v=1');
+    const bytes=xlsxBytes({title:'سرعة — الطلبات بكل التفاصيل',subtitle:rn,meta,sheets:[
+      {name:'الطلبات',subtitle:'كل طلب بسطر: الزبون وأرقامه، الأصناف، المبالغ، الدفع، ومنو ألغى',columns:[{h:'رقم الطلب',w:11},...(isAdmin()?[{h:'المطعم',w:18}]:[]),{h:'التاريخ',w:11},{h:'الوقت',w:9},{h:'النوع',w:8},{h:'الحالة',w:12},{h:'الرقم/الطاولة',w:11},
+        {h:'الزبون',w:18},{h:'الهاتف',w:14},{h:'هاتف ثاني',w:14},{h:'العنوان',w:26},{h:'الأصناف',w:40},{h:'عدد القطع',w:9,t:'num'},{h:'المبلغ',w:12,t:'money'},{h:'الخصم',w:10,t:'money'},{h:'التوصيل',w:10,t:'money'},{h:'الإجمالي',w:12,t:'money'},
+        {h:'الدفع',w:10},{h:'الكابتن',w:14},{h:'الكاشير',w:14},{h:'ملاحظة الطلب',w:22},{h:'سبب الإلغاء',w:22},{h:'ملاحظة الإلغاء',w:20},{h:'ألغاه',w:16},{h:'إيميل اللي ألغى',w:24},{h:'وقت الإلغاء',w:17},{h:'كان بحالة',w:12}],rows},
+      {name:'الأصناف',subtitle:'كل صنف بكل طلب',columns:[{h:'رقم الطلب',w:11},{h:'التاريخ',w:11},{h:'حالة الطلب',w:12},{h:'الصنف',w:24},{h:'النوع',w:12},{h:'العدد',w:8,t:'num'},{h:'سعر الواحد',w:12,t:'money'},{h:'المجموع',w:12,t:'money'},{h:'ملاحظة',w:20}],rows:iRows},
+      {name:'مراحل الطلب',subtitle:'كل خطوة صارت بالطلب (إنشاء، قبول، تجهيز، إلغاء...)',columns:[{h:'رقم الطلب',w:11},{h:'التاريخ',w:11},{h:'الوقت',w:9},{h:'الحالة',w:12},{h:'شنو صار',w:60}],rows:tRows}]});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    a.download=`sora3a-orders-${orderFilter||'all'}-${from}_${to}.xlsx`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    audit('orders.export',{n:L.length,filter:orderFilter||'all',range:v});
+    toast('✅ نزل ملف الإكسل ('+L.length+' طلب)');
+  }catch(err){console.warn('export',err);toast('❌ تعذّر إنشاء الملف: '+(err.message||err),'error');}
+  finally{if(btn)btn.disabled=false;}
+};
 
 // CAPTAINS STATS
 window.renderCapStats=function(force){
