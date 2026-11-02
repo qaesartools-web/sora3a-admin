@@ -3567,6 +3567,12 @@ window.mrLoad=function(){
     mcRender(s.docs.map(d=>({id:d.id,...d.data()})));
   },e=>{document.getElementById('mcList').innerHTML='<div style="color:var(--red);font-size:12px">تعذّر التحميل — تأكد من نشر قواعد الحماية الجديدة</div>';}));
   mrUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',mrRid,'loyalty','main'),s=>{lyFill(s.exists()?s.data():{});},()=>{}));
+  // الصالات (من إعدادات الكاشير): كل كاشير إله صالة ← توصله طلبات طاولاتها بس
+  mcHalls=[];
+  mrUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',mrRid,'settings','main'),s=>{
+    const h=((s.exists()&&s.data().halls)||[]).filter(x=>x&&x.id&&x.name);
+    if(JSON.stringify(h)!==JSON.stringify(mcHalls)){mcHalls=h;if(mcLast.length)mcRender(mcLast,true);}
+  },()=>{}));
   if(isRest())mrUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',mrRid),s=>{const v=!!(s.exists()&&s.data().cashSelf===true);if(v!==mcSelf){mcSelf=v;mcSelfUi();}},()=>{}));
   mrUnsubs.push(fb.onSnapshot(fb.query(fb.collection(fb.db,'lineTokens'),fb.where('restaurantId','==',mrRid)),s=>{
     mlRender(s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(+a.line||0)-(+b.line||0)));
@@ -3766,6 +3772,20 @@ window.mcLines=async function(uid){
     toast(!on.length?'⚠️ هذا الكاشير ما ترن عنده ولا مكالمة':'✅ صارت ترن عنده: خط '+on.join('، خط '));}
   catch(e){toast('❌ تعذّر التحديث','error');}
 };
+let mcHalls=[];
+// صالة الكاشير: «كل الصالات» أو صالة وحدة (طلبات باركود الطاولة والويتر لطاولاتها بس)
+function mcHallRow(u){
+  if(!mcHalls.length)return '';
+  const cur=mcHalls.some(h=>h.id===u.hall)?u.hall:'';
+  return `<div class="perm-row" style="align-items:center">🏛️ الصالة: <select class="form-sel" style="width:auto;padding:6px" data-hall="${esc(u.id)}" onchange="mcHall('${esc(u.id)}',this.value)">
+    <option value="">كل الصالات</option>${mcHalls.map(h=>`<option value="${esc(h.id)}" ${h.id===cur?'selected':''}>${esc(h.name)} (طاولات ${esc(h.from)}–${esc(h.to)})</option>`).join('')}</select>
+    <small style="color:var(--muted)">توصله طلبات طاولات صالته بس (باركود الطاولة والويتر)</small></div>`;
+}
+window.mcHall=async function(uid,v){
+  try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'users',uid),{hall:String(v||'')});audit('cashier.hall',{uid,hall:v});
+    const h=mcHalls.find(x=>x.id===v);toast(h?'✅ صار كاشير «'+h.name+'» — توصله طلبات طاولاتها بس':'✅ توصله طلبات كل الصالات');}
+  catch(e){toast('❌ تعذّر التحديث','error');}
+};
 function mcRender(list,noLines){
   mcLast=list;
   if(!noLines&&mlLines.length)mlRender(mlLines,true);
@@ -3779,6 +3799,7 @@ function mcRender(list,noLines){
     <div class="perm-row">${PERMS.map(([k,l])=>`<label><input type="checkbox" ${p[k]?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>
     ${ordPermRow(p,(k,l,c)=>`<label><input type="checkbox" data-op="${k}" ${c?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`)}
     ${mcLinesRow(u)}
+    ${mcHallRow(u)}
     <div class="perm-row" style="align-items:center">⏰ الدوام من <input type="time" class="form-inp" style="width:auto;padding:6px" id="hf_${esc(u.id)}" value="${u.hours?fromMins(u.hours.from):''}">
       إلى <input type="time" class="form-inp" style="width:auto;padding:6px" id="ht_${esc(u.id)}" value="${u.hours?fromMins(u.hours.to):''}">
       <button class="btn-sm btn-edit" onclick="mcHours('${esc(u.id)}')">💾 حفظ الدوام</button>

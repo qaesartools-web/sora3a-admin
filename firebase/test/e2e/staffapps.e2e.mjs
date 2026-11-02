@@ -1293,7 +1293,8 @@ test('warehouse app (إدارة المخزن) is an on/off service: ON → the s
   await st.waitForFunction(() => /إدارة المخزن/.test(document.getElementById('restName').textContent), null, { timeout: 15000 });
   await st.waitForSelector('#acTabs .mtab', { timeout: 15000 });
   const tabs = await st.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
-  assert.deepEqual(tabs.filter((x) => !/رجوع/.test(x)), ['📦 المخزون', '🧾 الوصفات والتكلفة', '🏭 الموردين']);
+  assert.deepEqual(tabs.filter((x) => !/رجوع/.test(x)), ['🏠 الرئيسية', '📦 المخزون', '🧾 الوصفات والتكلفة', '🏭 الموردين']);
+  assert.match(await st.textContent('#acBody'), /استلام بضاعة/, 'the storekeeper starts on the home screen');
   assert.equal(await st.isVisible('.bnav .nb[data-tab="cashier"]'), false, 'no cashier screens on the storekeeper device');
   // يضيف مادة ← تنحفظ بحسابات المطعم
   await st.evaluate(() => window.matNew());
@@ -1333,6 +1334,8 @@ test('warehouse app works without internet: opens from its saved copy, stock cha
   await st.waitForSelector('#appPage.show', { timeout: 20000 });
   // المخزون كما بالجهاز (ينحفظ بالجهاز أول)
   const loc = (id) => st.evaluate((id) => { try { return (JSON.parse(localStorage.getItem('pos_acc_RW')).materials.find((m) => m.id === id) || {}); } catch (e) { return {}; } }, id);
+  await st.waitForSelector('#acTabs .mtab', { timeout: 15000 });
+  await st.evaluate(() => acTab('mat'));
   await st.waitForSelector('#acBody >> text=جبن', { timeout: 15000 });
   assert.ok(await until(async () => (await loc('MAT1')).qty === 20, 10000));
   await st.waitForTimeout(1500);   // الكاش المحلي ينحفظ
@@ -1379,6 +1382,74 @@ test('warehouse app works without internet: opens from its saved copy, stock cha
   await st.waitForSelector('#acf_qty'); await st.fill('#acf_qty', '2'); await st.click('#acDlgOk');
   assert.ok(await until(async () => (await read('accounting/RW')).materials.find((m) => m.id === 'MAT1').qty === 25, 10000));
   assert.deepEqual(clean(st).filter((e) => !/permission|insufficient|Could not reach Cloud Firestore backend|client is offline|internetdisconnected|ERR_INTERNET|acc sync|unavailable/i.test(e)), []);
+  await write('restaurants/RW', { features: { store: false } });
+  await st.context().close();
+});
+
+test('warehouse app extras: home screen, one receipt for many items (credit on the supplier), full stock count, shortage list to the supplier on WhatsApp, and item categories', async () => {
+  await write('restaurants/RW', { features: { store: true }, svcOff: {} });
+  await put('accounting/RW', { materials: [{ id: 'MAT1', name: 'جبن', unit: 'كغم', qty: 1, cost: 5000, min: 2 }, { id: 'MAT2', name: 'خبز', unit: 'حبة', qty: 100, cost: 250, min: 10 }, { id: 'MAT3', name: 'زيت', unit: 'لتر', qty: 0, cost: 3000, min: 3 }], recipes: {}, costs: {}, moves: [], expenses: [], updatedAt: 1 });
+  await put('accounting/RW/suppliers/S1', { name: 'مورد الأجبان', phone: '0770 111 2223', note: '' });
+  const st = await page(B, { w: 1100, h: 800 });
+  await pairScreen(st, BASE + 'index.html?store=1', { name: 'أبو حيدر' });
+  await st.waitForSelector('#appPage.show', { timeout: 20000 });
+  // ── الرئيسية: الأرقام، الأزرار، واللي يحتاج شراء
+  await st.waitForSelector('.st-act', { timeout: 15000 });
+  await st.waitForFunction(() => /زيت/.test(document.getElementById('acBody').textContent), null, { timeout: 15000 });
+  const home = await st.textContent('#acBody');
+  assert.match(home, /استلام بضاعة/); assert.match(home, /جرد كامل/); assert.match(home, /قائمة النواقص/);
+  assert.match(home, /تحتاج شراء \(1 نفذت\)/); assert.ok(home.includes('جبن') && home.includes('زيت') && !/خبز/.test(home.split('تحتاج شراء').pop().split('آخر الحركات')[0]));
+  await st.screenshot({ path: 'shots/store-home.png' });
+  // ── قائمة النواقص ← واتساب المورد (الرقم العراقي بصيغة دولية) بالكميات المقترحة
+  await st.evaluate(() => { window.open = () => null; });
+  await st.click('.st-act >> text=قائمة النواقص');
+  await st.waitForSelector('#stShList .st-cnt');
+  assert.deepEqual(await st.$$eval('#stShList input', (x) => x.map((i) => i.value)), ['6', '3'], 'oil (out) first, then cheese — up to twice the minimum');
+  await st.selectOption('#stShSup', 'S1');
+  await st.fill('#stShList .st-cnt[data-mid="MAT1"] input', '5');
+  await st.click('#stShWa');
+  const wa = decodeURIComponent(await st.evaluate(() => window.__stWa));
+  assert.ok(wa.startsWith('https://wa.me/9647701112223?text='), wa);
+  assert.match(wa, /طلب مواد/); assert.match(wa, /زيت: 6 لتر/); assert.match(wa, /جبن: 5 كغم/);
+  await st.evaluate(() => viewClose());
+  // ── استلام بضاعة: مادتين بفاتورة وحدة، آجل على المورد
+  await st.click('.st-act >> text=استلام بضاعة');
+  await st.waitForSelector('#stRxLines .st-ln');
+  await st.selectOption('#stRxLines .st-ln >> nth=0 >> select', 'MAT1');
+  await st.fill('#stRxLines .st-ln >> nth=0 >> [data-k="q"]', '10'); await st.fill('#stRxLines .st-ln >> nth=0 >> [data-k="t"]', '60000');
+  await st.click('button >> text=مادة ثانية');
+  await st.selectOption('#stRxLines .st-ln >> nth=1 >> select', 'MAT3');
+  await st.fill('#stRxLines .st-ln >> nth=1 >> [data-k="q"]', '5'); await st.fill('#stRxLines .st-ln >> nth=1 >> [data-k="t"]', '15000');
+  assert.match(await st.textContent('#stRxTot'), /75,000/);
+  await st.selectOption('#stRx_sid', 'S1'); await st.fill('#stRx_paid', '0'); await st.fill('#stRx_note', 'فاتورة 77');
+  await st.click('#stRxOk');
+  const acc1 = await until(async () => { const d = await read('accounting/RW'); return d && d.materials.find((m) => m.id === 'MAT1').qty === 11 ? d : null; });
+  assert.ok(acc1, 'stock went up');
+  assert.equal(acc1.materials.find((m) => m.id === 'MAT3').qty, 5);
+  assert.equal(acc1.materials.find((m) => m.id === 'MAT1').cost, 5909.09, 'weighted average cost');
+  const buys = acc1.moves.filter((e) => e.type === 'purchase');
+  assert.equal(buys.length, 2); assert.ok(buys.every((e) => e.sid === 'S1' && /فاتورة 77/.test(e.note)));
+  const inv = await until(async () => { let r; await E.withSecurityRulesDisabled(async (c) => { const q = await getDocs(collection(c.firestore(), 'accounting/RW/ledger')); r = q.docs.map((d) => d.data()).filter((x) => x.type === 'invoice'); }); return r.length ? r : null; });
+  assert.equal(inv.length, 1, 'one invoice for the whole receipt'); assert.equal(inv[0].amount, 75000); assert.equal(inv[0].paid, 0); assert.equal(inv[0].party, 'S1');
+  // ── جرد كامل: الخبز 95 (عجز 5)، والجبن مطابق، والزيت متروك
+  await st.click('.st-act >> text=جرد كامل');
+  await st.waitForSelector('#stCntList .st-cnt');
+  await st.fill('#stCntList .st-cnt[data-mid="MAT2"] input', '95');
+  await st.fill('#stCntList .st-cnt[data-mid="MAT1"] input', '11');
+  assert.match(await st.textContent('#stCntSum'), /2 مادة انجردت — 1 بيها فرق/);
+  await st.click('#stCntOk');
+  const acc2 = await until(async () => { const d = await read('accounting/RW'); return d && d.materials.find((m) => m.id === 'MAT2').qty === 95 ? d : null; });
+  assert.ok(acc2); assert.equal(acc2.moves.filter((e) => e.type === 'count').length, 1, 'only the item with a difference');
+  assert.equal(acc2.moves.find((e) => e.type === 'count').by, 'أبو حيدر');
+  // ── الفئات: الخبز «مخبوزات» ← زر فلترة بالمخزون
+  await st.evaluate(() => { acTab('mat'); window.matEdit('MAT2'); });
+  await st.waitForSelector('#acf_cat'); await st.fill('#acf_cat', 'مخبوزات'); await st.click('#acDlgOk');
+  await st.waitForSelector('#acMatCats .st-chip >> text=مخبوزات');
+  await st.click('#acMatCats .st-chip >> text=مخبوزات');
+  assert.deepEqual(await st.$$eval('#acMatList .ac-name', (x) => x.map((e) => e.textContent.replace(/(نفذ|منخفض|متوفر)$/, '').trim())), ['خبز']);
+  assert.equal((await until(async () => { const d = await read('accounting/RW'); const m = d.materials.find((x) => x.id === 'MAT2'); return m.cat === 'مخبوزات' ? m : null; })).cat, 'مخبوزات');
+  await st.screenshot({ path: 'shots/store-cats.png' });
+  assert.deepEqual(clean(st).filter((e) => !/permission|insufficient/i.test(e)), []);
   await write('restaurants/RW', { features: { store: false } });
   await st.context().close();
 });

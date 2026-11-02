@@ -219,7 +219,8 @@ service cloud.firestore {
         && resource.data.role == 'cashier'
         && request.resource.data.get('perms', {}) is map
         && validHours(request.resource.data)
-        && onlyChanged(['name','perms','hours','hoursExt'])
+        && onlyChanged(['name','perms','hours','hoursExt','hall'])
+        && str(request.resource.data.get('hall', ''), 40)   // الصالة (المطعم اللي بيه أكثر من صالة)
         && (!('hoursExt' in request.resource.data) || request.resource.data.hoursExt == null
             || request.resource.data.hoursExt == resource.data.get('hoursExt', null) || validExt(request.resource.data.hoursExt));
 
