@@ -141,7 +141,11 @@ test('order details: tap an order → every item (size, qty, price, note), disco
   await p.click(card + ' .order-head');
   await p.waitForSelector('#ordMo.open');
   const t = await p.textContent('#ordMoBody');
-  for (const re of [/مندي لحم/, /\(نص\)/, /بدون بصل/, /لبن/, /صالة — #42/, /زبون قديم/, /نقد \+ بطاقة/, /📟 7/, /تم إنشاء الطلب/, /40[,٬]000/, /-3[,٬]000/]) assert.match(t, re);
+  // رقم الطلب كبير بالرأس، والرمز الداخلي صغير تحته
+  assert.equal((await p.textContent('#ordMoBody .od-h .od-num')).trim(), '#42');
+  assert.equal((await p.textContent('#ordMoBody .od-h .od-sid')).trim(), '#ORDFUL');
+  assert.equal((await p.textContent(card + ' .onum')).trim(), '#42', 'order card: big number');
+  for (const re of [/مندي لحم/, /\(نص\)/, /بدون بصل/, /لبن/, /🪑 صالة/, /زبون قديم/, /نقد \+ بطاقة/, /📟 7/, /تم إنشاء الطلب/, /40[,٬]000/, /-3[,٬]000/]) assert.match(t, re);
   assert.match(t, /[صم]/, '12-hour time');
   assert.match(t, /11:55 م/, 'steps in 12-hour time'); assert.ok(!t.includes('23:55'), 'no 24-hour time');
   await p.screenshot({ path: 'shots/order-details.png' }).catch(() => {});

@@ -318,7 +318,7 @@ test('cashier settings: choose what the ready screen shows (dine-in without page
   await p.uncheck('#stScrSalon'); await p.check('#stScrDel');
   await p.click('button >> text=حفظ الإعدادات');
   const st = await until(async () => { const d = await read('restaurants/RW/settings/main'); return d && d.screen && d.screen.delivery ? d : null; });
-  assert.deepEqual(st.screen, { salon: false, delivery: true, qr: true });
+  assert.deepEqual(st.screen, { salon: false, delivery: true, qr: true, keepMin: 10 });
   assert.equal(st.tables, 8, 'other settings kept');
   assert.deepEqual(clean(p), []);
   await p.context().close();
@@ -1297,4 +1297,80 @@ test('a device that still has an OLD copy of brand.js (no welcome/health) still 
   await posLogin(c);
   assert.ok(await c.isVisible('#prods'), 'cashier opened');
   await a.context().close(); await c.context().close();
+});
+
+test('cashier main screen: «جاهز للزبون» strip — tap a number = served, «سلّم الكل» clears the rest; the ready screen hides a number by itself after the minutes set in settings; big order number with the code under it; easy edit (tap an item to add)', async () => {
+  const now = Date.now(), today = bagDay();
+  // طلبات الاختبارات السابقة: تنسلّم حتى ما تطلع بالشريط
+  for (const o of await list('orders', 'restaurantId', 'RW')) if (!o.servedAtMs) await write('orders/' + o.id, { servedAtMs: now - 1000 });
+  const base = { restaurantId: 'RW', status: 'delivered', value: 6000, day: today, createdAtMs: now - 5 * 60000, payment: { method: 'cash', cash: 6000, card: 0 }, orderType: 'takeaway' };
+  await put('orders/R1', { ...base, kitchen: 'ready', kitchenReadyAt: now - 60000, ticketNo: 71, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1, price: 6000 }] });
+  await put('orders/R2', { ...base, kitchen: 'ready', kitchenReadyAt: now - 50000, ticketNo: 72 });
+  await put('orders/R3', { ...base, kitchen: 'ready', kitchenReadyAt: now - 40000, ticketNo: 73 });
+  await put('orders/R4', { ...base, kitchen: 'ready', kitchenReadyAt: now - 6 * 60000, ticketNo: 74 });   // جاهز من ٦ دقايق
+  await put('orders/R5', { restaurantId: 'RW', status: 'preparing', orderType: 'salon', tableNo: 3, ticketNo: 75, value: 6000, day: today, createdAtMs: now - 2 * 60000, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1, price: 6000 }] });
+  await write('restaurants/RW/settings/main', { screen: { salon: true, delivery: false, qr: true, keepMin: 10 } });
+  const scr = await page(B, { w: 1280, h: 720 });
+  await login(scr, BASE + 'screen.html', 'scr@x.com');
+  const onScreen = (n) => scr.evaluate((n) => [...document.querySelectorAll('#ready .n, #prep .n')].some((e) => e.textContent.replace(/\D+/g, ' ').trim().split(' ')[0] === n), n);
+  await until(async () => (await onScreen('71')) && (await onScreen('74')), 15000);
+  assert.ok(await onScreen('74'), 'ready 6 min ago, limit 10 → still shown');
+  const c = await page(B, { w: 1280, h: 860 });
+  c.on('dialog', (d) => d.accept().catch(() => {}));
+  await posLogin(c);
+  // الشريط فوق السلة بأرقام كبيرة
+  await c.waitForSelector('#readyBar .rb-n:has-text("71")', { timeout: 15000 });
+  assert.equal(await c.locator('#readyBar .rb-n').count(), 4);
+  await c.screenshot({ path: 'shots/cashier-ready-strip.png' });
+  // ضغطة على الرقم = تم التسليم
+  await c.click('#readyBar .rb-n:has-text("71")');
+  await until(async () => !(await onScreen('71')), 10000);
+  assert.equal(await onScreen('71'), false, 'tapped → gone from the TV');
+  assert.ok((await read('orders/R1')).servedAtMs);
+  // الإعدادات: يختفي وحده بعد ٥ دقايق ← رقم ٧٤ (جاهز من ٦) يطلع من الشاشة بدون أحد يدوس
+  await c.evaluate(() => { goTab('menu'); showMTab('settings'); });
+  await c.waitForSelector('#stScrKeep');
+  assert.equal(await c.inputValue('#stScrKeep'), '10');
+  await c.fill('#stScrKeep', '5');
+  await c.click('button >> text=حفظ الإعدادات');
+  await until(async () => ((await read('restaurants/RW/settings/main')).screen || {}).keepMin === 5, 10000);
+  await until(async () => !(await onScreen('74')), 12000);
+  assert.equal(await onScreen('74'), false, 'older than 5 min → hidden by itself');
+  assert.ok(await onScreen('72'));
+  // «سلّم الكل» ← يسأل ← الكل يطلع من الشاشة
+  await c.evaluate(() => goTab('cashier'));
+  await c.waitForSelector('#readyBar .rb-all', { timeout: 10000 });
+  await c.click('#readyBar .rb-all');
+  await until(async () => !(await onScreen('72')) && !(await onScreen('73')), 10000);
+  assert.equal(await onScreen('73'), false);
+  assert.ok((await read('orders/R2')).servedAtMs && (await read('orders/R3')).servedAtMs);
+  await c.waitForFunction(() => document.getElementById('readyBar').style.display === 'none', null, { timeout: 10000 });
+  // قائمة الطلبات: رقم الطلب كبير والرمز صغير تحته
+  await c.evaluate(() => goTab('orders'));
+  const card = c.locator('.ocard', { has: c.locator('.oid', { hasText: /^R1$/ }) });
+  await card.waitFor({ timeout: 10000 });
+  assert.equal((await card.locator('.onum').textContent()).trim(), '#71');
+  assert.ok(await c.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.ocard .onum')).fontSize) >= 22));
+  await c.screenshot({ path: 'shots/cashier-order-number.png' });
+  // التعديل الأسهل: فروع + بحث، دوس الصنف ينضاف، والحجم يطلع أزرار
+  await c.evaluate(() => ordEdit('R5'));
+  await c.waitForSelector('#edGrid .ed-it', { timeout: 10000 });
+  assert.match(await c.textContent('#viewTitle'), /#75/, 'edit title shows the order number');
+  await c.click('#edGrid .ed-it:has-text("برغر لحم")');
+  await c.waitForFunction(() => /×?\s*2|٢/.test([...document.querySelectorAll('.ac-line.ed-line-new')].map((e) => e.textContent).join('')), null, { timeout: 5000 });
+  await c.click('#edGrid .ed-it:has-text("برغر دجاج")');
+  await c.click('.ed-vars .ed-var:has-text("دبل")');
+  await c.waitForSelector('.ac-line.ed-line-new:has-text("دبل")');
+  await c.fill('#edQ', 'لبن');
+  await c.waitForSelector('#edGrid .ed-it:has-text("لبن")');
+  assert.equal(await c.locator('#edGrid .ed-it').count(), 1, 'search shows only matches');
+  await c.click('#edGrid .ed-it:has-text("لبن")');
+  await c.screenshot({ path: 'shots/cashier-edit-grid.png' });
+  await c.evaluate(() => edSave());
+  const r1 = await until(async () => { const o = await read('orders/R5'); return (o.items || []).length === 3 ? o : null; }, 10000);
+  assert.ok(r1, 'saved with the added items');
+  assert.equal(r1.items.find((i) => i.name === 'برغر لحم').qty, 2);
+  assert.ok(r1.items.find((i) => i.name === 'برغر دجاج' && i.variant === 'دبل'));
+  assert.ok(r1.items.find((i) => i.name === 'لبن'));
+  for (const x of [scr, c]) { assert.deepEqual(clean(x), []); await x.context().close(); }
 });
