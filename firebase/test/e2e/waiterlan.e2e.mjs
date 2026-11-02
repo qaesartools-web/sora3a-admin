@@ -206,3 +206,50 @@ test('waiter with no internet: the order reaches the cashier over WiFi, the kitc
   await c.context().close(); await k.context().close(); await w.context().close();
 });
 
+
+test('waiter phone HAS internet (mobile data) but the cashier has none: the new order still reaches the cashier over WiFi — once the phone joins the WiFi, no duplicate later', async () => {
+  const UDP2 = UDP + 1;
+  const hub2 = createHub({ udpPort: UDP2, tcpPort: 0, host: '127.0.0.1', bcast: ['127.0.0.1'] });
+  const c = await page(B, { w: 1280, h: 860 });
+  await wire(c, hub2, 'hub');
+  await c.goto(BASE + 'index.html');
+  await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await c.fill('#inEmail', 'wl@x.com'); await c.fill('#inPass', 'secret123'); await c.click('#loginBtn');
+  await c.waitForSelector('#prods .prod', { timeout: 15000 });
+  const key = (await until(() => read('restaurants/RWL/lan/key')))?.key;
+  await until(() => hub2.status().on);
+  // تلفون الويتر (التطبيق): ينربط، والكاشير مو متصل بعد على الواي فاي
+  const wc = createClient({ role: 'waiter', udpPort: UDP2, targets: ['127.0.0.1'] });
+  const w = await page(B, { w: 390, h: 844 });
+  await wire(w, wc, 'waiter');
+  const wuid = await pair(w, BASE + 'waiter.html', 'waiter', 'حسن');
+  await w.waitForSelector('.tb', { timeout: 15000 });
+  await until(() => hub2.status().peers.some((x) => x.role === 'waiter'));
+  await w.waitForFunction(() => /الكاشير متصل على الواي فاي/.test(document.getElementById('lanSt').textContent), null, { timeout: 10000 });
+  // نت الكاشير ينقطع، والتلفون يطلع من الواي فاي (بس عنده نت من الموبايل)
+  await offline(c);
+  wc.stop();
+  await w.waitForFunction(() => /مو متصل/.test(document.getElementById('lanSt').textContent), null, { timeout: 15000 });
+  await order(w, '2', ['فلافل']);
+  const wo = await until(async () => (await list('webOrders')).find((d) => d.table === '2' && d.waiterUid === wuid));
+  assert.ok(wo, 'the order reached the server from the phone internet');
+  await c.waitForTimeout(2000);
+  assert.equal(await c.locator('#webBox .web-card:has-text("طاولة 2")').count(), 0, 'the cashier (no internet) does not have it yet');
+  // التلفون يرجع للواي فاي ← الطلب يوصل للكاشير مباشرة، بدون ما ينتظر نت الكاشير
+  await wc.start({ rid: 'RWL', key, dev: 'waiter-dev', name: '🧑‍🍳 حسن' });
+  await c.waitForSelector('#webBox .web-card:has-text("طاولة 2")', { timeout: 30000 });
+  await w.waitForFunction(() => /الكاشير متصل على الواي فاي/.test(document.getElementById('lanSt').textContent), null, { timeout: 10000 });
+  await w.screenshot({ path: 'shots/waiter-lan-chip.png' });
+  // الكاشير يقبله بدون نت ← من يرجع النت: طلب واحد بس بالمطبخ والسيرفر
+  await c.click('#webBox .web-card:has-text("طاولة 2") .call-go');
+  await c.waitForFunction((id) => orders.some((o) => o.webId === id), wo.id, { timeout: 10000 });
+  await online(c);
+  const done = await until(async () => { const x = (await list('webOrders')).find((d) => d.id === wo.id); return x && x.status === 'accepted' && x.orderId ? x : null; }, 30000);
+  assert.ok(done, 'accepted on the server once the cashier internet is back');
+  await c.waitForTimeout(3000);
+  assert.equal((await list('orders')).filter((o) => o.webId === wo.id).length, 1, 'one kitchen order — no duplicate');
+  assert.equal((await list('webOrders')).filter((d) => d.table === '2' && d.waiterUid === wuid).length, 1);
+  assert.equal(await c.locator('#webBox .web-card:has-text("طاولة 2")').count(), 0, 'its card is gone after accepting');
+  wc.stop(); hub2.stop();
+  await c.context().close(); await w.context().close();
+});
