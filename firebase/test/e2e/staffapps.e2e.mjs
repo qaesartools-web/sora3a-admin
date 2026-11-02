@@ -361,6 +361,18 @@ test('ready screen shows the menu QR in the corner when the online menu is on (o
   assert.ok((await p.getAttribute('#qrCode', 'data-url')).endsWith('/sora3a-rest2/menu.html?r=RW'));
   assert.ok((await p.textContent('#qrT')).includes('واطلب'));
   await p.screenshot({ path: 'shots/ready-screen-qr.png' });
+  // البرج يغيّر لون المربع ولون كتابته وكتابته — الكود نفسه يبقى
+  const qrSvg = await p.innerHTML('#qrCode');
+  await write('restaurants/RW', { screenTheme: { design: 'classic', qr: { bg: '#7c3aed', fg: '#fde047', t1: 'امسح وأطلب', t2: 'من مكانك', sub: 'بدون تطبيق' } } });
+  await p.waitForFunction(() => document.getElementById('qrT').textContent.includes('امسح وأطلب'), null, { timeout: 10000 });
+  const qs = await p.evaluate(() => ({ bg: getComputedStyle(document.getElementById('qrBox')).backgroundImage, fg: getComputedStyle(document.querySelector('#qrT span')).color, t: document.getElementById('qrT').textContent, sub: document.getElementById('qrS').textContent }));
+  assert.match(qs.bg, /124, 58, 237/, 'purple box'); assert.equal(qs.fg, 'rgb(253, 224, 71)', 'yellow text');
+  assert.match(qs.t, /امسح وأطلب[\s\S]*من مكانك/); assert.equal(qs.sub, 'بدون تطبيق');
+  assert.equal(await p.innerHTML('#qrCode'), qrSvg, 'the code itself did not change');
+  await p.screenshot({ path: 'shots/ready-screen-qr-custom.png' });
+  // البرج يرجّعه ← الأصلي
+  await write('restaurants/RW', { screenTheme: null });
+  await p.waitForFunction(() => document.getElementById('qrT').textContent.includes('واطلب') && !document.getElementById('qrBox').style.background, null, { timeout: 10000 });
   // عرض المنيو بس
   await write('publicMenus/RW', { modes: { table: false, pickup: false, delivery: false } });
   await p.waitForFunction(() => document.getElementById('qrT').textContent.includes('وشوف المنيو'));
