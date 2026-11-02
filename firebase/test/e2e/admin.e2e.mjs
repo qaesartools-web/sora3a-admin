@@ -96,11 +96,14 @@ test('admin creates restaurant + captain with correct linking', async () => {
   assert.ok(r.expiryMs > Date.now());
   // admin is still logged in (secondary app used)
   assert.ok(await p.isVisible('#appPage'));
+  // إضافة الكابتن صارت من البرج بس: لوحة الإدارة تبين ملاحظة بس
   await p.click('.dnav-btn[data-screen="scCaptains"]');
-  await p.waitForFunction((id) => [...document.querySelectorAll('#ncRest option')].some((o) => o.value === id), r.id);
-  await p.selectOption('#ncRest', r.id);
-  await p.fill('#ncName', 'كابتن'); await p.fill('#ncPhone', '0770'); await p.fill('#ncEmail', 'newcap@x.com'); await p.fill('#ncPass', 'longpass1');
-  await p.click('#addCapForm .btn-primary');
+  await p.waitForSelector('#capAddNote', { state: 'visible' });
+  assert.equal(await p.locator('#addCapForm, #ncName').count(), 0, 'no add-captain form in the admin app');
+  // كابتن انضاف من البرج
+  await E.withSecurityRulesDisabled(async (ctx) => { const db = ctx.firestore();
+    await setDoc(doc(db, 'captains/CAPNEW'), { restaurantId: r.id, userId: 'capNewU', name: 'كابتن', phone: '0770', email: 'newcap@x.com', available: true, createdAtMs: Date.now() });
+    await setDoc(doc(db, 'users/capNewU'), { email: 'newcap@x.com', role: 'captain', name: 'كابتن', restaurantId: r.id, captainId: 'CAPNEW', createdAtMs: Date.now() }); });
   const c = await until(() => findOne('captains', 'email', 'newcap@x.com'));
   const cu = await until(() => read('users/' + c.userId));
   assert.equal(cu.role, 'captain'); assert.equal(cu.captainId, c.id); assert.equal(cu.restaurantId, r.id);

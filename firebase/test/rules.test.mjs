@@ -61,9 +61,12 @@ test('الكابتن لا يستطيع تغيير دوره', async () => {
 test('المطعم لا يستطيع إنشاء حساب مدير', async () => {
   await assertFails(setDoc(doc(as('rest1'), 'users/newu'), { role: 'admin', restaurantId: 'R1', captainId: 'X' }));
 });
-test('المطعم ينشئ حساب كابتن لمطعمه فقط', async () => {
-  await assertSucceeds(setDoc(doc(as('rest1'), 'users/newc'), { role: 'captain', restaurantId: 'R1', captainId: 'CX', name: 'n', email: 'e' }));
+test('المطعم ما يضيف كباتن (من البرج بس) — بس يوقفهم ويحذفهم', async () => {
+  await assertFails(setDoc(doc(as('rest1'), 'users/newc'), { role: 'captain', restaurantId: 'R1', captainId: 'CX', name: 'n', email: 'e' }));
+  await assertFails(setDoc(doc(as('rest1'), 'captains/CX'), { restaurantId: 'R1', userId: 'newc', name: 'n' }));
   await assertFails(setDoc(doc(as('rest1'), 'users/newc2'), { role: 'captain', restaurantId: 'R2', captainId: 'CY' }));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'users/cap1'), { disabled: true }));
+  await assertSucceeds(deleteDoc(doc(as('rest1'), 'captains/C2')));
 });
 test('المطعم لا يستطيع الكتابة فوق حساب موجود', async () => {
   await assertFails(setDoc(doc(as('rest1'), 'users/admin1'), { role: 'captain', restaurantId: 'R1', captainId: 'C' }));
@@ -650,8 +653,9 @@ test('الفروع: صاحب المطعم يدير كل فروعه النشطة 
   await assertFails(updateDoc(doc(m, 'restaurants/R2'), { expiryMs: Date.now() + 400 * DAY }), 'subscription stays with super admin');
   await assertFails(setDoc(doc(m, 'users/newCash'), { email: 'c@x.com', role: 'cashier', name: 'ك', restaurantId: 'R2', perms: {} }), 'cashiers are added by the super admin only');
   await assertSucceeds(getDocs(query(collection(m, 'users'), where('restaurantId', '==', 'R2'), where('role', '==', 'cashier'))));
-  await assertSucceeds(setDoc(doc(m, 'captains/CB'), { restaurantId: 'R2', name: 'كابتن الفرع' }));
-  await assertSucceeds(setDoc(doc(m, 'users/newCap'), { email: 'k@x.com', role: 'captain', name: 'ك', restaurantId: 'R2', captainId: 'CB' }));
+  // إضافة الكباتن من البرج بس (حتى للفروع)
+  await assertFails(setDoc(doc(m, 'captains/CB'), { restaurantId: 'R2', name: 'كابتن الفرع' }));
+  await assertFails(setDoc(doc(m, 'users/newCap'), { email: 'k@x.com', role: 'captain', name: 'ك', restaurantId: 'R2', captainId: 'CB' }));
   await assertSucceeds(setDoc(doc(m, 'lineTokens/TOKEN_R2_LINE1_xxxxxxxxxxxxxxxx'), { restaurantId: 'R2', line: '1', label: '', active: true }));
   await assertSucceeds(setDoc(doc(m, 'pushTokens/multi'), { tokens: ['t'], role: 'restaurant', captainId: '', restaurantId: 'R2', updatedAtMs: 1 }));
   // ولا يزال يدير مطعمه الأساسي
