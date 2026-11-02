@@ -49,6 +49,8 @@ export async function page(b, { notif = false, w = 400, h = 860 } = {}) {
     const m = route.request().url().match(/firebase-(\w+)\.js/)[1];
     route.fulfill({ status: 200, contentType: 'text/javascript', body: await readFile(path.join(HERE, 'sdk', `firebase-${m}.js`), 'utf8') });
   });
+  // شاشة الترحيب تغطي الشاشة ثانيتين: نطفيها بالاختبارات، واختبارها الخاص يشغّلها (SB_WELCOME_TEST)
+  await ctx.addInitScript(() => { window.SB_NO_WELCOME = true; });
   await ctx.route(/fonts\.(googleapis|gstatic)\.com|tile\.openstreetmap|unpkg\.com|cdnjs|jsdelivr/, (r) => r.fulfill({ status: 200, body: '' }));
   await ctx.addInitScript(() => {
     const fakeReg = { scope: location.origin + '/x/', showNotification: (t, o) => { (window.__notes ||= []).push([t, o]); return Promise.resolve(); }, pushManager: {} };

@@ -103,6 +103,8 @@ service cloud.firestore {
     //  الجهاز معتمد لمطعمه + الجلسة هي نفس تسجيل الدخول الحالي (auth_time) — فالدخول من جهاز ثاني أو من البيت ينرفض،
     //  ونفس الحساب ما يشتغل بجهازين بنفس الوقت (آخر دخول يفوز).
     function devicesOn(rid) { return restDoc(rid).get('features', {}).get('devices', false) == true; }
+    // خدمة شغّلها البرج وما طفّاها صاحب المطعم
+    function featOn(rid, k) { return restDoc(rid).get('features', {}).get(k, false) == true && restDoc(rid).get('svcOff', {}).get(k, false) != true; }
     function devApproved(rid, key) { return exists(/databases/$(database)/documents/restaurants/$(rid)/devices/$(key)); }
     // ── شاشات المطبخ وتلفونات الويتر المربوطة برمز (بدون إيميل ولا كلمة سر) ──
     //  الشاشة تدخل «مجهول» (Anonymous) وتطلع رمز ← screenPairs/{الرمز} = {uid}. البرج أو صاحب المطعم (لوحة الإدارة) يكتب الرمز
@@ -114,8 +116,12 @@ service cloud.firestore {
         && (get(scrPath()).data.get('approved', false) == true || !devicesOn(rid));
     }
     //  نوع الجهاز المربوط: شاشة مطبخ (المجهز/الأقسام) تشوف الطلبات وتعلّم «جاهز»، وتلفون الويتر يشوف المنيو ويرسل طلبات الطاولات
-    function kitchenScreenOf(rid) { return screenOf(rid) && get(scrPath()).data.get('kind', '') != 'waiter'; }
+    function kitchenScreenOf(rid) { return screenOf(rid) && !(get(scrPath()).data.get('kind', '') in ['waiter', 'ready', 'store']); }
     function waiterScreenOf(rid) { return screenOf(rid) && get(scrPath()).data.get('kind', '') == 'waiter'; }
+    //  شاشة «طلبك جاهز» قدام الزبائن: تشوف طلبات مطعمها بس (ما تعلّم «جاهز» ولا تغيّر شي)
+    function readyScreenOf(rid) { return screenOf(rid) && get(scrPath()).data.get('kind', '') == 'ready'; }
+    //  تطبيق «إدارة المخزن» (جهاز أمين المخزن، مربوط برمز): المخزون والوصفات والموردين لمطعمه بس — إذا خدمة المخزن شغّالة
+    function storeOf(rid) { return screenOf(rid) && get(scrPath()).data.get('kind', '') == 'store' && featOn(rid, 'store'); }
     function deviceOk() {
       let sp = /databases/$(database)/documents/sessions/$(request.auth.uid);
       return !devicesOn(myRest())
@@ -231,8 +237,9 @@ service cloud.firestore {
         || (hqEdit('money') && onlyChanged(['expiry','expiryMs','active','paidUntilMs']))
         || (hqEdit('trials') && resource.data.get('trial', false) == true && onlyChanged(['expiry','expiryMs','active','trial']))
         // المطعم لا يستطيع تعديل الاشتراك أو التفعيل أو ربط الحساب
+        //  وشكل شاشة «طلبك جاهز» (screenTheme) وعدد شاشاتها (screenMax) يختارهن البرج بس
         || (ownsRest(rid) && !changed().hasAny(
-             ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs','features']));
+             ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs','features','screenTheme','screenMax']));
 
       // المنيو والإعدادات المتزامنة بين أجهزة المطعم
       //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
@@ -243,11 +250,13 @@ service cloud.firestore {
         allow read: if isOffice() || hqView('rests') || (coll == 'devices' && hqView('devices'))
           || (coll == 'devices' && ownsRest(rid))
           || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid && coll != 'lan')))
-          || (coll == 'settings' && screenOf(rid))
-          || (coll == 'lan' && (kitchenScreenOf(rid) || waiterScreenOf(rid)))
-          || (coll in ['menu', 'menuImages'] && waiterScreenOf(rid));
+          || (coll in ['settings', 'theme'] && screenOf(rid))
+          || (coll == 'lan' && (kitchenScreenOf(rid) || waiterScreenOf(rid) || readyScreenOf(rid)))
+          || (coll in ['menu', 'menuImages'] && waiterScreenOf(rid))
+          || (coll == 'menu' && storeOf(rid));
+        //  theme (شعار المطعم بشاشة «طلبك جاهز»): يحطه البرج بس
         allow write: if isAdmin() || hqEdit('rests') || (coll == 'devices' && hqEdit('devices'))
-          || (coll != 'devices' && (ownsRest(rid)
+          || (!(coll in ['devices', 'theme']) && (ownsRest(rid)
           // الكاشير: البيع يحدّث المخزون الجاهز بالمنيو + الورديات + سجل الزبائن
           || (cashierOf(rid) && (coll in ['menu', 'shifts', 'customers', 'counters']
               || (coll in ['settings', 'lan'] && perm('settings'))
@@ -294,7 +303,8 @@ service cloud.firestore {
     // ── screens/{uid}: شاشة مطبخ مربوطة بمطعم (شوف screenOf) ──
     match /screens/{uid} {
       function pairOk(d) {
-        return d.keys().hasOnly(['restaurantId','restName','kind','name','code','platform','pairedBy','approved','atMs','by'])
+        return d.keys().hasOnly(['restaurantId','restName','kind','name','code','platform','pairedBy','approved','atMs','by','cashiers'])
+          && (!('cashiers' in d) || (d.cashiers is list && d.cashiers.size() <= 30))
           && d.restaurantId is string && d.restaurantId != '' && str(d.code, 12)
           && exists(/databases/$(database)/documents/screenPairs/$(d.code))
           && get(/databases/$(database)/documents/screenPairs/$(d.code)).data.uid == uid
@@ -309,7 +319,12 @@ service cloud.firestore {
         || (ownsRest(request.resource.data.restaurantId) && request.resource.data.get('approved', false) == false
             && request.resource.data.get('pairedBy', '') == 'owner'));
       allow update: if hqScr()
-        || (ownsRest(resource.data.restaurantId) && onlyChanged(['name']) && optStr(request.resource.data, 'name', 60));
+        // صاحب المطعم: اسم الشاشة، وكاشيرية شاشة «طلبك جاهز» (أي كاشيرية تطلع طلباتهم عليها)
+        //  و«شنو تعرض»: سفري/صالة/دلفري (فارغ = الكل)
+        || (ownsRest(resource.data.restaurantId) && onlyChanged(['name', 'cashiers', 'types']) && optStr(request.resource.data, 'name', 60)
+            && (!('cashiers' in request.resource.data) || (request.resource.data.cashiers is list && request.resource.data.cashiers.size() <= 30))
+            && (!('types' in request.resource.data) || (request.resource.data.types is list && request.resource.data.types.size() <= 3
+                && request.resource.data.types.hasOnly(['takeaway', 'salon', 'delivery']))));
       allow delete: if hqScr() || ownsRest(resource.data.restaurantId) || (signedIn() && request.auth.uid == uid);
     }
     // ── screenPairs/{الرمز}: الشاشة غير المربوطة تطلع رمز (المعرّف) — اللي يعرف الرمز بس يكدر يربطها ──
@@ -370,8 +385,8 @@ service cloud.firestore {
         //  (الاستعلامات: where captainId == X  أو  where restaurantId == R && status == 'pending')
         || (isCaptain() && resource.data.captainId == myCap())
         || (isCaptain() && resource.data.status == 'pending' && resource.data.restaurantId == me().restaurantId)
-        // شاشة المطبخ المربوطة: طلبات مطعمها
-        || kitchenScreenOf(resource.data.restaurantId);
+        // شاشة المطبخ المربوطة وشاشة «طلبك جاهز»: طلبات مطعمها
+        || kitchenScreenOf(resource.data.restaurantId) || readyScreenOf(resource.data.restaurantId);
 
       allow create: if isAdmin() || validNew(request.resource.data);
 
@@ -384,9 +399,14 @@ service cloud.firestore {
         || (kitchenScreenOf(resource.data.restaurantId)
             && onlyChanged(['kitchen','kitchenReadyAt','kSec','status','readyAt','timeline','kitchenSecDoneAt'])
             && (!('kitchenSecDoneAt' in request.resource.data) || request.resource.data.kitchenSecDoneAt is number)
-            && request.resource.data.get('kitchen', null) in [resource.data.get('kitchen', null), 'ready']
+            && (request.resource.data.get('kitchen', null) in [resource.data.get('kitchen', null), 'ready']
+                // «رجّع»: «جاهز» انضغط بالغلط ← يرجع للمطبخ خلال 5 دقايق
+                || (resource.data.get('kitchen', null) == 'ready' && request.resource.data.get('kitchen', null) == 'new'
+                    && resource.data.get('kitchenReadyAt', 0) is number && resource.data.get('kitchenReadyAt', 0) > request.time.toMillis() - 300000))
             && (request.resource.data.get('status', null) == resource.data.get('status', null)
-                || (resource.data.get('status', null) == 'preparing' && request.resource.data.status == 'ready')))
+                || (resource.data.get('status', null) == 'preparing' && request.resource.data.status == 'ready')
+                || (resource.data.get('status', null) == 'ready' && request.resource.data.get('status', null) == 'preparing'
+                    && resource.data.get('readyAt', 0) is number && resource.data.get('readyAt', 0) > request.time.toMillis() - 300000)))
 
         // قبول الطلب: مرة واحدة فقط (يُنفَّذ داخل transaction)
         || (isCaptain()
@@ -455,8 +475,8 @@ service cloud.firestore {
     // ── accounting (مخزون وحسابات المطعم) ─────────────────────
     match /accounting/{rid} {
       // الكاشير يحتاجها لخصم المواد عند كل بيع (عرضها بالواجهة حسب صلاحية inventory)
-      allow read: if isOffice() || staffOf(rid);
-      allow write: if isAdmin() || ownsRest(rid)
+      allow read: if isOffice() || staffOf(rid) || storeOf(rid);
+      allow write: if isAdmin() || ownsRest(rid) || storeOf(rid)
         // الكاشير: لا يحذف مواد، ولا يغيّر الوصفات والتكاليف أو المصروفات القديمة
         || (cashierOf(rid) && (resource == null || (
               request.resource.data.get('expenses', []) == resource.data.get('expenses', [])
@@ -481,13 +501,13 @@ service cloud.firestore {
 
       // الموردين: الكاشير يضيف مورد؛ التعديل والحذف للمطعم والإدارة
       match /suppliers/{sid} {
-        allow read: if isOffice() || staffOf(rid);
-        allow create: if (isAdmin() || staffOf(rid))
+        allow read: if isOffice() || staffOf(rid) || storeOf(rid);
+        allow create: if (isAdmin() || staffOf(rid) || storeOf(rid))
           && request.resource.data.keys().hasOnly(['name','phone','note','by','byUid','createdAtMs'])
           && str(request.resource.data.name, 60) && request.resource.data.name.size() > 0
           && optStr(request.resource.data, 'phone', 20) && optStr(request.resource.data, 'note', 200) && optStr(request.resource.data, 'by', 60)
           && request.resource.data.byUid == request.auth.uid && request.resource.data.createdAtMs is int;
-        allow update: if (isAdmin() || ownsRest(rid))
+        allow update: if (isAdmin() || ownsRest(rid) || storeOf(rid))
           && request.resource.data.keys().hasOnly(['name','phone','note','by','byUid','createdAtMs','editedBy','editedAtMs'])
           && str(request.resource.data.name, 60) && request.resource.data.name.size() > 0;
         allow delete: if isAdmin() || ownsRest(rid);
@@ -506,8 +526,8 @@ service cloud.firestore {
             && optStr(d, 'phone', 20) && optStr(d, 'cat', 40) && optStr(d, 'note', 300) && optStr(d, 'orderId', 60) && optStr(d, 'ref', 80)
             && optStr(d, 'shiftId', 60) && optStr(d, 'by', 60) && d.ts is int;
         }
-        allow read: if isOffice() || staffOf(rid);
-        allow create: if (isAdmin() || staffOf(rid)) && ledgerOk(request.resource.data)
+        allow read: if isOffice() || staffOf(rid) || storeOf(rid);
+        allow create: if (isAdmin() || staffOf(rid) || (storeOf(rid) && request.resource.data.kind == 'sup')) && ledgerOk(request.resource.data)
           && request.resource.data.byUid == request.auth.uid && !('editedBy' in request.resource.data);
         allow update: if (isAdmin() || ownsRest(rid)) && ledgerOk(request.resource.data)
           && request.resource.data.kind == resource.data.kind && request.resource.data.byUid == resource.data.byUid;
@@ -675,6 +695,19 @@ service cloud.firestore {
     }
 
     // ── config (إعدادات عامة يقرأها كل حساب فعّال، ويكتبها المدير الأعلى فقط — مثل رابط سيرفر الإشعارات) ──
+    // صحة الأجهزة: كل جهاز مسجّل يكتب سجله (ساعة الجهاز، المتصفح، فحص الحماية) — البرج بس يقراها
+    match /devHealth/{id} {
+      allow read: if isAdmin() || hqView('devices');
+      allow create, update: if signedIn() && id.size() <= 40
+        && request.resource.data.keys().hasOnly(['app', 'page', 'ua', 'browser', 'skewSec', 'ac', 'rid', 'rest', 'who', 'atMs', 'v'])
+        && request.resource.data.atMs is number && request.resource.data.ua is string && request.resource.data.ua.size() <= 200
+        && request.resource.data.get('ac', '') is string && request.resource.data.get('ac', '').size() <= 100
+        && request.resource.data.get('rest', '') is string && request.resource.data.get('rest', '').size() <= 80
+        && request.resource.data.get('who', '') is string && request.resource.data.get('who', '').size() <= 60
+        && request.resource.data.get('browser', '') is string && request.resource.data.get('browser', '').size() <= 40
+        && (request.resource.data.get('skewSec', null) == null || request.resource.data.skewSec is int);
+      allow delete: if isAdmin();
+    }
     match /config/{id} {
       // config/brand = رقم وإيميل سرعة اللي يطلعن بشريط الهوية والوصل بكل التطبيقات — عام للقراءة (حتى منيو الزبون)، ويكتبه المدير الأعلى (البرج) بس
       allow read: if active() || id == 'brand';

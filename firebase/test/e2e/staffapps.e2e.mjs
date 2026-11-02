@@ -33,6 +33,8 @@ before(async () => {
 after(async () => { await B?.close(); srv?.close(); await E?.cleanup(); setTimeout(() => process.exit(0), 200).unref(); });
 
 async function login(p, url, email) {
+  // شاشة «طلبك جاهز» ما تدخل بإيميل بعد: تطلع رمز وصاحب المطعم يربطها
+  if (/screen\.html/.test(url)) { await pairScreen(p, url, { name: 'شاشة طلبك جاهز' }); return; }
   await p.goto(url);
   await p.waitForSelector('#gEmail', { timeout: 15000 });
   await p.fill('#gEmail', email); await p.fill('#gPass', 'secret123'); await p.click('#gGo');
@@ -95,7 +97,7 @@ test('ready screen: takeaway/pager orders in two columns, new ready number flash
   await p.context().close();
 });
 
-test('ready screen stays signed in when the TV starts without internet — opens from its saved copy, no password again; only «تسجيل خروج» signs out', async () => {
+test('ready screen stays linked when the TV starts without internet — opens from its saved copy; only «فصل الشاشة» unlinks it', async () => {
   const p = await page(B, { w: 1280, h: 720 });
   await login(p, BASE + 'screen.html', 'scr@x.com');
   await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
@@ -118,24 +120,28 @@ test('ready screen stays signed in when the TV starts without internet — opens
   await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
   await p.context().unroute(/127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/);
   await p.click('#menuBtn'); await p.click('#mOut'); await p.click('#mOut');
-  await p.waitForSelector('#gPass', { timeout: 15000 });
-  assert.equal(await p.inputValue('#gEmail'), 'scr@x.com', 'الإيميل محفوظ');
+  await p.waitForSelector('#pairCode', { timeout: 15000 });   // «فصل الشاشة» ← رمز جديد للربط
+  assert.equal(await p.locator('#gEmail').count(), 0, 'no email login any more');
   assert.deepEqual(clean(p).filter((e) => !/Could not reach Cloud Firestore backend|client is offline|internetdisconnected|ERR_INTERNET/i.test(e)), []);
   await p.context().close();
 });
 
-test('ready screen opens straight from a signed-in cashier and shows orders made at the cashier', async () => {
+test('ready screen opened from the cashier button links itself to that restaurant (no code, no email), the cashier stays signed in, and it shows the cashier orders', async () => {
   const p = await page(B, { w: 1280, h: 860 });
   await posLogin(p);
-  assert.equal(await p.getAttribute('#readyScrBtn', 'href'), 'screen.html');
+  assert.equal(await p.getAttribute('#readyScrBtn', 'href'), 'screen.html?from=pos');
   await p.evaluate(() => { cart.push({ name: 'برغر لحم', variant: 'وحدة', price: 6000, qty: 1 }); holdOrder({ name: 'سجاد' }); });
   const o = await until(async () => (await list('orders', 'restaurantId', 'RW')).find((x) => x.customer === 'سجاد'));
   assert.equal(o.day, bagDay());
   const s = await p.context().newPage();
   s.errors = []; s.on('pageerror', (e) => s.errors.push(String(e)));
-  await s.goto(BASE + 'screen.html');
+  await s.goto(BASE + 'screen.html?from=pos');
   await s.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
   assert.equal(await s.locator('#gEmail').count(), 0, 'no second login');
+  const linked = (await list('screens', 'restaurantId', 'RW')).find((x) => x.kind === 'ready' && x.pairedBy === 'owner');
+  assert.ok(linked, 'the screen got linked to the restaurant by itself');
+  assert.ok(await p.isVisible('#prods'), 'the cashier window is still signed in');
+  assert.equal(o.byUid, U.owner, 'each order remembers the cashier who took it');
   await s.waitForFunction((n) => [...document.querySelectorAll('#prep .n')].some((e) => e.textContent.startsWith('#' + n)), o.ticketNo);
   assert.deepEqual(s.errors, []);
   await p.context().close();
@@ -271,17 +277,14 @@ test('waiter: opening the link asks to install the app (prompt, close, manifest)
   await w.context().close();
 });
 
-test('ready screen inside the TV app: page reports it works, no fullscreen button, remote arrows move between login fields', async () => {
+test('ready screen inside the TV app: page reports it works, shows a link code (no email), opens once linked, no fullscreen button', async () => {
   const p = await page(B, { w: 1280, h: 720 });
   await p.addInitScript(() => { Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 9; X96) Chrome/120 Mobile Safari/537.36 SoraScreenApp/1.5' }); });
-  await p.goto(BASE + 'screen.html');
-  await p.waitForSelector('#gEmail');
+  const sc = await openScreen(p, BASE + 'screen.html');
+  assert.equal(sc.pair.kind, 'ready');
   assert.equal(await p.evaluate(() => window.__scrOk), true);
-  await p.waitForFunction(() => document.activeElement && document.activeElement.id === 'gEmail');
-  await p.keyboard.press('ArrowDown'); assert.equal(await p.evaluate(() => document.activeElement.id), 'gPass');
-  await p.keyboard.press('ArrowDown'); assert.equal(await p.evaluate(() => document.activeElement.id), 'gGo');
-  await p.keyboard.press('ArrowUp'); assert.equal(await p.evaluate(() => document.activeElement.id), 'gPass');
-  await p.focus('#gEmail'); await p.keyboard.type('scr@x.com'); await p.keyboard.press('ArrowDown'); await p.keyboard.type('secret123'); await p.keyboard.press('Enter');
+  assert.equal(await p.locator('#gEmail').count(), 0, 'no email or password on the TV');
+  await put('screens/' + sc.uid, { restaurantId: 'RW', restName: 'مطعم الشاشة', code: sc.code, kind: 'ready', name: 'الطابق الأول', pairedBy: 'hq', approved: true, atMs: Date.now() });
   await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
   assert.equal(await p.isVisible('#fsBtn'), false);
   assert.deepEqual(clean(p), []);
@@ -321,7 +324,7 @@ test('cashier settings: choose what the ready screen shows (dine-in without page
   await p.context().close();
 });
 
-test('ready screen menu with the remote: sound on/off, and log out needs a second press', async () => {
+test('ready screen menu with the remote: sound on/off, and unlinking needs a second press', async () => {
   const p = await page(B, { w: 1280, h: 720 });
   await login(p, BASE + 'screen.html', 'scr@x.com');
   await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
@@ -341,12 +344,9 @@ test('ready screen menu with the remote: sound on/off, and log out needs a secon
   assert.ok((await p.textContent('#mOut')).includes('متأكد'));
   assert.equal(await p.isVisible('#scr'), true, 'first press only asks');
   await p.keyboard.press('Enter');
-  await p.waitForSelector('#gEmail', { timeout: 10000 });
+  await p.waitForSelector('#pairCode', { timeout: 10000 });   // انفصلت ← رمز جديد
   assert.equal(await p.isVisible('#scr'), false);
   assert.equal(await p.isVisible('#menu'), false);
-  // الإيميل محفوظ على الجهاز: بالريموت يكتب الرمز بس
-  assert.equal(await p.inputValue('#gEmail'), 'scr@x.com');
-  await p.waitForFunction(() => document.activeElement && document.activeElement.id === 'gPass');
   await p.screenshot({ path: 'shots/ready-screen-login.png' });
   assert.deepEqual(clean(p), []);
   await p.context().close();
@@ -916,11 +916,13 @@ test('many orders: the ready screen shrinks the numbers so none hide behind the 
 
   // ── شاشة المجهز: 24 طلب ← كلها بالشاشة و«جاهز» ينضغط
   for (let i = 0; i < 30; i++) await write('orders/MQ' + i, { status: 'ready', kitchen: 'ready', kitchenReadyAt: now - 30 * 60000 });
+  // الطلبات الملغية من الاختبارات القديمة (بطاقات حمرة) نخليها قديمة حتى ما تزاحم
+  for (const x of await list('orders', 'restaurantId', 'RW')) if (x.status === 'cancelled' && x.kitchen === 'new') await write('orders/' + x.id, { cancelledAt: now - 3 * 3600000 });
   for (let i = 0; i < 24; i++) await put('orders/MK' + i, { restaurantId: 'RW', orderType: 'takeaway', status: 'delivered', kitchen: 'new', ticketNo: 200 + i, value: 5000, day, createdAt: '20:05', createdAtMs: now - (30 - i) * 60000,
     items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1 }, { name: 'بطاطا', variant: 'وحدة', qty: 2 }] });
   const k = await page(B, { w: 1280, h: 800 });
   await pairScreen(k, BASE + 'kitchen.html');
-  await k.waitForFunction(() => document.querySelectorAll('#grid .card').length === 24, null, { timeout: 20000 });
+  await k.waitForFunction(() => document.querySelectorAll('#grid .card:not(.canc)').length === 24, null, { timeout: 20000 });   // (الملغية من الاختبارات القديمة تطلع بطاقات حمرة)
   await k.waitForTimeout(300);
   const fitK = await k.evaluate(() => {
     const g = document.getElementById('grid'), box = g.getBoundingClientRect();
@@ -960,4 +962,322 @@ test('a screen on a device with a wrong clock shows how to fix it (otherwise the
   await ok.waitForTimeout(2500);
   assert.equal(await ok.$('#clockWarn'), null);
   await ok.context().close();
+});
+
+test('a TV that was signed in with the restaurant email links itself to the restaurant (no code), then the owner login leaves that device', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, screen: true } });
+  const p = await page(B, { w: 1280, h: 720 });
+  await posLogin(p);   // نفس الجهاز جان داخل بإيميل المطعم (قبل الربط بالرمز)
+  const before = (await list('screens', 'restaurantId', 'RW')).length;
+  const s = await p.context().newPage();
+  s.errors = []; s.on('pageerror', (e) => s.errors.push(String(e)));
+  await s.goto(BASE + 'screen.html');
+  await s.waitForSelector('#scr:not([hidden])', { timeout: 20000 });
+  const mine = await until(async () => { const l = await list('screens', 'restaurantId', 'RW'); return l.length > before && l.find((x) => x.kind === 'ready' && x.pairedBy === 'owner' && x.approved === false); });
+  assert.ok(mine, 'linked to the same restaurant by itself');
+  // جلسة صاحب المطعم طلعت من التلفزيون (محد يفتح الكاشير منه)
+  await p.reload();
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  assert.deepEqual(s.errors, []);
+  await p.context().close();
+});
+
+test('a restaurant with two halls: each ready screen shows only its own cashiers orders; the owner picks them in the admin panel and the screen follows live', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, screen: true } });
+  const c1 = 'hallOne', c2 = 'hallTwo', now = Date.now(), today = bagDay();
+  await put('users/' + c1, { role: 'cashier', restaurantId: 'RW', email: 'hall1@x.com', name: 'كاشير الطابق الأول', perms: {} });
+  await put('users/' + c2, { role: 'cashier', restaurantId: 'RW', email: 'hall2@x.com', name: 'كاشير الطابق الثاني', perms: {} });
+  const base = { restaurantId: 'RW', status: 'delivered', value: 5000, day: today, createdAtMs: now - 5 * 60000, orderType: 'takeaway', kitchen: 'ready', kitchenReadyAt: now - 60000 };
+  await put('orders/H1', { ...base, ticketNo: 71, byUid: c1 });
+  await put('orders/H2', { ...base, ticketNo: 72, byUid: c2 });
+  await put('orders/H3', { ...base, ticketNo: 73 });   // طلب قديم بدون اسم كاشير: يطلع بكل الشاشات
+  const one = await page(B, { w: 1280, h: 720 }), two = await page(B, { w: 1280, h: 720 });
+  const s1 = await pairScreen(one, BASE + 'screen.html', { name: 'الطابق الأول', cashiers: [c1] });
+  await pairScreen(two, BASE + 'screen.html', { name: 'الطابق الثاني', cashiers: [c2] });
+  const shown = (p) => p.$$eval('#ready .n, #prep .n', (els) => els.map((e) => e.textContent.trim().replace(/\D.*$/, '').replace('#', '')));
+  const has = (p, n) => p.waitForFunction((n) => [...document.querySelectorAll('#ready .n, #prep .n')].some((e) => e.textContent.trim().startsWith('#' + n)), n, { timeout: 15000 });
+  await has(one, 71); await has(one, 73); await has(two, 72);
+  assert.ok(!(await one.textContent('#ready')).includes('#72'), 'hall 1 does not show hall 2 orders');
+  assert.ok(!(await two.textContent('#ready')).includes('#71'), 'hall 2 does not show hall 1 orders');
+  // صاحب المطعم: لوحة الإدارة ← الشاشات ← «تعرض طلبات» ← يضيف كاشير الطابق الثاني للشاشة الأولى
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.goto('http://localhost:5050/sora3a-admin/index.html');
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await a.fill('#lEmail', 'scr@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#appPage', { state: 'visible', timeout: 15000 });
+  await a.click('.dnav-btn[data-screen="scScreens"]');
+  await a.waitForSelector(`[data-cash="${s1.uid}"]`, { timeout: 15000 });
+  assert.match(await a.textContent(`[data-cash="${s1.uid}"] summary`), /كاشير الطابق الأول/);
+  await a.click(`[data-cash="${s1.uid}"] summary`);
+  await a.check(`[data-cash="${s1.uid}"] input[data-cu="${c2}"]`);
+  await until(async () => ((await read('screens/' + s1.uid)).cashiers || []).length === 2);
+  await has(one, 72);   // الشاشة تتبع فوراً
+  await a.screenshot({ path: 'shots/admin-ready-cashiers.png' });
+  for (const p of [one, two, a]) await p.context().close();
+});
+
+test('Tower picks the ready screen look per restaurant: design + 2 colours + logo, the TV follows live; the default stays exactly as before', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, screen: true }, screenTheme: null, screenMax: null });
+  const now = Date.now(), today = bagDay();
+  const base = { restaurantId: 'RW', status: 'delivered', value: 5000, day: today, createdAtMs: now - 5 * 60000, orderType: 'takeaway' };
+  for (const [i, n] of [81, 82, 83].entries()) await put('orders/TH' + n, { ...base, ticketNo: n, kitchen: 'ready', kitchenReadyAt: now - (i + 1) * 30000 });
+  for (const n of [84, 85, 86, 87]) await put('orders/TH' + n, { ...base, ticketNo: n, kitchen: 'new' });
+  const p = await page(B, { w: 1280, h: 720 });
+  await pairScreen(p, BASE + 'screen.html', { name: 'شاشة الثيمات' });
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
+  await p.waitForFunction(() => document.querySelectorAll('#ready .n').length >= 3, null, { timeout: 15000 });
+  const look = () => p.evaluate(() => ({ cls: [...document.documentElement.classList].filter((c) => c.startsWith('th-')), o2: document.documentElement.style.getPropertyValue('--o2'), c2: document.documentElement.style.getPropertyValue('--c2'), logo: !!document.querySelector('#mk img') }));
+  assert.deepEqual(await look(), { cls: ['th-classic'], o2: '', c2: '', logo: false }, 'no Tower setting = the current design untouched');
+  // نفس ألوان التصميم الحالي من البرج = ولا تغيير
+  await write('restaurants/RW', { screenTheme: { design: 'classic', c1: '#f5891f', c2: '#16a34a' } });
+  await new Promise((r) => setTimeout(r, 800));
+  assert.equal((await look()).o2, '', 'the default colours saved from Tower keep the exact original look');
+  // شعار من البرج
+  const png = await p.evaluate(() => { const c = document.createElement('canvas'); c.width = 160; c.height = 160; const g = c.getContext('2d'); g.fillStyle = '#7c3aed'; g.beginPath(); g.arc(80, 80, 76, 0, 7); g.fill(); g.fillStyle = '#fff'; g.font = 'bold 90px sans-serif'; g.textAlign = 'center'; g.fillText('و', 80, 112); return c.toDataURL('image/png'); });
+  await put('restaurants/RW/theme/logo', { data: png, atMs: Date.now() });
+  await p.waitForSelector('#mk img', { timeout: 10000 });
+  for (const [design, c1, c2] of [['classic', '#7c3aed', '#0ea5e9'], ['board', '#16130e', '#ffc94a'], ['tickets', '#1f5b57', '#fce7a2'], ['whiteboard', '#f6f8f8', '#2b59c3']]) {
+    await write('restaurants/RW', { screenTheme: { design, c1, c2 } });
+    await p.waitForFunction(([d, c]) => document.documentElement.classList.contains('th-' + d) && document.documentElement.style.getPropertyValue('--c2').trim().toLowerCase() === c, [design, c2], { timeout: 10000 });
+    const l = await look();
+    assert.equal(l.c2.trim().toLowerCase(), c2, design + ': colours applied');
+    if (design === 'classic') assert.equal(l.o2.trim().toLowerCase(), c1, 'classic with own colours recolours the orange');
+    assert.ok(l.logo, design + ': logo stays');
+    await new Promise((r) => setTimeout(r, 900));   // الخط والحركة
+    await p.screenshot({ path: `shots/ready-theme-${design}.png` });
+  }
+  // لون كل جزء بروحه: خلفية ذهبية، أرقام «جاهز» بيضاء، وكتابة الشاشة الفارغة حمرة
+  await write('restaurants/RW', { screenTheme: { design: 'board', c1: '#16130e', c2: '#ffc94a', x: { bg: '#d4af37', readyNumFg: '#ffffff', emptyFg: '#ff0000', bad: '#123456', prepFg: 'red' } } });
+  await p.waitForFunction(() => document.documentElement.classList.contains('xs-bg'), null, { timeout: 10000 });
+  const cs = await p.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, rn: getComputedStyle(document.querySelector('#ready .n')).color, prep: document.documentElement.classList.contains('xs-prepFg') }));
+  assert.equal(cs.bg, 'rgb(212, 175, 55)'); assert.equal(cs.rn, 'rgb(255, 255, 255)'); assert.equal(cs.prep, false, 'a wrong colour value is ignored');
+  await p.screenshot({ path: 'shots/ready-theme-gold.png' });
+  // البرج يشيل الشعار ← يرجع الحرف
+  await E.withSecurityRulesDisabled(async (c) => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(c.firestore(), 'restaurants/RW/theme/logo')); });
+  await p.waitForFunction(() => !document.querySelector('#mk img'), null, { timeout: 10000 });
+  assert.deepEqual(clean(p), []);
+  await write('restaurants/RW', { screenTheme: null });
+  await p.context().close();
+});
+
+test('Tower limits how many ready screens a restaurant links: the admin panel refuses one more, and the cashier button stops self-linking', async () => {
+  await write('restaurants/RW', { features: { kitchen: true, screen: true, devices: false }, screenMax: 1 });
+  for (const s of await list('screens', 'restaurantId', 'RW')) if (s.kind === 'ready') await E.withSecurityRulesDisabled(async (c) => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(c.firestore(), 'screens/' + s.id)); });
+  await pairScreen(await page(B, { w: 800, h: 600 }), BASE + 'screen.html', { name: 'الأولى' });
+  // لوحة الإدارة: شاشة ثانية ← «وصلت الحد»
+  const p2 = await page(B, { w: 1280, h: 720 });
+  const sc = await openScreen(p2, BASE + 'screen.html');
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.goto('http://localhost:5050/sora3a-admin/index.html?pair=' + sc.code);
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await a.fill('#lEmail', 'scr@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#scScreens.on #scrCode', { timeout: 15000 });
+  await a.waitForFunction(() => /شاشات «طلبك جاهز»: 1 من 1/.test(document.body.textContent), null, { timeout: 15000 });
+  await until(async () => (await a.inputValue('#scrCode')) === sc.code);
+  await a.click('#scrPairBtn');
+  await a.waitForFunction(() => /وصلت حد شاشات/.test(document.body.textContent), null, { timeout: 10000 });
+  assert.equal(await read('screens/' + sc.uid), null, 'not linked');
+  // زر الكاشير: ما تنربط وحدها، تبقى على الرمز
+  const p = await page(B, { w: 1280, h: 860 });
+  await posLogin(p);
+  const s = await p.context().newPage();
+  await s.goto(BASE + 'screen.html?from=pos');
+  await s.waitForSelector('#pairCode', { timeout: 15000 });
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal((await list('screens', 'restaurantId', 'RW')).filter((x) => x.kind === 'ready').length, 1, 'still one ready screen');
+  await write('restaurants/RW', { screenMax: null });
+  for (const x of [p2, a, p]) await x.context().close();
+});
+
+test('old TV browsers (no clamp/min/max/env/gap): the Sora3a bar stays thin on every screen — it once grew to a third of the TV', async () => {
+  const oldCss = (css) => css.replace(/clamp\(/g, 'clampx(').replace(/\bmin\(/g, 'minx(').replace(/\bmax\(/g, 'maxx(').replace(/env\(/g, 'envx(').replace(/dvh/g, 'dvhx').replace(/\binset:/g, 'insetx:').replace(/([;{\s])gap:/g, '$1gapx:');
+  const { readFileSync } = await import('node:fs');
+  for (const [url, w, h] of [['screen.html', 960, 540], ['kitchen.html', 1280, 720], ['index.html', 1280, 800], ['waiter.html', 400, 800]]) {
+    const p = await page(B, { w, h });
+    await p.route('**/sora3a-rest2/brand.css', (r) => r.fulfill({ contentType: 'text/css', body: oldCss(readFileSync(new URL('../../../../sora3a-rest2/brand.css', import.meta.url), 'utf8')) }));
+    await p.goto(BASE + url);
+    await p.waitForSelector('.sb-bar', { timeout: 15000 });
+    await p.waitForTimeout(600);
+    const m = await p.evaluate(() => { const r = (s) => { const e = document.querySelector(s); return e ? Math.round(e.getBoundingClientRect().height) : 0; }; return { bar: r('.sb-bar'), mark: r('.sb-bar .sb-m'), foot: r('.sb-foot') }; });
+    assert.ok(m.bar >= 40 && m.bar <= 60, `${url}: bar ${m.bar}px`);
+    assert.ok(m.mark > 0 && m.mark <= m.bar, `${url}: logo ${m.mark}px inside the bar`);
+    assert.ok(m.foot <= 40, `${url}: footer ${m.foot}px`);
+    if (url === 'screen.html') await p.screenshot({ path: 'shots/old-tv-screen.png' });
+    await p.context().close();
+  }
+});
+
+test('kitchen screen: a cancelled order turns red and stays until «شفته»; a cashier edit shows what was added/removed; «رجّع» undoes a wrong «جاهز»; item totals, table colours, late times from settings', async () => {
+  const now = Date.now(), day = bagDay(now);
+  await write('restaurants/RW', { features: { kitchen: true, kitchenSec: false }, svcOff: {} });
+  await put('restaurants/RW/settings/main', { tables: 8, pagers: 10, receiptTitle: 'برغر الشاشة', updatedAtMs: 4, kWarn: 2, kLate: 30 });
+  // طلبات الاختبارات القديمة تطلع من المطبخ حتى المجموع يكون لطلبات هذا الاختبار بس
+  for (const x of await list('orders', 'restaurantId', 'RW')) if (x.kitchen === 'new') await write('orders/' + x.id, { kitchen: 'ready', kitchenReadyAt: now - 3600000, status: x.status === 'cancelled' ? 'cancelled' : 'delivered', cancelledAt: x.status === 'cancelled' ? now - 3 * 3600000 : null });
+  const base = { restaurantId: 'RW', status: 'preparing', held: true, kitchen: 'new', value: 13500, day, createdAt: '20:15' };
+  await put('orders/KX1', { ...base, orderType: 'salon', tableNo: '5', ticketNo: 61, createdAtMs: now - 3 * 60000, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 2, price: 6000 }] });
+  await put('orders/KX2', { ...base, orderType: 'takeaway', ticketNo: 62, createdAtMs: now - 30000, value: 6750, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1, price: 6000 }, { name: 'لبن', variant: 'وحدة', qty: 1, price: 750 }] });
+  const k = await page(B, { w: 1280, h: 800 });
+  await pairScreen(k, BASE + 'kitchen.html');
+  await k.waitForSelector('.card [data-done="KX1"]', { timeout: 15000 });
+  await k.waitForSelector('.card [data-done="KX2"]', { timeout: 15000 });
+  // أوقات التأخير من الإعدادات (أصفر بعد دقيقتين) + لون الطاولة + مجموع الأصناف
+  assert.ok(await k.$('.card.warn:has([data-done="KX1"])'), 'yellow after 2 minutes (restaurant setting)');
+  assert.ok(await k.$('.card.warn:has([data-done="KX2"])') === null);
+  assert.match(await k.getAttribute('.card:has([data-done="KX1"]) .tbl', 'style'), /background:hsl\(/);
+  assert.match(await k.textContent('#tot'), /3×\s*برغر لحم/);
+  // الكاشير يعدّل الطلب: يضيف 2 لبن وينقص البرغر
+  const c = await page(B, { w: 1280, h: 860 });
+  await posLogin(c);
+  await c.waitForFunction(() => typeof window.ordEdit === 'function' && orders.some((o) => o.id === 'KX2'), null, { timeout: 15000 });
+  await c.evaluate(() => { window.ordEdit('KX2'); edState.work.find((i) => i.name === 'لبن').qty = 3; edState.work = edState.work.filter((i) => i.name !== 'برغر لحم'); window.edSave(); });
+  const o2 = await until(async () => { const x = await read('orders/KX2'); return x.kEdits && x.kEdits.length ? x : null; });
+  assert.deepEqual(o2.kEdits[0].add.map((a) => [a.name, a.qty]), [['لبن', 2]]);
+  assert.deepEqual(o2.kEdits[0].rem.map((a) => [a.name, a.qty]), [['برغر لحم', 1]]);
+  await k.waitForSelector('.card.edited:has([data-done="KX2"])', { timeout: 15000 });
+  const card = await k.textContent('.card.edited:has([data-done="KX2"])');
+  assert.match(card, /انعدل الطلب/); assert.match(card, /\+ انضاف 2× لبن/); assert.match(card, /− انشال 1× برغر لحم/);
+  assert.ok(await k.$('.card:has([data-done="KX2"]) .it.it-add'), 'the added item is highlighted');
+  await k.screenshot({ path: 'shots/kitchen-edited.png' });
+  await k.click('.card [data-ack-e^="KX2|"]');
+  await k.waitForSelector('.card.edited', { state: 'detached', timeout: 8000 });
+  // «جاهز» بالغلط ← «رجّع»
+  await k.click('.card [data-done="KX2"]');
+  await until(async () => (await read('orders/KX2')).kitchen === 'ready');
+  await k.waitForSelector('#undoB:not([hidden])', { timeout: 8000 });
+  assert.match(await k.textContent('#undoB'), /#62/);
+  await k.click('#undoB');
+  const back = await until(async () => { const x = await read('orders/KX2'); return x.kitchen === 'new' ? x : null; });
+  assert.equal(back.status, 'preparing', 'status back to preparing'); assert.equal(back.kitchenReadyAt, undefined);
+  await k.waitForSelector('.card [data-done="KX2"]', { timeout: 15000 });
+  // بعد «جاهز»، الكاشير يضيف صنف ← يرجع للمطبخ ويبين التعديل
+  await k.click('.card [data-done="KX2"]');
+  await until(async () => (await read('orders/KX2')).kitchen === 'ready');
+  await c.waitForFunction(() => orders.some((o) => o.id === 'KX2' && o.kitchen === 'ready'), null, { timeout: 15000 });
+  await c.evaluate(() => { window.ordEdit('KX2'); edState.work.push({ name: 'برغر دجاج', variant: 'عادي', qty: 1, price: 5000 }); window.edSave(); });
+  await until(async () => (await read('orders/KX2')).kitchen === 'new');
+  await k.waitForSelector('.card.edited:has([data-done="KX2"])', { timeout: 15000 });
+  assert.match(await k.textContent('.card.edited:has([data-done="KX2"])'), /\+ انضاف 1× برغر دجاج \(عادي\)/);
+  // الكاشير يلغي طلب الطاولة 5 ← بطاقة حمرة «ملغي» بالسبب، تبقى لحد «شفته» (حتى بعد إعادة التحميل)
+  await write('orders/KX1', { status: 'cancelled', cancelledAt: Date.now(), cancelReason: 'الزبون غيّر رأيه', cancelledBy: 'المطعم' });
+  await k.waitForSelector('.card.canc[data-id="KX1"]', { timeout: 15000 });
+  const cc = await k.textContent('.card.canc[data-id="KX1"]');
+  assert.match(cc, /ملغي — لا تحضّره/); assert.match(cc, /الزبون غيّر رأيه/);
+  assert.equal(await k.locator('[data-done="KX1"]').count(), 0, 'no «ready» button on a cancelled order');
+  await k.screenshot({ path: 'shots/kitchen-cancelled.png' });
+  await k.reload();
+  await k.waitForSelector('.card.canc[data-id="KX1"]', { timeout: 15000 });
+  await k.click('.card.canc [data-ack-c="KX1"]');
+  await k.waitForSelector('.card.canc', { state: 'detached', timeout: 8000 });
+  await k.reload();
+  await k.waitForSelector('.card [data-done="KX2"]', { timeout: 15000 });
+  assert.equal(await k.locator('.card.canc').count(), 0, 'stays dismissed after reload');
+  assert.equal(await k.locator('.card.edited').count(), 1, 'the unseen edit is still flagged after reload');
+  assert.deepEqual(clean(k), []);
+  await write('restaurants/RW', { features: { kitchen: false, kitchenSec: false }, svcOff: {} });
+  await k.context().close(); await c.context().close();
+});
+
+test('welcome screen on every entry: the cashier login and a linked screen greet with the name/restaurant in the app colour, then it goes away by itself', async () => {
+  const p = await page(B, { w: 1280, h: 800 });
+  await p.addInitScript(() => { window.SB_WELCOME_TEST = true; window.SB_HEALTH_TEST = true; });
+  await p.goto(BASE + 'index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#inEmail', 'scr@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
+  await p.waitForSelector('.sb-welcome', { timeout: 15000 });
+  const w = await p.textContent('.sb-welcome');
+  assert.match(w, /(صباح الخير|هلا بيك|مساء الخير)/); assert.match(w, /مطعم الشاشة/); assert.match(w, /الكاشير/);
+  await p.screenshot({ path: 'shots/welcome-cashier.png' });
+  await p.waitForSelector('.sb-welcome', { state: 'detached', timeout: 6000 });
+  await p.waitForSelector('#prods .prod', { timeout: 15000 });
+  // صحة الجهاز: سجل بساعة الجهاز والمتصفح (البرج يشوفه)
+  const hl = await until(async () => (await list('devHealth', 'rid', 'RW')).find((x) => x.app === 'cashier'));
+  assert.ok(hl, 'device health record written'); assert.equal(typeof hl.skewSec, 'number'); assert.equal(hl.ac, 'off'); assert.match(hl.browser, /Chrome|HeadlessChrome/);
+  // شاشة «طلبك جاهز» بعد الربط
+  const s = await page(B, { w: 1280, h: 720 });
+  await s.addInitScript(() => { window.SB_WELCOME_TEST = true; });
+  await pairScreen(s, BASE + 'screen.html', { name: 'شاشة الصالة' });
+  await s.waitForSelector('.sb-welcome', { timeout: 15000 });
+  assert.match(await s.textContent('.sb-welcome'), /مطعم الشاشة[\s\S]*شاشة الصالة/);
+  await s.screenshot({ path: 'shots/welcome-screen.png' });
+  await s.click('.sb-welcome');   // ضغطة تخفيها
+  await s.waitForSelector('.sb-welcome', { state: 'detached', timeout: 3000 });
+  await p.context().close(); await s.context().close();
+});
+
+test('who cancelled an order: the cashier name and email are saved and shown in the order details and timeline (cashier and admin panel)', async () => {
+  const now = Date.now();
+  await put('users/' + U.waiter, { role: 'cashier', restaurantId: 'RW', email: 'waiter@x.com', name: 'علي ضياء', perms: { cancel: true } });
+  await put('orders/CN1', { restaurantId: 'RW', status: 'preparing', held: true, orderType: 'takeaway', ticketNo: 77, value: 6000, day: bagDay(now), createdAt: '20:00', createdAtMs: now - 60000, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1, price: 6000 }] });
+  const c = await page(B, { w: 1280, h: 860 });
+  await c.goto(BASE + 'index.html');
+  await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await c.fill('#inEmail', 'waiter@x.com'); await c.fill('#inPass', 'secret123'); await c.click('#loginBtn');
+  await c.waitForFunction(() => typeof window.ordCancel === 'function' && typeof orders !== 'undefined' && orders.some((o) => o.id === 'CN1'), null, { timeout: 20000 });
+  await c.evaluate(() => window.ordCancel('CN1'));
+  await c.waitForSelector('#acDlgOk', { state: 'visible', timeout: 8000 });
+  await c.click('#acDlgOk');
+  const o = await until(async () => { const x = await read('orders/CN1'); return x.status === 'cancelled' ? x : null; });
+  assert.equal(o.cancelledByName, 'علي ضياء'); assert.equal(o.cancelledByEmail, 'waiter@x.com'); assert.equal(o.cancelledByUid, U.waiter);
+  assert.match(o.timeline[o.timeline.length - 1].text, /بواسطة علي ضياء \(waiter@x\.com\)/);
+  // لوحة الإدارة: تفاصيل الطلب تبين منو ألغاه
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.goto('http://localhost:5050/sora3a-admin/index.html');
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await a.fill('#lEmail', 'scr@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#appPage', { state: 'visible', timeout: 15000 });
+  await a.waitForFunction(() => typeof odHTML === 'function', null, { timeout: 10000 });
+  const html = await a.evaluate((x) => odHTML({ id: 'CN1', ...x }), o);
+  assert.match(html, /ألغاه: <b>علي ضياء<\/b> — <bdi>waiter@x\.com<\/bdi>/);
+  // الطلبات الملغية + إكسل بكل التفاصيل لأي فترة
+  await a.click('.dnav-btn[data-screen="scOrders"]').catch(() => a.evaluate(() => showScreen && showScreen('scOrders')));
+  await a.waitForSelector('#scOrders.on', { timeout: 10000 });
+  await a.selectOption('#ordRange', 'today');
+  await a.click('#ordersFilter .filter-btn:has-text("ملغية")');
+  await a.waitForFunction(() => /#CN1|CN1/i.test(document.getElementById('ordersList').textContent), null, { timeout: 15000 });
+  const [dl] = await Promise.all([a.waitForEvent('download', { timeout: 15000 }), a.click('#ordXlsBtn')]);
+  const fp = '/tmp/claude-0/orders-export.xlsx'; await dl.saveAs(fp);
+  const { execSync } = await import('node:child_process');
+  const xml = execSync(`unzip -p ${fp} 'xl/*'`).toString();
+  for (const w of ['علي ضياء', 'waiter@x.com', 'الطلبات', 'الأصناف', 'مراحل الطلب', 'سبب الإلغاء']) assert.ok(xml.includes(w), 'excel has ' + w);
+  await c.context().close(); await a.context().close();
+});
+
+test('warehouse app (إدارة المخزن) is an on/off service: ON → the storekeeper device (linked by code) has stock, recipes and suppliers and the cashier loses them; OFF → they come back to the cashier', async () => {
+  await write('restaurants/RW', { features: { store: true }, svcOff: {} });
+  // جهاز أمين المخزن: رمز ← ربط ← يفتح المخزون بس
+  const st = await page(B, { w: 1100, h: 800 });
+  const sc = await pairScreen(st, BASE + 'index.html?store=1', { name: 'أبو حيدر' });
+  assert.equal(sc.pair.kind, 'store');
+  await st.waitForSelector('#appPage.show', { timeout: 20000 });
+  await st.waitForFunction(() => /إدارة المخزن/.test(document.getElementById('restName').textContent), null, { timeout: 15000 });
+  await st.waitForSelector('#acTabs .mtab', { timeout: 15000 });
+  const tabs = await st.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
+  assert.deepEqual(tabs.filter((x) => !/رجوع/.test(x)), ['📦 المخزون', '🧾 الوصفات والتكلفة', '🏭 الموردين']);
+  assert.equal(await st.isVisible('.bnav .nb[data-tab="cashier"]'), false, 'no cashier screens on the storekeeper device');
+  // يضيف مادة ← تنحفظ بحسابات المطعم
+  await st.evaluate(() => window.matNew());
+  await st.waitForSelector('#acf_name', { timeout: 8000 });
+  await st.fill('#acf_name', 'لحم برغر'); await st.fill('#acf_qty', '12'); await st.fill('#acf_cost', '9000');
+  await st.click('#acDlgOk');
+  const accd = await until(async () => { const d = await read('accounting/RW'); return d && (d.materials || []).some((m) => m.name === 'لحم برغر') ? d : null; });
+  assert.equal(accd.materials.find((m) => m.name === 'لحم برغر').qty, 12);
+  assert.equal(await st.isVisible('#storeGate'), false, 'the link screen goes away after linking');
+  assert.ok(await st.isVisible('#accScreen'), 'stock screen is visible');
+  await st.screenshot({ path: 'shots/store-app.png' });
+  // الكاشير: المخزون والوصفات والموردين انشالوا منه (المصروفات وديون الزبائن تبقى)
+  const c = await page(B, { w: 1280, h: 860 });
+  await posLogin(c);
+  await c.evaluate(() => goTab('acc'));
+  await c.waitForSelector('#acTabs .mtab', { timeout: 15000 });
+  let ct = await c.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()).join('|'));
+  assert.ok(!/المخزون|الوصفات|الموردين/.test(ct), 'cashier: ' + ct); assert.match(ct, /المصروفات/);
+  assert.match(await c.textContent('#acBody'), /صاروا بتطبيق «إدارة المخزن»/);
+  // تنطفي الخدمة ← يرجعون للكاشير
+  await write('restaurants/RW', { features: { store: false } });
+  await c.waitForFunction(() => !window.storeSvcOn(), null, { timeout: 15000 });
+  await c.evaluate(() => renderAcc());
+  ct = await c.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()).join('|'));
+  assert.match(ct, /المخزون/); assert.match(ct, /الموردين/);
+  assert.deepEqual(clean(st).filter((e) => !/permission|insufficient/i.test(e)), []);
+  await st.context().close(); await c.context().close();
 });

@@ -143,6 +143,10 @@ html.sb-on .hdr{justify-content:flex-end}
 .scr-pr{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:9px 11px}
 .scr-pr b{font-size:13.5px}.scr-pr small{display:block;color:var(--muted);font-size:11.5px}
 .scr-pr .btn-sm{background:var(--panel2);color:var(--text)}
+/* شاشة طلبك جاهز: أي كاشيرية تطلع طلباتهم عليها (مطعم بيه أكثر من صالة) */
+.scr-cash{margin-top:5px;font-size:12px}.scr-cash summary{cursor:pointer;color:var(--accent);font-weight:700}
+.scr-types{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;font-size:12px}.scr-types span{color:var(--muted);font-weight:700}.scr-types label{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.scr-cash label{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:12.5px}.scr-cash small{margin-top:3px}
 .scr-sv{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px;font-weight:700}
 .scr-sv small{color:var(--muted);font-weight:600;font-size:12px}
 .scr-sw{min-width:96px;border:none;border-radius:999px;padding:7px 12px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;background:var(--panel2);color:var(--muted)}
@@ -217,6 +221,7 @@ html.sb-on .hdr{justify-content:flex-end}
 .filter-row{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px;}
 .filter-row::-webkit-scrollbar{height:0;}
 .filter-btn{flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid var(--line);background:transparent;color:var(--muted);font-family:'IBM Plex Sans Arabic',sans-serif;font-size:11px;font-weight:700;cursor:pointer;}
+.filter-btn.ord-xls{margin-right:auto;border-color:var(--green);color:var(--green);font-weight:700}
 .filter-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
 
 /* Date filter */
@@ -515,6 +520,8 @@ body.staff-mode .staff-banner{display:block;}
         <button class="filter-btn" onclick="setOF('takeaway',this)">🥡 سفري</button>
         <button class="filter-btn" onclick="setOF('pending',this)">🟡 ينتظر</button>
         <button class="filter-btn" onclick="setOF('delivered',this)">✅ مسلّمة</button>
+        <button class="filter-btn" onclick="setOF('cancelled',this)">❌ ملغية</button>
+        <button class="filter-btn ord-xls" id="ordXlsBtn" onclick="ordExport(this)" title="كل تفاصيل الطلبات المعروضة (حسب الفترة والفلتر) بملف إكسل">📥 إكسل بكل التفاصيل</button>
       </div>
       <div id="ordersList"></div>
     </div>
@@ -651,9 +658,9 @@ body.staff-mode .staff-banner{display:block;}
     <!-- Screens: every screen link of the restaurant in one place (restaurant owner + admin) -->
     <div class="screen" id="scScreens">
       <div class="card admin-only"><div class="form-group" style="margin:0"><label>المطعم</label><select class="form-sel" id="scrRest" onchange="scrRender()"></select></div></div>
-      <div class="card scr-intro">📺 <b>كل شاشات المطعم وخدماته بمكان واحد.</b> افتح رابط الشاشة على جهازها (تلفون، تابلت، تلفزيون) وثبّتها، أو امسح الـQR بكاميرا التلفون.<br>🔗 <b>المجهز والمطبخ والويتر بدون إيميل:</b> يطلع رمز على الجهاز، تكتبه هنا بـ«ربط جهاز» ويفتح وحده — والموظفين ما يعرفون حساب الإدارة.<br>🔐 إذا خدمة «أجهزة معتمدة فقط» شغّالة: الشاشة اللي تربطها تنتظر اعتماد إدارة سرعة مرة وحدة.</div>
+      <div class="card scr-intro">📺 <b>كل شاشات المطعم وخدماته بمكان واحد.</b> افتح رابط الشاشة على جهازها (تلفون، تابلت، تلفزيون) وثبّتها، أو امسح الـQR بكاميرا التلفون.<br>🔗 <b>شاشة طلبك جاهز والمجهز والمطبخ والويتر بدون إيميل:</b> يطلع رمز على الجهاز، تكتبه هنا بـ«ربط جهاز» ويفتح وحده — والموظفين ما يعرفون حساب الإدارة.<br>🔐 إذا خدمة «أجهزة معتمدة فقط» شغّالة: الشاشة اللي تربطها تنتظر اعتماد إدارة سرعة مرة وحدة.</div>
       <div class="card scr-svc" id="scrSvc" hidden></div>
-      <div class="card scr-pair"><b>🔗 ربط جهاز (المجهز، المطبخ، الويتر)</b><small>افتح رابط الشاشة أو تطبيق الويتر على الجهاز ← يطلع رمز من 6 حروف ← اكتبه هنا واضغط «ربط». بدون إيميل وبدون كلمة سر. للويتر اكتب اسمه حتى يطلع على طلباته.</small>
+      <div class="card scr-pair"><b>🔗 ربط جهاز (شاشة طلبك جاهز، المجهز، المطبخ، الويتر)</b><small>افتح رابط الشاشة أو التطبيق على الجهاز ← يطلع رمز من 6 حروف ← اكتبه هنا واضغط «ربط». بدون إيميل وبدون كلمة سر. للويتر اكتب اسمه حتى يطلع على طلباته، ولشاشة طلبك جاهز اكتب مكانها (مثلاً الطابق الأول) واختار كاشيريتها تحت.</small>
         <div class="scr-pf"><input class="form-inp" id="scrCode" maxlength="6" dir="ltr" placeholder="ABC234" autocomplete="off" onkeydown="if(event.key==='Enter')scrPair()"><input class="form-inp" id="scrName" maxlength="60" placeholder="الاسم (اختياري): مطبخ الشوي، أو اسم الويتر" onkeydown="if(event.key==='Enter')scrPair()"><button type="button" class="btn-sm" id="scrPairBtn" onclick="scrPair()">🔗 ربط</button></div>
         <div class="scr-pl" id="scrPaired"></div></div>
       <div id="scrList"></div>
@@ -862,7 +869,7 @@ const app = initializeApp({
 // App Check (reCAPTCHA Enterprise / Fraud Defense): السيرفر يعرف إن الطلب جاي من تطبيقاتنا الحقيقية (بدون ما يحس المستخدم) — على الموقع بس، مو بالتجارب المحلية
 const APPCHECK_KEY = '6LdWa_0tAAAAAEWXuLi8yrdnPjQmx-r-ayyoZ07h';
 const appCheck = (a) => { if (!/\.github\.io$/.test(location.hostname)) return; if (!document.getElementById('acHide')) document.head.insertAdjacentHTML('beforeend', '<style id="acHide">.grecaptcha-badge{visibility:hidden}</style>');
-  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true })).catch(() => {}); };
+  import('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-check.js').then((m) => { const ac = m.initializeAppCheck(a, { provider: new m.ReCaptchaEnterpriseProvider(APPCHECK_KEY), isTokenAutoRefreshEnabled: true }); m.getToken(ac).then(() => { window.__acState = window.__acState || 'ok'; }, (e) => { window.__acState = 'err:' + String((e && (e.code || e.message)) || e).slice(0, 80); }); }).catch(() => {}); };
 appCheck(app);
 
 // Secondary app for creating users without logout
@@ -907,11 +914,11 @@ const isStaff=()=>currentUser?.role==='staff';
 const canManage=()=>isAdmin()||isRest();
 // خدمات المطعم: يفتحها ويغلقها المدير الأعلى فقط (الافتراضي مفعّلة)
 // العنصر الثالث = مطفية افتراضياً (تشتغل بس إذا شغّلها المدير الأعلى)
-const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 الباركود والمنيو الأونلاين'],['screen','📺 شاشة طلبك جاهز'],['waiter','🧑‍🍳 تطبيق الويتر'],['kitchen','👨‍🍳 شاشة المجهز (مطبخ منفصل)',1],['kitchenSec','🔥 شاشة المطبخ (الأقسام)',1],['printTest','🧪 تجربة الطابعات (محاكي)',1],['devices','🔐 أجهزة معتمدة فقط',1]];
+const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 الباركود والمنيو الأونلاين'],['screen','📺 شاشة طلبك جاهز'],['waiter','🧑‍🍳 تطبيق الويتر'],['kitchen','👨‍🍳 شاشة المجهز (مطبخ منفصل)',1],['kitchenSec','🔥 شاشة المطبخ (الأقسام)',1],['store','📦 إدارة المخزن (تطبيق أمين المخزن)',1],['printTest','🧪 تجربة الطابعات (محاكي)',1],['devices','🔐 أجهزة معتمدة فقط',1]];
 const OFF_DEFAULT=new Set(SERVICES.filter(x=>x[2]).map(x=>x[0]));
 const featBase=(r,k)=>OFF_DEFAULT.has(k)?!!(r&&r.features&&r.features[k]===true):(!r||!r.features||r.features[k]!==false);
 // صاحب المطعم يكدر يوقف (ويرجّع) بس الخدمات اللي شغّلها البرج: restaurants.svcOff — مو «الأجهزة المعتمدة» ولا التجربة ولا شاشة طلبك جاهز
-const OWNER_SVC=['captain','calls','whatsapp','pager','online','waiter','kitchen','kitchenSec'];
+const OWNER_SVC=['captain','calls','whatsapp','pager','online','waiter','kitchen','kitchenSec','store'];
 const ownerOff=(r,k)=>OWNER_SVC.includes(k)&&!!(r&&r.svcOff&&r.svcOff[k]===true);
 const featOf=(r,k)=>featBase(r,k)&&!ownerOff(r,k);
 let myRestDoc=null;
@@ -1063,6 +1070,8 @@ function enterApp(){
   document.getElementById('hdrName').textContent=currentUser.restaurantName||currentUser.name||currentUser.email;
   document.getElementById('hdrRole').className='hdr-role '+(isAdmin()?'role-admin':isStaff()?'role-staff':'role-rest');
   document.getElementById('hdrRole').textContent=isAdmin()?'👑 إدارة عليا':isStaff()?'👥 موظف':'🍽️ مطعم';
+  if(window.SB&&window._fb)SB.health((hid,hd)=>window._fb.setDoc(window._fb.doc(window._fb.db,'devHealth',hid),hd),{rid:currentUser.restaurantId||'',rest:currentUser.restaurantName||'',who:currentUser.name||''});   // صحة الجهاز
+  if(window.SB)SB.welcome({app:'admin',name:currentUser.name||'',rest:currentUser.restaurantName||'',role:isAdmin()?'لوحة الإدارة — الإدارة العليا':isStaff()?'لوحة الإدارة — موظف':'لوحة الإدارة'});
   document.body.classList.toggle('rest-mode',isRest());
   document.body.classList.toggle('staff-mode',isStaff());
   buildNavs();
@@ -1499,7 +1508,7 @@ function odHTML(o){
   ].filter(Boolean);
   const tl=Array.isArray(o.timeline)?o.timeline:[];
   return`<div class="od-h"><span class="od-id">#${esc(o.id.substring(0,6).toUpperCase())}</span><span class="od-big">${OD_TYPE[d.type]||esc(d.type)}${num?' — '+esc(num):''}</span><span class="badge ${o.status==='cancelled'?'b-cancelled':o.status==='delivered'?'b-delivered':'b-accepted'}">${OD_ST[o.status]||esc(o.status||'')}</span></div>
-    ${o.status==='cancelled'?`<div class="od-warn">❌ ملغي${o.cancelReason?' — '+esc(o.cancelReason):''}${o.cancelNote?' — '+esc(o.cancelNote):''}${o.cancelledBy?' (من '+esc(o.cancelledBy)+')':''}</div>`:''}
+    ${o.status==='cancelled'?`<div class="od-warn">❌ ملغي${o.cancelReason?' — '+esc(o.cancelReason):''}${o.cancelNote?' — '+esc(o.cancelNote):''}${o.cancelledByName?`<br>👤 ألغاه: <b>${esc(o.cancelledByName)}</b>${o.cancelledByEmail?' — <bdi>'+esc(o.cancelledByEmail)+'</bdi>':''}`:o.cancelledBy?' (من '+esc(o.cancelledBy)+')':''}</div>`:''}
     <dl class="od-kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
     <div class="od-sec">🍽️ الأصناف (${toA(d.items.reduce((s,i)=>s+i.qty,0))})</div>
     ${d.items.length?`<div class="od-items">${d.items.map(i=>`<div class="od-it"><span class="od-q">${toA(i.qty)}×</span><span class="od-n"><b>${esc(i.name)}${vr(i)}</b>${i.price?`<small>${fmt(i.price)} د.ع للواحد</small>`:''}${i.note?`<span class="od-note">📝 ${esc(i.note)}</span>`:''}</span><span class="od-p">${i.price?fmt(i.price*i.qty):''}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:13px">ما مسجّل أصناف لهذا الطلب</div>'}
@@ -1600,6 +1609,7 @@ function ordersTabList(rerender){
   else if(orderFilter==='takeaway')fil=fil.filter(o=>o.orderType==='takeaway');
   else if(orderFilter==='pending')fil=fil.filter(o=>['pending','accepted','pickup','delivering'].includes(o.status));
   else if(orderFilter==='delivered')fil=fil.filter(o=>o.status==='delivered');
+  else if(orderFilter==='cancelled')fil=fil.filter(o=>o.status==='cancelled'||o.status==='rejected');
   const q=(document.getElementById('orderSearch')?.value||'').trim().toLowerCase();
   if(q)fil=fil.filter(o=>(o.customer||'').toLowerCase().includes(q)||(o.phone||'').includes(q));
   return fil;
@@ -1616,6 +1626,48 @@ function renderOrders(){
   const shown=fil.slice(0,300);
   el.innerHTML=shown.length?shown.map(o=>orderCard(o)).join('')+(fil.length>shown.length?`<div style="text-align:center;color:var(--muted);padding:10px;font-size:12px">يبين أول ${toA(shown.length)} من ${toA(fil.length)} — ضيّق البحث أو الفترة</div>`:''):'<div style="text-align:center;color:var(--muted);padding:24px;">لا توجد طلبات</div>';
 }
+
+// ── إكسل الطلبات بكل التفاصيل (حسب الفترة والفلتر المختارين): الطلب، الزبون وأرقامه، الأصناف، الدفع، ومنو ألغى ووكت وليش ──
+window.ordExport=async function(btn){
+  const fil=ordersTabList(()=>{});
+  if(!fil){toast('⏳ دا تنجاب طلبات الفترة — جرّب بعد ثواني');return;}
+  if(!fil.length){toast('⚠️ ماكو طلبات بهذي الفترة والفلتر');return;}
+  if(btn)btn.disabled=true;
+  try{
+    const L=fil.slice().sort((a,b)=>(a.createdAtMs||0)-(b.createdAtMs||0));
+    const day=ms=>ms?new Date(ms+3*3600000).toISOString().slice(0,10):'';
+    const hm=ms=>{if(!ms)return '';const d=new Date(ms+3*3600000),h=d.getUTCHours(),m=String(d.getUTCMinutes()).padStart(2,'0');return ((h%12)||12)+':'+m+' '+(h<12?'ص':'م');};
+    const TY={delivery:'دلفري',salon:'صالة',takeaway:'سفري'},PMN={cash:'نقداً',card:'بطاقة',later:'آجل',credit:'دين',cod:'عند الاستلام',mixed:'مختلط'};
+    const stName=s=>(OD_ST[s]||s||'').replace(/^[^؀-ۿ]+/,'');
+    const money=v=>({v:Math.round(Number(v)||0),t:'money'});
+    const rows=[],iRows=[],tRows=[];
+    L.forEach(o=>{
+      const d=odData(o),num=odNum(o),id=o.id.substring(0,6).toUpperCase(),pm=(o.payment||{}).method||'';
+      rows.push([id,...(isAdmin()?[o.restaurantName||'']:[]),day(o.createdAtMs),hm(o.createdAtMs),TY[d.type]||d.type,stName(o.status),num,o.customer||'',o.phone||'',o.phone2||'',o.address||'',
+        d.items.map(i=>i.qty+'× '+i.name+(i.variant&&i.variant!=='وحدة'?' ('+i.variant+')':'')).join('، '),{v:d.items.reduce((s,i)=>s+i.qty,0),t:'num'},
+        money(d.sub),money(d.disc),d.fee==null?'':money(d.fee),money((d.total||0)+(d.fee||0)),PMN[pm]||pm,o.captainName||'',o.byName||'',o.note||'',
+        o.cancelReason||'',o.cancelNote||'',o.cancelledByName||o.cancelledBy||'',o.cancelledByEmail||'',o.cancelledAt?day(o.cancelledAt)+' '+hm(o.cancelledAt):'',o.cancelledFrom?stName(o.cancelledFrom):'']);
+      d.items.forEach(i=>iRows.push([id,day(o.createdAtMs),stName(o.status),i.name,i.variant||'',{v:i.qty,t:'num'},money(i.price),money(i.price*i.qty),i.note||'']));
+      (Array.isArray(o.timeline)?o.timeline:[]).forEach(e=>tRows.push([id,day(o.createdAtMs),t12(e.time||''),stName(e.status),e.text||'']));
+    });
+    const v=(document.getElementById('ordRange')||{}).value||'live',fl={all:'كل الطلبات',delivery:'دلفري',salon:'صالة',takeaway:'سفري',pending:'ينتظر',delivered:'مسلّمة',cancelled:'الملغية'}[orderFilter]||'';
+    const from=day(L[0].createdAtMs),to=day(L[L.length-1].createdAtMs),rn=isRest()?(myRestDoc&&myRestDoc.name)||'':(document.getElementById('ordRest').selectedOptions[0]||{}).text||'';
+    const meta=['الفترة: '+(from===to?from:from+' ← '+to),'الفلتر: '+fl,'عدد الطلبات: '+L.length];
+    const {xlsxBytes}=await import('./xlsx.js?v=1');
+    const bytes=xlsxBytes({title:'سرعة — الطلبات بكل التفاصيل',subtitle:rn,meta,sheets:[
+      {name:'الطلبات',subtitle:'كل طلب بسطر: الزبون وأرقامه، الأصناف، المبالغ، الدفع، ومنو ألغى',columns:[{h:'رقم الطلب',w:11},...(isAdmin()?[{h:'المطعم',w:18}]:[]),{h:'التاريخ',w:11},{h:'الوقت',w:9},{h:'النوع',w:8},{h:'الحالة',w:12},{h:'الرقم/الطاولة',w:11},
+        {h:'الزبون',w:18},{h:'الهاتف',w:14},{h:'هاتف ثاني',w:14},{h:'العنوان',w:26},{h:'الأصناف',w:40},{h:'عدد القطع',w:9,t:'num'},{h:'المبلغ',w:12,t:'money'},{h:'الخصم',w:10,t:'money'},{h:'التوصيل',w:10,t:'money'},{h:'الإجمالي',w:12,t:'money'},
+        {h:'الدفع',w:10},{h:'الكابتن',w:14},{h:'الكاشير',w:14},{h:'ملاحظة الطلب',w:22},{h:'سبب الإلغاء',w:22},{h:'ملاحظة الإلغاء',w:20},{h:'ألغاه',w:16},{h:'إيميل اللي ألغى',w:24},{h:'وقت الإلغاء',w:17},{h:'كان بحالة',w:12}],rows},
+      {name:'الأصناف',subtitle:'كل صنف بكل طلب',columns:[{h:'رقم الطلب',w:11},{h:'التاريخ',w:11},{h:'حالة الطلب',w:12},{h:'الصنف',w:24},{h:'النوع',w:12},{h:'العدد',w:8,t:'num'},{h:'سعر الواحد',w:12,t:'money'},{h:'المجموع',w:12,t:'money'},{h:'ملاحظة',w:20}],rows:iRows},
+      {name:'مراحل الطلب',subtitle:'كل خطوة صارت بالطلب (إنشاء، قبول، تجهيز، إلغاء...)',columns:[{h:'رقم الطلب',w:11},{h:'التاريخ',w:11},{h:'الوقت',w:9},{h:'الحالة',w:12},{h:'شنو صار',w:60}],rows:tRows}]});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    a.download=`sora3a-orders-${orderFilter||'all'}-${from}_${to}.xlsx`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    audit('orders.export',{n:L.length,filter:orderFilter||'all',range:v});
+    toast('✅ نزل ملف الإكسل ('+L.length+' طلب)');
+  }catch(err){console.warn('export',err);toast('❌ تعذّر إنشاء الملف: '+(err.message||err),'error');}
+  finally{if(btn)btn.disabled=false;}
+};
 
 // CAPTAINS STATS
 window.renderCapStats=function(force){
@@ -3264,6 +3316,7 @@ function scrItems(rid,r){
     {id:'cashier',ic:'🧾',t:'الكاشير',d:'برنامج الكاشير من المتصفح — وإله تطبيق أندرويد وويندوز بقسم التطبيقات.',url:SCR_R2,inst:1},
     {id:'kitchen',ic:'👨‍🍳',t:'شاشة المجهز — يجمّع ويتمم',d:'يوصلها الطلب بعد ما يخلص المطبخ (ولو شاشة المطبخ مطفية يوصلها مباشرة): المجهز يجمّعه ويغلّفه ويضغط «تم التجهيز» ← الصالة والسفري يطلعون «جاهز» بشاشة طلبك جاهز، والدلفري يرجع لكاشيره حتى يختار الكابتن.',url:k,feat:'kitchen',inst:1},
     {id:'kitchenSec',ic:'🔥',t:'شاشة المطبخ (الأقسام) — تطبخ',d:'أول شاشة يوصلها طلب الكاشير. نفس الرابط لكل أجهزة المطبخ: كل جهاز يختار قسمه ('+(secs.length?secs.map(x=>x.name).join('، '):'ماكو أقسام بعد — ضيفها من الكاشير ← الإعدادات ← «أقسام المطبخ والطابعات»')+') وتطلعله أصنافه بس، و«جاهز» يعلّم قسمه — ولما تخلص كل الأقسام الطلب يروح لشاشة المجهز.'+(secs.length&&!scrCfg.secOn?' ⚠️ شغّل «تقسيم الطلب على أقسام المطبخ» من الكاشير ← الإعدادات.':''),url:k+'?sec',feat:'kitchenSec',inst:1},
+    {id:'store',ic:'📦',t:'إدارة المخزن — أمين المخزن',d:'المخزون والوصفات والموردين على تابلت أو تلفون أمين المخزن. ينربط برمز (بدون إيميل) من «ربط جهاز» فوق. لما الخدمة شغّالة تنشال هذي الأقسام من الكاشير، ولما تنطفي ترجع للكاشير.',url:SCR_R2+'index.html?store=1',feat:'store',inst:1},
     {id:'waiter',ic:'🧑‍🍳',t:'الويتر',d:'الويتر يطلب من الطاولة بالتلفون، والطلب ينطبع بالمطبخ مباشرة. التلفون ينربط برمز (بدون إيميل) من «ربط جهاز» فوق.',url:SCR_R2+'waiter.html',feat:'waiter',inst:1},
     {id:'captain',ic:'🛵',t:'الكابتن (للآيفون أو أي تلفون)',d:'تطبيق الكابتن من المتصفح — وإله تطبيق أندرويد تحت.',url:SCR_CAP+'captain.html',feat:'captain',inst:1},
     {id:'menu',ic:'📱',t:'منيو الباركود',d:'الزبون يفتحه ويطلب — اطبع QR الطاولات من الكاشير.',url:SCR_R2+'menu.html?r='+encodeURIComponent(rid),feat:'online'},
@@ -3330,24 +3383,31 @@ window.scrSvc=async function(k,on){
   }catch(e){toast('❌ تعذّر التحديث','error');}
 };
 // ── ربط شاشة المجهز / المطبخ برمز (بدون إيميل) ──
-let scrPairRid='',scrPairUnsub=null,scrPairList=[];
+let scrPairRid='',scrPairUnsub=null,scrPairList=[],scrCashList=[],scrCashUnsub=null,scrCashOpen='';
 function scrWatchPaired(rid){
   if(scrPairRid===rid)return scrPairedRender();
   if(scrPairUnsub){scrPairUnsub();scrPairUnsub=null;}
-  scrPairRid=rid;scrPairList=[];scrPairedRender();
+  if(scrCashUnsub){scrCashUnsub();scrCashUnsub=null;}
+  scrPairRid=rid;scrPairList=[];scrCashList=[];scrPairedRender();
   if(!rid)return;
   const fb=window._fb;
   scrPairUnsub=fb.onSnapshot(fb.query(fb.collection(fb.db,'screens'),fb.where('restaurantId','==',rid)),s=>{if(scrPairRid!==rid)return;scrPairList=s.docs.map(d=>({id:d.id,...d.data()}));scrPairedRender();},()=>{});
-  unsubs.push(()=>{if(scrPairUnsub){scrPairUnsub();scrPairUnsub=null;}scrPairRid='';});
+  // حسابات الكاشير: حتى كل شاشة «طلبك جاهز» تختار كاشيريتها
+  scrCashUnsub=fb.onSnapshot(fb.query(fb.collection(fb.db,'users'),fb.where('restaurantId','==',rid),fb.where('role','==','cashier')),s=>{if(scrPairRid!==rid)return;scrCashList=s.docs.map(d=>({id:d.id,name:d.data().name||d.data().email||'كاشير'}));scrPairedRender();},()=>{});
+  unsubs.push(()=>{if(scrPairUnsub){scrPairUnsub();scrPairUnsub=null;}if(scrCashUnsub){scrCashUnsub();scrCashUnsub=null;}scrPairRid='';});
 }
 function scrPairedRender(){
   const el=document.getElementById('scrPaired');if(!el)return;
   const r=isRest()?myRestDoc:allRestaurants.find(x=>x.id===scrPairRid),devOn=featBase(r,'devices');
   if(!scrPairRid){el.innerHTML='';return;}
   if(!scrPairList.length){el.innerHTML='<small style="color:var(--muted)">ماكو شاشات مربوطة بعد.</small>';return;}
-  el.innerHTML=scrPairList.slice().sort((a,b)=>(b.atMs||0)-(a.atMs||0)).map(x=>{
+  const max=+((r&&r.screenMax)||0),nReady=scrPairList.filter(x=>x.kind==='ready').length;
+  const lim=max>0?`<small class="scr-lim" style="color:var(--muted);display:block;margin-bottom:6px">📺 شاشات «طلبك جاهز»: ${nReady} من ${max}</small>`:'';
+  el.innerHTML=lim+scrPairList.slice().sort((a,b)=>(b.atMs||0)-(a.atMs||0)).map(x=>{
     const pend=x.approved!==true&&devOn;
-    return `<div class="scr-pr" data-paired="${esc(x.id)}"><div style="font-size:21px">${x.kind==='kitchenSec'?'🔥':x.kind==='waiter'?'🧑‍🍳':'👨‍🍳'}</div><div style="flex:1;min-width:0"><b>${esc(x.name||'شاشة')}</b><small>${esc(x.platform||'')}${x.platform?' • ':''}<span class="scr-st">${pend?'⏳ تنتظر اعتماد إدارة سرعة':'✅ شغّالة'}</span>${x.pairedBy==='hq'?' • ربطتها إدارة سرعة':''}</small></div>${pend&&isAdmin()?`<button type="button" class="btn-sm" onclick="scrApprove('${esc(x.id)}')">✅ اعتماد</button>`:''}<button type="button" class="btn-sm" onclick="scrUnlink('${esc(x.id)}')">🔌 فصل</button></div>`;
+    const sel=(x.cashiers||[]).filter(u=>scrCashList.some(c=>c.id===u)),cn=u=>(scrCashList.find(c=>c.id===u)||{}).name||'';
+    const cash=x.kind!=='ready'?'':`<details class="scr-cash" data-cash="${esc(x.id)}" ${scrCashOpen===x.id?'open':''} ontoggle="scrCashOpen=this.open?'${esc(x.id)}':(scrCashOpen==='${esc(x.id)}'?'':scrCashOpen)"><summary>🧾 تعرض طلبات: ${sel.length?esc(sel.map(cn).join('، ')):'كل الكاشيرية'}</summary>${scrCashList.length?scrCashList.map(c=>`<label><input type="checkbox" data-cu="${esc(c.id)}" ${sel.includes(c.id)?'checked':''} onchange="scrCash('${esc(x.id)}','${esc(c.id)}',this.checked)"> ${esc(c.name)}</label>`).join(''):'<small>ماكو حسابات كاشير بعد</small>'}<small>بدون اختيار = كل الكاشيرية. إذا المطعم بيه أكثر من صالة، كل شاشة تختار كاشير صالتها.</small></details>`+`<div class="scr-types" data-types="${esc(x.id)}"><span>📋 تعرض:</span>${[['takeaway','🥡 سفري'],['salon','🪑 صالة'],['delivery','🏍️ دلفري']].map(([k,l])=>`<label><input type="checkbox" data-ty="${k}" ${!(x.types||[]).length||(x.types||[]).includes(k)?'checked':''} onchange="scrType('${esc(x.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>`;
+    return `<div class="scr-pr" data-paired="${esc(x.id)}"><div style="font-size:21px">${x.kind==='kitchenSec'?'🔥':x.kind==='waiter'?'🧑‍🍳':x.kind==='ready'?'📺':x.kind==='store'?'📦':'👨‍🍳'}</div><div style="flex:1;min-width:0"><b>${esc(x.name||'شاشة')}</b><small>${esc(x.platform||'')}${x.platform?' • ':''}<span class="scr-st">${pend?'⏳ تنتظر اعتماد إدارة سرعة':'✅ شغّالة'}</span>${x.pairedBy==='hq'?' • ربطتها إدارة سرعة':''}</small>${cash}</div>${pend&&isAdmin()?`<button type="button" class="btn-sm" onclick="scrApprove('${esc(x.id)}')">✅ اعتماد</button>`:''}<button type="button" class="btn-sm" onclick="scrUnlink('${esc(x.id)}')">🔌 فصل</button></div>`;
   }).join('');
 }
 window.scrPair=async function(){
@@ -3362,7 +3422,10 @@ window.scrPair=async function(){
     const pd=p.data(),r=isRest()?myRestDoc:allRestaurants.find(x=>x.id===rid),hq=isAdmin();
     const ex=scrPairList.find(x=>x.id===pd.uid);
     if(ex){toast('✅ هذا الجهاز مربوط من قبل');ci.value='';return;}
-    const name=(ni.value||'').trim()||(pd.kind==='kitchenSec'?'شاشة المطبخ':pd.kind==='waiter'?'ويتر':'شاشة المجهز');
+    // عدد شاشات «طلبك جاهز» لكل مطعم يحدده البرج (screenMax)
+    const max=+((r&&r.screenMax)||0),nReady=scrPairList.filter(x=>x.kind==='ready').length;
+    if(pd.kind==='ready'&&max>0&&nReady>=max&&!hq){toast(`⛔ وصلت حد شاشات «طلبك جاهز» (${max}) — للزيادة تواصل ويا إدارة سرعة`,'warn');return;}
+    const name=(ni.value||'').trim()||(pd.kind==='kitchenSec'?'شاشة المطبخ':pd.kind==='waiter'?'ويتر':pd.kind==='ready'?'شاشة طلبك جاهز':pd.kind==='store'?'أمين المخزن':'شاشة المجهز');
     await fb.setDoc(fb.doc(fb.db,'screens',pd.uid),{restaurantId:rid,restName:String((r&&r.name)||'').slice(0,80),code,kind:String(pd.kind||'').slice(0,20),
       platform:String(pd.platform||'').slice(0,80),name:name.slice(0,60),pairedBy:hq?'hq':'owner',approved:hq,atMs:Date.now(),by:String(currentUser.email||'').slice(0,120)});
     audit('screen.pair',{restaurantId:rid,screen:pd.uid,name});
@@ -3370,6 +3433,21 @@ window.scrPair=async function(){
     toast(!hq&&featBase(r,'devices')?'🔗 انربط — ينتظر اعتماد إدارة سرعة مرة وحدة':'✅ انربط — يفتح وحده هسه');
   }catch(e){toast(e&&e.code==='permission-denied'?'⛔ هذي الشاشة مربوطة بمطعم ثاني — افصلها منه أول':'📶 تعذّر الربط — تأكد من الإنترنت','error');}
   finally{btn.disabled=false;}
+};
+// شاشة «طلبك جاهز»: أي كاشيرية تطلع طلباتهم عليها (فارغة = الكل) — تتطبق على الشاشة فوراً
+window.scrCash=async function(id,uid,on){
+  const x=scrPairList.find(y=>y.id===id);if(!x)return;
+  const cur=new Set((x.cashiers||[]).filter(u=>scrCashList.some(c=>c.id===u)));if(on)cur.add(uid);else cur.delete(uid);
+  try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'screens',id),{cashiers:[...cur].slice(0,30)});audit('screen.cashiers',{screen:id,n:cur.size});toast(cur.size?'✅ الشاشة تعرض طلبات الكاشيرية المختارين بس':'✅ الشاشة تعرض طلبات كل الكاشيرية');}
+  catch(e){toast('❌ تعذّر الحفظ','error');}
+};
+window.scrType=async function(id,k,on){
+  const x=scrPairList.find(y=>y.id===id);if(!x)return;
+  const all=['takeaway','salon','delivery'],cur=new Set((x.types||[]).length?x.types:all);if(on)cur.add(k);else cur.delete(k);
+  if(!cur.size){toast('⚠️ اختار نوع واحد على الأقل','warn');scrPairedRender();return;}
+  const v=all.filter(t=>cur.has(t)),save=v.length===3?[]:v;
+  try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'screens',id),{types:save});audit('screen.types',{screen:id,types:save.join(',')});toast(save.length?'✅ الشاشة تعرض: '+save.map(t=>({takeaway:'سفري',salon:'صالة',delivery:'دلفري'})[t]).join('، '):'✅ الشاشة تعرض كل الطلبات');}
+  catch(e){toast('❌ تعذّر الحفظ','error');}
 };
 window.scrUnlink=async function(id){
   const x=scrPairList.find(y=>y.id===id);

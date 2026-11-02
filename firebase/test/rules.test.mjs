@@ -518,6 +518,19 @@ test('config/brand: our phone/email are public to read, only super admin (Tower)
   await assertFails(getDoc(doc(anon(), 'config/other')));
 });
 
+test('devHealth: every signed-in device writes its own health record (clock, browser, protection); only the Tower reads them', async () => {
+  const H = { app: 'screen', page: 'screen.html', ua: 'Mozilla/5.0 (Linux; Android 9; wv) Chrome/70.0', browser: 'Chrome 70 (تطبيق)', skewSec: -600, ac: 'err:appCheck/recaptcha-error', rid: 'R1', rest: 'R1', who: 'شاشة', atMs: Date.now(), v: 1 };
+  await assertSucceeds(setDoc(doc(as('cash1'), 'devHealth/dABC123'), H));
+  await assertSucceeds(setDoc(doc(as('rest1'), 'devHealth/dXYZ'), { ...H, skewSec: null, ac: 'ok' }));
+  await assertFails(setDoc(doc(anon(), 'devHealth/dANON'), H));
+  await assertFails(setDoc(doc(as('cash1'), 'devHealth/dBAD'), { ...H, extra: 'x' }));
+  await assertFails(setDoc(doc(as('cash1'), 'devHealth/dBAD2'), { ...H, skewSec: 1.5 }));
+  await assertFails(setDoc(doc(as('cash1'), 'devHealth/dBAD3'), { ...H, ua: 'x'.repeat(201) }));
+  await assertFails(getDoc(doc(as('rest1'), 'devHealth/dABC123')));
+  await assertFails(getDocs(collection(as('cash1'), 'devHealth')));
+  await assertSucceeds(getDocs(collection(as('admin1'), 'devHealth')));
+});
+
 // ── المنيو الأونلاين وطلبات QR والويتر ──
 const PM = { name: 'R1', on: true, modes: { table: true, pickup: true, delivery: true }, fee: 1000, tables: 10, cats: [{ cat: 'برغر', items: [{ name: 'زنكر', variants: [{ name: 'وحدة', price: 5000 }] }] }], updatedAtMs: 1 };
 const WEB = (o = {}) => ({ restaurantId: 'R1', source: 'qr', mode: 'pickup', items: [{ name: 'زنكر', variant: 'وحدة', qty: 2 }], customer: 'علي', phone: '07701234567', status: 'new', total: 10000, createdAtMs: Date.now(), day: '2026-10-08', ...o });
@@ -882,6 +895,43 @@ test('شاشة المطبخ: تطلع رمز، صاحب المطعم يربطه�
   await assertFails(deleteDoc(doc(as('rest2'), 'screens/scrA')));
   await assertSucceeds(deleteDoc(doc(as('rest1'), 'screens/scrA')));
   await assertFails(getDoc(doc(S, 'orders/K1')), 'unlinked');
+});
+
+test('شاشة طلبك جاهز: تنربط برمز، تشوف طلبات مطعمها بس وما تغيّر شي، وصاحب المطعم يختار كاشيريتها', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const f = ctx.firestore();
+    await setDoc(doc(f, 'restaurants/R1'), { name: 'R1', userId: 'rest1', active: true, expiryMs: Date.now() + DAY });
+    await setDoc(doc(f, 'orders/RD1'), { restaurantId: 'R1', status: 'preparing', kitchen: 'new', value: 5000, byUid: 'cash1' });
+    await setDoc(doc(f, 'orders/RD2'), { restaurantId: 'R2', status: 'preparing', kitchen: 'new', value: 5000 });
+    await setDoc(doc(f, 'restaurants/R1/lan/key'), { key: 'k' });
+  });
+  const T = as('tvA');
+  await assertSucceeds(setDoc(doc(T, 'screenPairs/TV12AB'), { uid: 'tvA', atMs: Date.now(), platform: 'Android • شاشة طلبك جاهز', kind: 'ready' }));
+  const scr = { restaurantId: 'R1', code: 'TV12AB', kind: 'ready', name: 'الطابق الأول', pairedBy: 'owner', approved: false, atMs: Date.now() };
+  await assertFails(setDoc(doc(as('rest1'), 'screens/tvA'), { ...scr, cashiers: Array.from({ length: 31 }, (_, i) => 'c' + i) }), 'at most 30 cashiers');
+  await assertSucceeds(setDoc(doc(as('rest1'), 'screens/tvA'), scr));
+  await assertSucceeds(getDoc(doc(T, 'orders/RD1')));
+  await assertFails(getDoc(doc(T, 'orders/RD2')), 'other restaurant');
+  await assertSucceeds(getDoc(doc(T, 'restaurants/R1/lan/key')), 'works on the wifi without internet');
+  await assertFails(updateDoc(doc(T, 'orders/RD1'), { kitchen: 'ready', kitchenReadyAt: 1 }), 'a customer-facing screen cannot mark ready');
+  await assertFails(updateDoc(doc(T, 'orders/RD1'), { status: 'cancelled' }));
+  // صاحب المطعم يختار كاشيرية الشاشة (مطعم بيه أكثر من صالة)، والشاشة نفسها ما تغيّرها
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'screens/tvA'), { cashiers: ['cash1'] }));
+  await assertFails(updateDoc(doc(as('rest1'), 'screens/tvA'), { cashiers: 'cash1' }), 'must be a list');
+  await assertFails(updateDoc(doc(T, 'screens/tvA'), { cashiers: [] }));
+  await assertFails(updateDoc(doc(as('cash1'), 'screens/tvA'), { cashiers: [] }));
+  // وشنو تعرض (سفري/صالة/دلفري)
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'screens/tvA'), { types: ['takeaway', 'salon'] }));
+  await assertFails(updateDoc(doc(as('rest1'), 'screens/tvA'), { types: ['takeaway', 'pizza'] }), 'only known types');
+  await assertFails(updateDoc(doc(T, 'screens/tvA'), { types: [] }));
+  // شكل الشاشة وعددها وشعار المطعم: البرج بس يغيّرهن، والشاشة تقرا الشعار
+  await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'restaurants/R1/theme/logo'), { data: 'data:image/png;base64,AAAA' }); });
+  await assertSucceeds(getDoc(doc(T, 'restaurants/R1/theme/logo')));
+  await assertFails(updateDoc(doc(as('rest1'), 'restaurants/R1'), { screenTheme: { design: 'board' } }), 'owner cannot pick the screen look');
+  await assertFails(updateDoc(doc(as('rest1'), 'restaurants/R1'), { screenMax: 9 }), 'owner cannot raise the screen limit');
+  await assertFails(setDoc(doc(as('rest1'), 'restaurants/R1/theme/logo'), { data: 'data:image/png;base64,BBBB' }), 'owner cannot change the logo here');
+  await assertSucceeds(updateDoc(doc(as('admin1'), 'restaurants/R1'), { screenTheme: { design: 'board', c1: '#16130E', c2: '#FFC94A' }, screenMax: 3 }));
+  await assertSucceeds(setDoc(doc(as('admin1'), 'restaurants/R1/theme/logo'), { data: 'data:image/png;base64,CCCC' }));
 });
 
 test('خدمات المطعم: صاحب المطعم يوقف خدمة شغّلها البرج (svcOff) ويرجّعها — وما يكدر يشغّل خدمة البرج طافيها', async () => {
