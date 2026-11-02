@@ -272,21 +272,26 @@ test('delivery: address required → kitchen first → when ready the cashier pi
   await c.context().close();
 });
 
-test('auto mode: table orders go straight to the kitchen on the cashier device (no tap)', async () => {
+test('code orders always go through the cashier first — no «straight to the kitchen» option any more (even an old saved one)', async () => {
   await openOnlineSettings(cashier);
-  await cashier.check('#stOnAuto');
-  await cashier.click('button >> text=حفظ الإعدادات');
-  await until(async () => (await read('publicMenus/RQ')).autoTable === true);
+  assert.equal(await cashier.locator('#stOnAuto').count(), 0, 'the auto option is gone');
+  // مطعم كان مشغّل الخيار القديم
+  await write('publicMenus/RQ', { autoTable: true });
+  const st = await read('restaurants/RQ/settings/main');
+  await write('restaurants/RQ/settings/main', { online: { ...(st.online || {}), autoTable: true } });
   const c = await page(B, { w: 390, h: 844 });
   await c.goto(MENU + '&t=2');
   await c.waitForSelector('.it');
   await c.click('[data-add="1:0"]'); await c.click('#barBtn'); await c.waitForSelector('#cartSh.on');
   await c.click('#cSend');
-  const w = await until(async () => (await list('webOrders', 'restaurantId', 'RQ')).find((x) => x.table === '2'));
+  const w = await until(async () => (await list('webOrders', 'restaurantId', 'RQ')).find((x) => x.table === '2' && x.status === 'new'));
+  await cashier.waitForSelector('#webBox .web-card:has-text("طاولة 2")', { timeout: 10000 });
+  await cashier.waitForTimeout(1500);
+  assert.equal((await list('orders', 'restaurantId', 'RQ')).filter((x) => x.webId === w.id).length, 0, 'nothing reaches the kitchen before the cashier accepts');
+  await cashier.click('#webBox .web-card:has-text("طاولة 2") .call-go');
   const o = await until(async () => (await list('orders', 'restaurantId', 'RQ')).find((x) => x.webId === w.id));
   assert.equal(o.tableNo, 2);
   await c.waitForFunction(() => document.querySelector('#stView h2') && document.querySelector('#stView h2').textContent.includes('يتحضر'));
-  assert.equal(await cashier.locator('#webBox .web-card').count(), 0);
   await c.context().close();
 });
 
