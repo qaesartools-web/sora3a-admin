@@ -145,6 +145,7 @@ html.sb-on .hdr{justify-content:flex-end}
 .scr-pr .btn-sm{background:var(--panel2);color:var(--text)}
 /* شاشة طلبك جاهز: أي كاشيرية تطلع طلباتهم عليها (مطعم بيه أكثر من صالة) */
 .scr-cash{margin-top:5px;font-size:12px}.scr-cash summary{cursor:pointer;color:var(--accent);font-weight:700}
+.scr-types{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:6px;font-size:12px}.scr-types span{color:var(--muted);font-weight:700}.scr-types label{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
 .scr-cash label{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:12.5px}.scr-cash small{margin-top:3px}
 .scr-sv{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px;font-weight:700}
 .scr-sv small{color:var(--muted);font-weight:600;font-size:12px}
@@ -1504,7 +1505,7 @@ function odHTML(o){
   ].filter(Boolean);
   const tl=Array.isArray(o.timeline)?o.timeline:[];
   return`<div class="od-h"><span class="od-id">#${esc(o.id.substring(0,6).toUpperCase())}</span><span class="od-big">${OD_TYPE[d.type]||esc(d.type)}${num?' — '+esc(num):''}</span><span class="badge ${o.status==='cancelled'?'b-cancelled':o.status==='delivered'?'b-delivered':'b-accepted'}">${OD_ST[o.status]||esc(o.status||'')}</span></div>
-    ${o.status==='cancelled'?`<div class="od-warn">❌ ملغي${o.cancelReason?' — '+esc(o.cancelReason):''}${o.cancelNote?' — '+esc(o.cancelNote):''}${o.cancelledBy?' (من '+esc(o.cancelledBy)+')':''}</div>`:''}
+    ${o.status==='cancelled'?`<div class="od-warn">❌ ملغي${o.cancelReason?' — '+esc(o.cancelReason):''}${o.cancelNote?' — '+esc(o.cancelNote):''}${o.cancelledByName?`<br>👤 ألغاه: <b>${esc(o.cancelledByName)}</b>${o.cancelledByEmail?' — <bdi>'+esc(o.cancelledByEmail)+'</bdi>':''}`:o.cancelledBy?' (من '+esc(o.cancelledBy)+')':''}</div>`:''}
     <dl class="od-kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
     <div class="od-sec">🍽️ الأصناف (${toA(d.items.reduce((s,i)=>s+i.qty,0))})</div>
     ${d.items.length?`<div class="od-items">${d.items.map(i=>`<div class="od-it"><span class="od-q">${toA(i.qty)}×</span><span class="od-n"><b>${esc(i.name)}${vr(i)}</b>${i.price?`<small>${fmt(i.price)} د.ع للواحد</small>`:''}${i.note?`<span class="od-note">📝 ${esc(i.note)}</span>`:''}</span><span class="od-p">${i.price?fmt(i.price*i.qty):''}</span></div>`).join('')}</div>`:'<div style="color:var(--muted);font-size:13px">ما مسجّل أصناف لهذا الطلب</div>'}
@@ -3358,7 +3359,7 @@ function scrPairedRender(){
   el.innerHTML=lim+scrPairList.slice().sort((a,b)=>(b.atMs||0)-(a.atMs||0)).map(x=>{
     const pend=x.approved!==true&&devOn;
     const sel=(x.cashiers||[]).filter(u=>scrCashList.some(c=>c.id===u)),cn=u=>(scrCashList.find(c=>c.id===u)||{}).name||'';
-    const cash=x.kind!=='ready'?'':`<details class="scr-cash" data-cash="${esc(x.id)}" ${scrCashOpen===x.id?'open':''} ontoggle="scrCashOpen=this.open?'${esc(x.id)}':(scrCashOpen==='${esc(x.id)}'?'':scrCashOpen)"><summary>🧾 تعرض طلبات: ${sel.length?esc(sel.map(cn).join('، ')):'كل الكاشيرية'}</summary>${scrCashList.length?scrCashList.map(c=>`<label><input type="checkbox" data-cu="${esc(c.id)}" ${sel.includes(c.id)?'checked':''} onchange="scrCash('${esc(x.id)}','${esc(c.id)}',this.checked)"> ${esc(c.name)}</label>`).join(''):'<small>ماكو حسابات كاشير بعد</small>'}<small>بدون اختيار = كل الكاشيرية. إذا المطعم بيه أكثر من صالة، كل شاشة تختار كاشير صالتها.</small></details>`;
+    const cash=x.kind!=='ready'?'':`<details class="scr-cash" data-cash="${esc(x.id)}" ${scrCashOpen===x.id?'open':''} ontoggle="scrCashOpen=this.open?'${esc(x.id)}':(scrCashOpen==='${esc(x.id)}'?'':scrCashOpen)"><summary>🧾 تعرض طلبات: ${sel.length?esc(sel.map(cn).join('، ')):'كل الكاشيرية'}</summary>${scrCashList.length?scrCashList.map(c=>`<label><input type="checkbox" data-cu="${esc(c.id)}" ${sel.includes(c.id)?'checked':''} onchange="scrCash('${esc(x.id)}','${esc(c.id)}',this.checked)"> ${esc(c.name)}</label>`).join(''):'<small>ماكو حسابات كاشير بعد</small>'}<small>بدون اختيار = كل الكاشيرية. إذا المطعم بيه أكثر من صالة، كل شاشة تختار كاشير صالتها.</small></details>`+`<div class="scr-types" data-types="${esc(x.id)}"><span>📋 تعرض:</span>${[['takeaway','🥡 سفري'],['salon','🪑 صالة'],['delivery','🏍️ دلفري']].map(([k,l])=>`<label><input type="checkbox" data-ty="${k}" ${!(x.types||[]).length||(x.types||[]).includes(k)?'checked':''} onchange="scrType('${esc(x.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>`;
     return `<div class="scr-pr" data-paired="${esc(x.id)}"><div style="font-size:21px">${x.kind==='kitchenSec'?'🔥':x.kind==='waiter'?'🧑‍🍳':x.kind==='ready'?'📺':'👨‍🍳'}</div><div style="flex:1;min-width:0"><b>${esc(x.name||'شاشة')}</b><small>${esc(x.platform||'')}${x.platform?' • ':''}<span class="scr-st">${pend?'⏳ تنتظر اعتماد إدارة سرعة':'✅ شغّالة'}</span>${x.pairedBy==='hq'?' • ربطتها إدارة سرعة':''}</small>${cash}</div>${pend&&isAdmin()?`<button type="button" class="btn-sm" onclick="scrApprove('${esc(x.id)}')">✅ اعتماد</button>`:''}<button type="button" class="btn-sm" onclick="scrUnlink('${esc(x.id)}')">🔌 فصل</button></div>`;
   }).join('');
 }
@@ -3391,6 +3392,14 @@ window.scrCash=async function(id,uid,on){
   const x=scrPairList.find(y=>y.id===id);if(!x)return;
   const cur=new Set((x.cashiers||[]).filter(u=>scrCashList.some(c=>c.id===u)));if(on)cur.add(uid);else cur.delete(uid);
   try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'screens',id),{cashiers:[...cur].slice(0,30)});audit('screen.cashiers',{screen:id,n:cur.size});toast(cur.size?'✅ الشاشة تعرض طلبات الكاشيرية المختارين بس':'✅ الشاشة تعرض طلبات كل الكاشيرية');}
+  catch(e){toast('❌ تعذّر الحفظ','error');}
+};
+window.scrType=async function(id,k,on){
+  const x=scrPairList.find(y=>y.id===id);if(!x)return;
+  const all=['takeaway','salon','delivery'],cur=new Set((x.types||[]).length?x.types:all);if(on)cur.add(k);else cur.delete(k);
+  if(!cur.size){toast('⚠️ اختار نوع واحد على الأقل','warn');scrPairedRender();return;}
+  const v=all.filter(t=>cur.has(t)),save=v.length===3?[]:v;
+  try{await window._fb.updateDoc(window._fb.doc(window._fb.db,'screens',id),{types:save});audit('screen.types',{screen:id,types:save.join(',')});toast(save.length?'✅ الشاشة تعرض: '+save.map(t=>({takeaway:'سفري',salon:'صالة',delivery:'دلفري'})[t]).join('، '):'✅ الشاشة تعرض كل الطلبات');}
   catch(e){toast('❌ تعذّر الحفظ','error');}
 };
 window.scrUnlink=async function(id){

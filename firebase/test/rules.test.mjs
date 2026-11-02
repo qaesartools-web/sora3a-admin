@@ -920,6 +920,10 @@ test('شاشة طلبك جاهز: تنربط برمز، تشوف طلبات مط
   await assertFails(updateDoc(doc(as('rest1'), 'screens/tvA'), { cashiers: 'cash1' }), 'must be a list');
   await assertFails(updateDoc(doc(T, 'screens/tvA'), { cashiers: [] }));
   await assertFails(updateDoc(doc(as('cash1'), 'screens/tvA'), { cashiers: [] }));
+  // وشنو تعرض (سفري/صالة/دلفري)
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'screens/tvA'), { types: ['takeaway', 'salon'] }));
+  await assertFails(updateDoc(doc(as('rest1'), 'screens/tvA'), { types: ['takeaway', 'pizza'] }), 'only known types');
+  await assertFails(updateDoc(doc(T, 'screens/tvA'), { types: [] }));
   // شكل الشاشة وعددها وشعار المطعم: البرج بس يغيّرهن، والشاشة تقرا الشعار
   await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), 'restaurants/R1/theme/logo'), { data: 'data:image/png;base64,AAAA' }); });
   await assertSucceeds(getDoc(doc(T, 'restaurants/R1/theme/logo')));

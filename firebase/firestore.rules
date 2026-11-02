@@ -315,8 +315,11 @@ service cloud.firestore {
             && request.resource.data.get('pairedBy', '') == 'owner'));
       allow update: if hqScr()
         // صاحب المطعم: اسم الشاشة، وكاشيرية شاشة «طلبك جاهز» (أي كاشيرية تطلع طلباتهم عليها)
-        || (ownsRest(resource.data.restaurantId) && onlyChanged(['name', 'cashiers']) && optStr(request.resource.data, 'name', 60)
-            && (!('cashiers' in request.resource.data) || (request.resource.data.cashiers is list && request.resource.data.cashiers.size() <= 30)));
+        //  و«شنو تعرض»: سفري/صالة/دلفري (فارغ = الكل)
+        || (ownsRest(resource.data.restaurantId) && onlyChanged(['name', 'cashiers', 'types']) && optStr(request.resource.data, 'name', 60)
+            && (!('cashiers' in request.resource.data) || (request.resource.data.cashiers is list && request.resource.data.cashiers.size() <= 30))
+            && (!('types' in request.resource.data) || (request.resource.data.types is list && request.resource.data.types.size() <= 3
+                && request.resource.data.types.hasOnly(['takeaway', 'salon', 'delivery']))));
       allow delete: if hqScr() || ownsRest(resource.data.restaurantId) || (signedIn() && request.auth.uid == uid);
     }
     // ── screenPairs/{الرمز}: الشاشة غير المربوطة تطلع رمز (المعرّف) — اللي يعرف الرمز بس يكدر يربطها ──

@@ -1199,3 +1199,30 @@ test('welcome screen on every entry: the cashier login and a linked screen greet
   await s.waitForSelector('.sb-welcome', { state: 'detached', timeout: 3000 });
   await p.context().close(); await s.context().close();
 });
+
+test('who cancelled an order: the cashier name and email are saved and shown in the order details and timeline (cashier and admin panel)', async () => {
+  const now = Date.now();
+  await put('users/' + U.waiter, { role: 'cashier', restaurantId: 'RW', email: 'waiter@x.com', name: 'علي ضياء', perms: { cancel: true } });
+  await put('orders/CN1', { restaurantId: 'RW', status: 'preparing', held: true, orderType: 'takeaway', ticketNo: 77, value: 6000, day: bagDay(now), createdAt: '20:00', createdAtMs: now - 60000, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1, price: 6000 }] });
+  const c = await page(B, { w: 1280, h: 860 });
+  await c.goto(BASE + 'index.html');
+  await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await c.fill('#inEmail', 'waiter@x.com'); await c.fill('#inPass', 'secret123'); await c.click('#loginBtn');
+  await c.waitForFunction(() => typeof window.ordCancel === 'function' && typeof orders !== 'undefined' && orders.some((o) => o.id === 'CN1'), null, { timeout: 20000 });
+  await c.evaluate(() => window.ordCancel('CN1'));
+  await c.waitForSelector('#acDlgOk', { state: 'visible', timeout: 8000 });
+  await c.click('#acDlgOk');
+  const o = await until(async () => { const x = await read('orders/CN1'); return x.status === 'cancelled' ? x : null; });
+  assert.equal(o.cancelledByName, 'علي ضياء'); assert.equal(o.cancelledByEmail, 'waiter@x.com'); assert.equal(o.cancelledByUid, U.waiter);
+  assert.match(o.timeline[o.timeline.length - 1].text, /بواسطة علي ضياء \(waiter@x\.com\)/);
+  // لوحة الإدارة: تفاصيل الطلب تبين منو ألغاه
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.goto('http://localhost:5050/sora3a-admin/index.html');
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await a.fill('#lEmail', 'scr@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#appPage', { state: 'visible', timeout: 15000 });
+  await a.waitForFunction(() => typeof odHTML === 'function', null, { timeout: 10000 });
+  const html = await a.evaluate((x) => odHTML({ id: 'CN1', ...x }), o);
+  assert.match(html, /ألغاه: <b>علي ضياء<\/b> — <bdi>waiter@x\.com<\/bdi>/);
+  await c.context().close(); await a.context().close();
+});
