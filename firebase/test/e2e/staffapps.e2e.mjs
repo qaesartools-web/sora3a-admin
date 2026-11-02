@@ -1239,3 +1239,43 @@ test('who cancelled an order: the cashier name and email are saved and shown in 
   for (const w of ['علي ضياء', 'waiter@x.com', 'الطلبات', 'الأصناف', 'مراحل الطلب', 'سبب الإلغاء']) assert.ok(xml.includes(w), 'excel has ' + w);
   await c.context().close(); await a.context().close();
 });
+
+test('warehouse app (إدارة المخزن) is an on/off service: ON → the storekeeper device (linked by code) has stock, recipes and suppliers and the cashier loses them; OFF → they come back to the cashier', async () => {
+  await write('restaurants/RW', { features: { store: true }, svcOff: {} });
+  // جهاز أمين المخزن: رمز ← ربط ← يفتح المخزون بس
+  const st = await page(B, { w: 1100, h: 800 });
+  const sc = await pairScreen(st, BASE + 'index.html?store=1', { name: 'أبو حيدر' });
+  assert.equal(sc.pair.kind, 'store');
+  await st.waitForSelector('#appPage.show', { timeout: 20000 });
+  await st.waitForFunction(() => /إدارة المخزن/.test(document.getElementById('restName').textContent), null, { timeout: 15000 });
+  await st.waitForSelector('#acTabs .mtab', { timeout: 15000 });
+  const tabs = await st.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
+  assert.deepEqual(tabs.filter((x) => !/رجوع/.test(x)), ['📦 المخزون', '🧾 الوصفات والتكلفة', '🏭 الموردين']);
+  assert.equal(await st.isVisible('.bnav .nb[data-tab="cashier"]'), false, 'no cashier screens on the storekeeper device');
+  // يضيف مادة ← تنحفظ بحسابات المطعم
+  await st.evaluate(() => window.matNew());
+  await st.waitForSelector('#acf_name', { timeout: 8000 });
+  await st.fill('#acf_name', 'لحم برغر'); await st.fill('#acf_qty', '12'); await st.fill('#acf_cost', '9000');
+  await st.click('#acDlgOk');
+  const accd = await until(async () => { const d = await read('accounting/RW'); return d && (d.materials || []).some((m) => m.name === 'لحم برغر') ? d : null; });
+  assert.equal(accd.materials.find((m) => m.name === 'لحم برغر').qty, 12);
+  assert.equal(await st.isVisible('#storeGate'), false, 'the link screen goes away after linking');
+  assert.ok(await st.isVisible('#accScreen'), 'stock screen is visible');
+  await st.screenshot({ path: 'shots/store-app.png' });
+  // الكاشير: المخزون والوصفات والموردين انشالوا منه (المصروفات وديون الزبائن تبقى)
+  const c = await page(B, { w: 1280, h: 860 });
+  await posLogin(c);
+  await c.evaluate(() => goTab('acc'));
+  await c.waitForSelector('#acTabs .mtab', { timeout: 15000 });
+  let ct = await c.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()).join('|'));
+  assert.ok(!/المخزون|الوصفات|الموردين/.test(ct), 'cashier: ' + ct); assert.match(ct, /المصروفات/);
+  assert.match(await c.textContent('#acBody'), /صاروا بتطبيق «إدارة المخزن»/);
+  // تنطفي الخدمة ← يرجعون للكاشير
+  await write('restaurants/RW', { features: { store: false } });
+  await c.waitForFunction(() => !window.storeSvcOn(), null, { timeout: 15000 });
+  await c.evaluate(() => renderAcc());
+  ct = await c.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()).join('|'));
+  assert.match(ct, /المخزون/); assert.match(ct, /الموردين/);
+  assert.deepEqual(clean(st).filter((e) => !/permission|insufficient/i.test(e)), []);
+  await st.context().close(); await c.context().close();
+});

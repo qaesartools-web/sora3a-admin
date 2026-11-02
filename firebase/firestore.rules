@@ -103,6 +103,8 @@ service cloud.firestore {
     //  الجهاز معتمد لمطعمه + الجلسة هي نفس تسجيل الدخول الحالي (auth_time) — فالدخول من جهاز ثاني أو من البيت ينرفض،
     //  ونفس الحساب ما يشتغل بجهازين بنفس الوقت (آخر دخول يفوز).
     function devicesOn(rid) { return restDoc(rid).get('features', {}).get('devices', false) == true; }
+    // خدمة شغّلها البرج وما طفّاها صاحب المطعم
+    function featOn(rid, k) { return restDoc(rid).get('features', {}).get(k, false) == true && restDoc(rid).get('svcOff', {}).get(k, false) != true; }
     function devApproved(rid, key) { return exists(/databases/$(database)/documents/restaurants/$(rid)/devices/$(key)); }
     // ── شاشات المطبخ وتلفونات الويتر المربوطة برمز (بدون إيميل ولا كلمة سر) ──
     //  الشاشة تدخل «مجهول» (Anonymous) وتطلع رمز ← screenPairs/{الرمز} = {uid}. البرج أو صاحب المطعم (لوحة الإدارة) يكتب الرمز
@@ -114,10 +116,12 @@ service cloud.firestore {
         && (get(scrPath()).data.get('approved', false) == true || !devicesOn(rid));
     }
     //  نوع الجهاز المربوط: شاشة مطبخ (المجهز/الأقسام) تشوف الطلبات وتعلّم «جاهز»، وتلفون الويتر يشوف المنيو ويرسل طلبات الطاولات
-    function kitchenScreenOf(rid) { return screenOf(rid) && !(get(scrPath()).data.get('kind', '') in ['waiter', 'ready']); }
+    function kitchenScreenOf(rid) { return screenOf(rid) && !(get(scrPath()).data.get('kind', '') in ['waiter', 'ready', 'store']); }
     function waiterScreenOf(rid) { return screenOf(rid) && get(scrPath()).data.get('kind', '') == 'waiter'; }
     //  شاشة «طلبك جاهز» قدام الزبائن: تشوف طلبات مطعمها بس (ما تعلّم «جاهز» ولا تغيّر شي)
     function readyScreenOf(rid) { return screenOf(rid) && get(scrPath()).data.get('kind', '') == 'ready'; }
+    //  تطبيق «إدارة المخزن» (جهاز أمين المخزن، مربوط برمز): المخزون والوصفات والموردين لمطعمه بس — إذا خدمة المخزن شغّالة
+    function storeOf(rid) { return screenOf(rid) && get(scrPath()).data.get('kind', '') == 'store' && featOn(rid, 'store'); }
     function deviceOk() {
       let sp = /databases/$(database)/documents/sessions/$(request.auth.uid);
       return !devicesOn(myRest())
@@ -248,7 +252,8 @@ service cloud.firestore {
           || (coll != 'devices' && (staffOf(rid) || (isCaptain() && me().restaurantId == rid && coll != 'lan')))
           || (coll in ['settings', 'theme'] && screenOf(rid))
           || (coll == 'lan' && (kitchenScreenOf(rid) || waiterScreenOf(rid) || readyScreenOf(rid)))
-          || (coll in ['menu', 'menuImages'] && waiterScreenOf(rid));
+          || (coll in ['menu', 'menuImages'] && waiterScreenOf(rid))
+          || (coll == 'menu' && storeOf(rid));
         //  theme (شعار المطعم بشاشة «طلبك جاهز»): يحطه البرج بس
         allow write: if isAdmin() || hqEdit('rests') || (coll == 'devices' && hqEdit('devices'))
           || (!(coll in ['devices', 'theme']) && (ownsRest(rid)
@@ -470,8 +475,8 @@ service cloud.firestore {
     // ── accounting (مخزون وحسابات المطعم) ─────────────────────
     match /accounting/{rid} {
       // الكاشير يحتاجها لخصم المواد عند كل بيع (عرضها بالواجهة حسب صلاحية inventory)
-      allow read: if isOffice() || staffOf(rid);
-      allow write: if isAdmin() || ownsRest(rid)
+      allow read: if isOffice() || staffOf(rid) || storeOf(rid);
+      allow write: if isAdmin() || ownsRest(rid) || storeOf(rid)
         // الكاشير: لا يحذف مواد، ولا يغيّر الوصفات والتكاليف أو المصروفات القديمة
         || (cashierOf(rid) && (resource == null || (
               request.resource.data.get('expenses', []) == resource.data.get('expenses', [])
@@ -496,13 +501,13 @@ service cloud.firestore {
 
       // الموردين: الكاشير يضيف مورد؛ التعديل والحذف للمطعم والإدارة
       match /suppliers/{sid} {
-        allow read: if isOffice() || staffOf(rid);
-        allow create: if (isAdmin() || staffOf(rid))
+        allow read: if isOffice() || staffOf(rid) || storeOf(rid);
+        allow create: if (isAdmin() || staffOf(rid) || storeOf(rid))
           && request.resource.data.keys().hasOnly(['name','phone','note','by','byUid','createdAtMs'])
           && str(request.resource.data.name, 60) && request.resource.data.name.size() > 0
           && optStr(request.resource.data, 'phone', 20) && optStr(request.resource.data, 'note', 200) && optStr(request.resource.data, 'by', 60)
           && request.resource.data.byUid == request.auth.uid && request.resource.data.createdAtMs is int;
-        allow update: if (isAdmin() || ownsRest(rid))
+        allow update: if (isAdmin() || ownsRest(rid) || storeOf(rid))
           && request.resource.data.keys().hasOnly(['name','phone','note','by','byUid','createdAtMs','editedBy','editedAtMs'])
           && str(request.resource.data.name, 60) && request.resource.data.name.size() > 0;
         allow delete: if isAdmin() || ownsRest(rid);
@@ -521,8 +526,8 @@ service cloud.firestore {
             && optStr(d, 'phone', 20) && optStr(d, 'cat', 40) && optStr(d, 'note', 300) && optStr(d, 'orderId', 60) && optStr(d, 'ref', 80)
             && optStr(d, 'shiftId', 60) && optStr(d, 'by', 60) && d.ts is int;
         }
-        allow read: if isOffice() || staffOf(rid);
-        allow create: if (isAdmin() || staffOf(rid)) && ledgerOk(request.resource.data)
+        allow read: if isOffice() || staffOf(rid) || storeOf(rid);
+        allow create: if (isAdmin() || staffOf(rid) || (storeOf(rid) && request.resource.data.kind == 'sup')) && ledgerOk(request.resource.data)
           && request.resource.data.byUid == request.auth.uid && !('editedBy' in request.resource.data);
         allow update: if (isAdmin() || ownsRest(rid)) && ledgerOk(request.resource.data)
           && request.resource.data.kind == resource.data.kind && request.resource.data.byUid == resource.data.byUid;

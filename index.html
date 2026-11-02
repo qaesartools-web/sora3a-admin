@@ -914,11 +914,11 @@ const isStaff=()=>currentUser?.role==='staff';
 const canManage=()=>isAdmin()||isRest();
 // خدمات المطعم: يفتحها ويغلقها المدير الأعلى فقط (الافتراضي مفعّلة)
 // العنصر الثالث = مطفية افتراضياً (تشتغل بس إذا شغّلها المدير الأعلى)
-const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 الباركود والمنيو الأونلاين'],['screen','📺 شاشة طلبك جاهز'],['waiter','🧑‍🍳 تطبيق الويتر'],['kitchen','👨‍🍳 شاشة المجهز (مطبخ منفصل)',1],['kitchenSec','🔥 شاشة المطبخ (الأقسام)',1],['printTest','🧪 تجربة الطابعات (محاكي)',1],['devices','🔐 أجهزة معتمدة فقط',1]];
+const SERVICES=[['captain','🛵 الكابتن والدلفري'],['calls','📞 اتصال الشريحة'],['whatsapp','💬 مكالمات واتساب'],['pager','📟 البيجر'],['online','📱 الباركود والمنيو الأونلاين'],['screen','📺 شاشة طلبك جاهز'],['waiter','🧑‍🍳 تطبيق الويتر'],['kitchen','👨‍🍳 شاشة المجهز (مطبخ منفصل)',1],['kitchenSec','🔥 شاشة المطبخ (الأقسام)',1],['store','📦 إدارة المخزن (تطبيق أمين المخزن)',1],['printTest','🧪 تجربة الطابعات (محاكي)',1],['devices','🔐 أجهزة معتمدة فقط',1]];
 const OFF_DEFAULT=new Set(SERVICES.filter(x=>x[2]).map(x=>x[0]));
 const featBase=(r,k)=>OFF_DEFAULT.has(k)?!!(r&&r.features&&r.features[k]===true):(!r||!r.features||r.features[k]!==false);
 // صاحب المطعم يكدر يوقف (ويرجّع) بس الخدمات اللي شغّلها البرج: restaurants.svcOff — مو «الأجهزة المعتمدة» ولا التجربة ولا شاشة طلبك جاهز
-const OWNER_SVC=['captain','calls','whatsapp','pager','online','waiter','kitchen','kitchenSec'];
+const OWNER_SVC=['captain','calls','whatsapp','pager','online','waiter','kitchen','kitchenSec','store'];
 const ownerOff=(r,k)=>OWNER_SVC.includes(k)&&!!(r&&r.svcOff&&r.svcOff[k]===true);
 const featOf=(r,k)=>featBase(r,k)&&!ownerOff(r,k);
 let myRestDoc=null;
@@ -3316,6 +3316,7 @@ function scrItems(rid,r){
     {id:'cashier',ic:'🧾',t:'الكاشير',d:'برنامج الكاشير من المتصفح — وإله تطبيق أندرويد وويندوز بقسم التطبيقات.',url:SCR_R2,inst:1},
     {id:'kitchen',ic:'👨‍🍳',t:'شاشة المجهز — يجمّع ويتمم',d:'يوصلها الطلب بعد ما يخلص المطبخ (ولو شاشة المطبخ مطفية يوصلها مباشرة): المجهز يجمّعه ويغلّفه ويضغط «تم التجهيز» ← الصالة والسفري يطلعون «جاهز» بشاشة طلبك جاهز، والدلفري يرجع لكاشيره حتى يختار الكابتن.',url:k,feat:'kitchen',inst:1},
     {id:'kitchenSec',ic:'🔥',t:'شاشة المطبخ (الأقسام) — تطبخ',d:'أول شاشة يوصلها طلب الكاشير. نفس الرابط لكل أجهزة المطبخ: كل جهاز يختار قسمه ('+(secs.length?secs.map(x=>x.name).join('، '):'ماكو أقسام بعد — ضيفها من الكاشير ← الإعدادات ← «أقسام المطبخ والطابعات»')+') وتطلعله أصنافه بس، و«جاهز» يعلّم قسمه — ولما تخلص كل الأقسام الطلب يروح لشاشة المجهز.'+(secs.length&&!scrCfg.secOn?' ⚠️ شغّل «تقسيم الطلب على أقسام المطبخ» من الكاشير ← الإعدادات.':''),url:k+'?sec',feat:'kitchenSec',inst:1},
+    {id:'store',ic:'📦',t:'إدارة المخزن — أمين المخزن',d:'المخزون والوصفات والموردين على تابلت أو تلفون أمين المخزن. ينربط برمز (بدون إيميل) من «ربط جهاز» فوق. لما الخدمة شغّالة تنشال هذي الأقسام من الكاشير، ولما تنطفي ترجع للكاشير.',url:SCR_R2+'index.html?store=1',feat:'store',inst:1},
     {id:'waiter',ic:'🧑‍🍳',t:'الويتر',d:'الويتر يطلب من الطاولة بالتلفون، والطلب ينطبع بالمطبخ مباشرة. التلفون ينربط برمز (بدون إيميل) من «ربط جهاز» فوق.',url:SCR_R2+'waiter.html',feat:'waiter',inst:1},
     {id:'captain',ic:'🛵',t:'الكابتن (للآيفون أو أي تلفون)',d:'تطبيق الكابتن من المتصفح — وإله تطبيق أندرويد تحت.',url:SCR_CAP+'captain.html',feat:'captain',inst:1},
     {id:'menu',ic:'📱',t:'منيو الباركود',d:'الزبون يفتحه ويطلب — اطبع QR الطاولات من الكاشير.',url:SCR_R2+'menu.html?r='+encodeURIComponent(rid),feat:'online'},
@@ -3406,7 +3407,7 @@ function scrPairedRender(){
     const pend=x.approved!==true&&devOn;
     const sel=(x.cashiers||[]).filter(u=>scrCashList.some(c=>c.id===u)),cn=u=>(scrCashList.find(c=>c.id===u)||{}).name||'';
     const cash=x.kind!=='ready'?'':`<details class="scr-cash" data-cash="${esc(x.id)}" ${scrCashOpen===x.id?'open':''} ontoggle="scrCashOpen=this.open?'${esc(x.id)}':(scrCashOpen==='${esc(x.id)}'?'':scrCashOpen)"><summary>🧾 تعرض طلبات: ${sel.length?esc(sel.map(cn).join('، ')):'كل الكاشيرية'}</summary>${scrCashList.length?scrCashList.map(c=>`<label><input type="checkbox" data-cu="${esc(c.id)}" ${sel.includes(c.id)?'checked':''} onchange="scrCash('${esc(x.id)}','${esc(c.id)}',this.checked)"> ${esc(c.name)}</label>`).join(''):'<small>ماكو حسابات كاشير بعد</small>'}<small>بدون اختيار = كل الكاشيرية. إذا المطعم بيه أكثر من صالة، كل شاشة تختار كاشير صالتها.</small></details>`+`<div class="scr-types" data-types="${esc(x.id)}"><span>📋 تعرض:</span>${[['takeaway','🥡 سفري'],['salon','🪑 صالة'],['delivery','🏍️ دلفري']].map(([k,l])=>`<label><input type="checkbox" data-ty="${k}" ${!(x.types||[]).length||(x.types||[]).includes(k)?'checked':''} onchange="scrType('${esc(x.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>`;
-    return `<div class="scr-pr" data-paired="${esc(x.id)}"><div style="font-size:21px">${x.kind==='kitchenSec'?'🔥':x.kind==='waiter'?'🧑‍🍳':x.kind==='ready'?'📺':'👨‍🍳'}</div><div style="flex:1;min-width:0"><b>${esc(x.name||'شاشة')}</b><small>${esc(x.platform||'')}${x.platform?' • ':''}<span class="scr-st">${pend?'⏳ تنتظر اعتماد إدارة سرعة':'✅ شغّالة'}</span>${x.pairedBy==='hq'?' • ربطتها إدارة سرعة':''}</small>${cash}</div>${pend&&isAdmin()?`<button type="button" class="btn-sm" onclick="scrApprove('${esc(x.id)}')">✅ اعتماد</button>`:''}<button type="button" class="btn-sm" onclick="scrUnlink('${esc(x.id)}')">🔌 فصل</button></div>`;
+    return `<div class="scr-pr" data-paired="${esc(x.id)}"><div style="font-size:21px">${x.kind==='kitchenSec'?'🔥':x.kind==='waiter'?'🧑‍🍳':x.kind==='ready'?'📺':x.kind==='store'?'📦':'👨‍🍳'}</div><div style="flex:1;min-width:0"><b>${esc(x.name||'شاشة')}</b><small>${esc(x.platform||'')}${x.platform?' • ':''}<span class="scr-st">${pend?'⏳ تنتظر اعتماد إدارة سرعة':'✅ شغّالة'}</span>${x.pairedBy==='hq'?' • ربطتها إدارة سرعة':''}</small>${cash}</div>${pend&&isAdmin()?`<button type="button" class="btn-sm" onclick="scrApprove('${esc(x.id)}')">✅ اعتماد</button>`:''}<button type="button" class="btn-sm" onclick="scrUnlink('${esc(x.id)}')">🔌 فصل</button></div>`;
   }).join('');
 }
 window.scrPair=async function(){
@@ -3424,7 +3425,7 @@ window.scrPair=async function(){
     // عدد شاشات «طلبك جاهز» لكل مطعم يحدده البرج (screenMax)
     const max=+((r&&r.screenMax)||0),nReady=scrPairList.filter(x=>x.kind==='ready').length;
     if(pd.kind==='ready'&&max>0&&nReady>=max&&!hq){toast(`⛔ وصلت حد شاشات «طلبك جاهز» (${max}) — للزيادة تواصل ويا إدارة سرعة`,'warn');return;}
-    const name=(ni.value||'').trim()||(pd.kind==='kitchenSec'?'شاشة المطبخ':pd.kind==='waiter'?'ويتر':pd.kind==='ready'?'شاشة طلبك جاهز':'شاشة المجهز');
+    const name=(ni.value||'').trim()||(pd.kind==='kitchenSec'?'شاشة المطبخ':pd.kind==='waiter'?'ويتر':pd.kind==='ready'?'شاشة طلبك جاهز':pd.kind==='store'?'أمين المخزن':'شاشة المجهز');
     await fb.setDoc(fb.doc(fb.db,'screens',pd.uid),{restaurantId:rid,restName:String((r&&r.name)||'').slice(0,80),code,kind:String(pd.kind||'').slice(0,20),
       platform:String(pd.platform||'').slice(0,80),name:name.slice(0,60),pairedBy:hq?'hq':'owner',approved:hq,atMs:Date.now(),by:String(currentUser.email||'').slice(0,120)});
     audit('screen.pair',{restaurantId:rid,screen:pd.uid,name});
