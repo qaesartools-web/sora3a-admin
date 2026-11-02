@@ -1046,6 +1046,22 @@ test('Tower picks the ready screen look per restaurant: design + 2 colours + log
     await new Promise((r) => setTimeout(r, 900));   // الخط والحركة
     await p.screenshot({ path: `shots/ready-theme-${design}.png` });
   }
+  // شعار المطعم بخلفية «جاهز»: البرج يشغّله ويحدد وضوحه وحجمه — والأرقام تطلع فوقه
+  await write('restaurants/RW', { screenTheme: { design: 'classic', c1: '#7c3aed', c2: '#0ea5e9', wm: { on: true, op: 0.25, size: 'l' } } });
+  await p.waitForSelector('#wm:not([hidden]) i', { timeout: 10000 });
+  const wm = await p.evaluate(() => {
+    const im = document.querySelector('#wm i'), n = document.querySelector('#ready .n'), r = n.getBoundingClientRect();
+    const a = im.getBoundingClientRect(), col = document.querySelector('.col.ready').getBoundingClientRect();
+    const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return { op: getComputedStyle(im).opacity, cls: document.getElementById('wm').className, wide: a.width / col.width, bg: /url\(/.test(im.style.backgroundImage), numOnTop: n.contains(top) };
+  });
+  assert.equal(wm.op, '0.25'); assert.match(wm.cls, /\bl\b/); assert.ok(wm.wide > 0.8, 'large'); assert.ok(wm.bg); assert.ok(wm.numOnTop, 'numbers show on top of the logo');
+  await p.screenshot({ path: 'shots/ready-logo-watermark.png' });
+  await write('restaurants/RW', { 'screenTheme.wm.op': 1, 'screenTheme.wm.size': 's' });
+  await p.waitForFunction(() => getComputedStyle(document.querySelector('#wm i')).opacity === '1' && /\bs\b/.test(document.getElementById('wm').className), null, { timeout: 10000 });
+  await write('restaurants/RW', { 'screenTheme.wm.on': false });
+  await p.waitForSelector('#wm', { state: 'hidden', timeout: 10000 });
+  assert.equal(await p.evaluate(() => document.documentElement.classList.contains('wm-on')), false);
   // لون كل جزء بروحه: خلفية ذهبية، أرقام «جاهز» بيضاء، وكتابة الشاشة الفارغة حمرة
   await write('restaurants/RW', { screenTheme: { design: 'board', c1: '#16130e', c2: '#ffc94a', x: { bg: '#d4af37', readyNumFg: '#ffffff', emptyFg: '#ff0000', bad: '#123456', prepFg: 'red' } } });
   await p.waitForFunction(() => document.documentElement.classList.contains('xs-bg'), null, { timeout: 10000 });
