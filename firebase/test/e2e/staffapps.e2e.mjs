@@ -1301,6 +1301,8 @@ test('a device that still has an OLD copy of brand.js (no welcome/health) still 
 
 test('cashier main screen: «جاهز للزبون» strip — tap a number = served, «سلّم الكل» clears the rest; the ready screen hides a number by itself after the minutes set in settings; big order number with the code under it; easy edit (tap an item to add)', async () => {
   const now = Date.now(), today = bagDay();
+  // طلبات الاختبارات السابقة: تنسلّم حتى ما تطلع بالشريط
+  for (const o of await list('orders', 'restaurantId', 'RW')) if (!o.servedAtMs) await write('orders/' + o.id, { servedAtMs: now - 1000 });
   const base = { restaurantId: 'RW', status: 'delivered', value: 6000, day: today, createdAtMs: now - 5 * 60000, payment: { method: 'cash', cash: 6000, card: 0 }, orderType: 'takeaway' };
   await put('orders/R1', { ...base, kitchen: 'ready', kitchenReadyAt: now - 60000, ticketNo: 71, items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1, price: 6000 }] });
   await put('orders/R2', { ...base, kitchen: 'ready', kitchenReadyAt: now - 50000, ticketNo: 72 });
