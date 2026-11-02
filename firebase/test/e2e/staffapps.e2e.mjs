@@ -1094,7 +1094,7 @@ test('old TV browsers (no clamp/min/max/env/gap): the Sora3a bar stays thin on e
   const { readFileSync } = await import('node:fs');
   for (const [url, w, h] of [['screen.html', 960, 540], ['kitchen.html', 1280, 720], ['index.html', 1280, 800], ['waiter.html', 400, 800]]) {
     const p = await page(B, { w, h });
-    await p.route('**/sora3a-rest2/brand.css', (r) => r.fulfill({ contentType: 'text/css', body: oldCss(readFileSync(new URL('../../../../sora3a-rest2/brand.css', import.meta.url), 'utf8')) }));
+    await p.route('**/sora3a-rest2/brand.css*', (r) => r.fulfill({ contentType: 'text/css', body: oldCss(readFileSync(new URL('../../../../sora3a-rest2/brand.css', import.meta.url), 'utf8')) }));
     await p.goto(BASE + url);
     await p.waitForSelector('.sb-bar', { timeout: 15000 });
     await p.waitForTimeout(600);
@@ -1280,4 +1280,21 @@ test('warehouse app (إدارة المخزن) is an on/off service: ON → the s
   assert.match(ct, /المخزون/); assert.match(ct, /الموردين/);
   assert.deepEqual(clean(st).filter((e) => !/permission|insufficient/i.test(e)), []);
   await st.context().close(); await c.context().close();
+});
+
+test('a device that still has an OLD copy of brand.js (no welcome/health) still logs into the admin panel and the cashier — it once signed the owner out silently', async () => {
+  const { readFileSync } = await import('node:fs');
+  const oldBrand = (repo) => readFileSync(new URL(`../../../../${repo}/brand.js`, import.meta.url), 'utf8').replace(' welcome: welcome,', '').replace(' health: health,', '');
+  const a = await page(B, { w: 1280, h: 900 });
+  await a.route('**/sora3a-admin/brand.js*', (r) => r.fulfill({ contentType: 'text/javascript', body: oldBrand('sora3a-admin') }));
+  await a.goto('http://localhost:5050/sora3a-admin/index.html');
+  await a.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  assert.equal(await a.evaluate(() => typeof (window.SB && window.SB.health)), 'undefined', 'old brand.js loaded');
+  await a.fill('#lEmail', 'scr@x.com'); await a.fill('#lPass', 'secret123'); await a.click('#lBtn');
+  await a.waitForSelector('#appPage', { state: 'visible', timeout: 15000 });
+  const c = await page(B, { w: 1280, h: 860 });
+  await c.route('**/sora3a-rest2/brand.js*', (r) => r.fulfill({ contentType: 'text/javascript', body: oldBrand('sora3a-rest2') }));
+  await posLogin(c);
+  assert.ok(await c.isVisible('#prods'), 'cashier opened');
+  await a.context().close(); await c.context().close();
 });

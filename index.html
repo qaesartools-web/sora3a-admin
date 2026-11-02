@@ -12,7 +12,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>سرعة — الإدارة</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="brand.css">
+<link rel="stylesheet" href="brand.css?v=2">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.js" integrity="sha384-G436+Z2nlA8+PNoeRvWdxKbvOf8E/y+lYxqht2iBwNHTQDV5CJr3+AGVj8fGZi5t" crossorigin="anonymous"></script>
 <style>
 :root{
@@ -437,7 +437,7 @@ body.staff-mode .staff-banner{display:block;}
   <div class="sp-sub">لوحة الإدارة المتقدمة</div>
   <div class="sp-bar"><div class="sp-bar-fill"></div></div>
 </div>
-<script src="brand.js"></script>
+<script src="brand.js?v=2"></script>
 <script>window.SB && SB.mount('admin')</script>
 
 <button id="installBtn" onclick="doInstall()">📲 تثبيت التطبيق</button>
@@ -1017,7 +1017,7 @@ window.addEventListener('fbReady',()=>{
           currentUser.restaurantName=restData.name;
         }
         enterApp();
-      }catch(e){console.error(e);await fb.signOut(fb.auth);}
+      }catch(e){console.error(e);await fb.signOut(fb.auth);showErr('⚠️ ما كمل الدخول ('+String((e&&(e.code||e.message))||e).slice(0,80)+') — حدّث الصفحة وجرّب مرة ثانية');}
     }else{
       currentUser=null;restData=null;
       unsubs.forEach(u=>u&&u());unsubs=[];
@@ -1070,8 +1070,8 @@ function enterApp(){
   document.getElementById('hdrName').textContent=currentUser.restaurantName||currentUser.name||currentUser.email;
   document.getElementById('hdrRole').className='hdr-role '+(isAdmin()?'role-admin':isStaff()?'role-staff':'role-rest');
   document.getElementById('hdrRole').textContent=isAdmin()?'👑 إدارة عليا':isStaff()?'👥 موظف':'🍽️ مطعم';
-  if(window.SB&&window._fb)SB.health((hid,hd)=>window._fb.setDoc(window._fb.doc(window._fb.db,'devHealth',hid),hd),{rid:currentUser.restaurantId||'',rest:currentUser.restaurantName||'',who:currentUser.name||''});   // صحة الجهاز
-  if(window.SB)SB.welcome({app:'admin',name:currentUser.name||'',rest:currentUser.restaurantName||'',role:isAdmin()?'لوحة الإدارة — الإدارة العليا':isStaff()?'لوحة الإدارة — موظف':'لوحة الإدارة'});
+  if(window.SB&&SB.health&&window._fb)SB.health((hid,hd)=>window._fb.setDoc(window._fb.doc(window._fb.db,'devHealth',hid),hd),{rid:currentUser.restaurantId||'',rest:currentUser.restaurantName||'',who:currentUser.name||''});   // صحة الجهاز
+  if(window.SB&&SB.welcome)SB.welcome({app:'admin',name:currentUser.name||'',rest:currentUser.restaurantName||'',role:isAdmin()?'لوحة الإدارة — الإدارة العليا':isStaff()?'لوحة الإدارة — موظف':'لوحة الإدارة'});
   document.body.classList.toggle('rest-mode',isRest());
   document.body.classList.toggle('staff-mode',isStaff());
   buildNavs();
