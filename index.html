@@ -273,6 +273,9 @@ html.sb-on .hdr{justify-content:flex-end}
 body.rest-mode .rest-banner{display:block;}
 body.rest-mode .admin-only{display:none!important;}
 body:not(.rest-mode) #mcOwnerNote{display:none;}
+/* البرج سمح للمطعم يضيف كاشيرية بنفسه (cashSelf) */
+body.rest-mode.cash-self #mcAddBox{display:block!important;}
+body.rest-mode.cash-self #mcOwnerNote,body.rest-mode #mcFor{display:none!important;}
 .ord-ctl{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}.ord-ctl .form-sel{flex:1;min-width:140px;}
 .ord-wait{text-align:center;color:var(--muted);font-weight:700;}
 .idx-warn{border-color:rgba(217,119,6,.55);background:rgba(217,119,6,.07);}
@@ -3505,9 +3508,14 @@ function mrPickFirst(){
   try{sel.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
   sel.classList.add('pick-me');setTimeout(()=>sel.classList.remove('pick-me'),2500);setTimeout(()=>{try{sel.focus();}catch(e){}},400);
 }
+// صاحب المطعم يضيف كاشيرية بنفسه — إذا البرج مشغّلها له (restaurants/{rid}.cashSelf)
+let mcSelf=false;
+const mcCan=()=>isAdmin()||(isRest()&&mcSelf);
+function mcSelfUi(){document.body.classList.toggle('cash-self',isRest()&&mcSelf);if(mcLast.length)mcRender(mcLast,true);}
 window.mrLoad=function(){
   mrUnsubs.forEach(u=>u&&u());mrUnsubs=[];
   mrRid=mrRestId();
+  mcSelf=false;mcSelfUi();
   mcForLabel();
   mlVisibility();
   devReqsR=[];devApprR=[];devSessR=[];devRender();
@@ -3517,6 +3525,7 @@ window.mrLoad=function(){
     mcRender(s.docs.map(d=>({id:d.id,...d.data()})));
   },e=>{document.getElementById('mcList').innerHTML='<div style="color:var(--red);font-size:12px">تعذّر التحميل — تأكد من نشر قواعد الحماية الجديدة</div>';}));
   mrUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',mrRid,'loyalty','main'),s=>{lyFill(s.exists()?s.data():{});},()=>{}));
+  if(isRest())mrUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',mrRid),s=>{const v=!!(s.exists()&&s.data().cashSelf===true);if(v!==mcSelf){mcSelf=v;mcSelfUi();}},()=>{}));
   mrUnsubs.push(fb.onSnapshot(fb.query(fb.collection(fb.db,'lineTokens'),fb.where('restaurantId','==',mrRid)),s=>{
     mlRender(s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(+a.line||0)-(+b.line||0)));
   },e=>{document.getElementById('mlList').innerHTML='<div style="color:var(--red);font-size:12px">تعذّر التحميل — تأكد من نشر قواعد الحماية الجديدة</div>';}));
@@ -3723,7 +3732,7 @@ function mcRender(list,noLines){
   el.innerHTML=list.map(u=>{const p=u.perms||{};return `<div class="entity">
     <div class="entity-head"><div class="entity-icon">🧾</div>
       <div style="flex:1"><div class="entity-name">${esc(u.name||u.email)} ${u.disabled?'<span class="sub-badge sub-expired">موقوف</span>':''}</div><div class="entity-sub">📧 ${esc(u.email||'')} • ⏰ ${u.hours?esc(hm12(u.hours.from)+' ← '+hm12(u.hours.to)):'بدون تحديد وقت'}${mcExtOn(u)?` • <b style="color:#4f6bed">⏳ ممدد لغاية ${esc(hm12((Math.floor(u.hoursExt.untilMs/60000)+180)%1440))}</b>`:''}</div></div>
-      ${isAdmin()?`<button class="btn-sm ${u.disabled?'btn-cap':'btn-edit'}" onclick="mcToggle('${esc(u.id)}',${u.disabled?'false':'true'})">${u.disabled?'تفعيل':'⏸️ إيقاف'}</button>
+      ${mcCan()?`<button class="btn-sm ${u.disabled?'btn-cap':'btn-edit'}" onclick="mcToggle('${esc(u.id)}',${u.disabled?'false':'true'})">${u.disabled?'تفعيل':'⏸️ إيقاف'}</button>
       <button class="btn-sm btn-del" onclick="mcDel('${esc(u.id)}')">🗑️</button>`:''}</div>
     <div class="perm-row">${PERMS.map(([k,l])=>`<label><input type="checkbox" ${p[k]?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`).join('')}</div>
     ${ordPermRow(p,(k,l,c)=>`<label><input type="checkbox" data-op="${k}" ${c?'checked':''} onchange="mcPerm('${esc(u.id)}','${k}',this.checked)"> ${l}</label>`)}
@@ -3738,7 +3747,7 @@ function mcRender(list,noLines){
 }
 // إضافة الكاشيرية وإيقافهم وحذفهم: المدير الأعلى فقط (خدمة يتحكم بيها لكل مطعم)
 window.mcAdd=async function(){
-  if(!isAdmin()){toast('🔐 إضافة الكاشيرية من إدارة سرعة فقط','warn');return;}
+  if(!mcCan()){toast('🔐 إضافة الكاشيرية من إدارة سرعة فقط','warn');return;}
   const rid=mrRestId();if(!rid){mrPickFirst();return;}
   const name=document.getElementById('mcName').value.trim(),email=document.getElementById('mcEmail').value.trim().toLowerCase(),pass=document.getElementById('mcPass').value;
   if(!name||!email||!pass){toast('⚠️ أدخل الاسم والإيميل وكلمة المرور','warn');return;}

@@ -47,6 +47,10 @@ service cloud.firestore {
     function myRest() { return me().restaurantId; }
     // الفروع: صاحب المطعم يدير مطعمه + الفروع اللي يربطها له المدير الأعلى (users.branches)
     //  كل فرع مطعم مستقل (منيو، طلبات، كاشيرية، كباتن، اشتراك) — والصلاحية لكل فرع حسب اشتراكه
+    // البرج يسمح للمطعم يضيف كاشيرية بنفسه (خدمة لكل مطعم)
+    function cashSelfOn(rid) {
+      return rid is string && rid != '' && get(/databases/$(database)/documents/restaurants/$(rid)).data.get('cashSelf', false) == true;
+    }
     function ownsRest(rid) {
       return active() && role() == 'restaurant' && rid is string && rid != ''
         && (me().get('restaurantId', '') == rid || rid in me().get('branches', []))
@@ -178,12 +182,17 @@ service cloud.firestore {
 
       allow create, update, delete: if isAdmin();
 
-      // فريق المالك: حسابات المطاعم والكاشيرية بس — ما يمسون حسابات الإدارة أو الفريق أو الكباتن
+      // فريق المالك: حسابات المطاعم والكاشيرية — والكباتن (البرج يضيف كابتن للمطعم) — ما يمسون حسابات الإدارة أو الفريق
       allow create: if (hqEdit('rests') && request.resource.data.get('role', '') in ['restaurant', 'cashier'])
-        || (hqEdit('trials') && request.resource.data.get('role', '') == 'restaurant');
-      allow update: if hqEdit('rests') && resource.data.get('role', '') in ['restaurant', 'cashier']
-        && request.resource.data.get('role', '') == resource.data.get('role', '');
-      allow delete: if hqEdit('rests') && resource.data.get('role', '') in ['restaurant', 'cashier'];
+        || (hqEdit('trials') && request.resource.data.get('role', '') == 'restaurant')
+        || (hqEdit('rests') && request.resource.data.get('role', '') == 'captain'
+            && str(request.resource.data.get('restaurantId', ''), 64) && request.resource.data.restaurantId != ''
+            && str(request.resource.data.get('captainId', ''), 64)
+            && request.resource.data.keys().hasOnly(['email','role','name','restaurantId','captainId','createdAtMs']));
+      allow update: if (hqEdit('rests') && resource.data.get('role', '') in ['restaurant', 'cashier']
+        && request.resource.data.get('role', '') == resource.data.get('role', ''))
+        || (hqEdit('rests') && resource.data.get('role', '') == 'captain' && onlyChanged(['name','email','disabled']));
+      allow delete: if hqEdit('rests') && resource.data.get('role', '') in ['restaurant', 'cashier', 'captain'];
 
       // المطعم ينشئ حسابات الكباتن التابعين له فقط
       allow create: if ownsRest(request.resource.data.restaurantId)
@@ -196,9 +205,20 @@ service cloud.firestore {
       allow delete: if ownsRest(resource.data.restaurantId)
         && resource.data.role == 'captain';
 
-      // حسابات الكاشيرية: الإضافة والإيقاف والحذف للمدير الأعلى فقط (isAdmin فوق)
-      // صاحب المطعم يشوفهم ويحدد صلاحياتهم ودوامهم بس
+      // حسابات الكاشيرية: الإضافة والإيقاف والحذف للمدير الأعلى وفريق البرج (فوق)
+      // صاحب المطعم يشوفهم ويحدد صلاحياتهم ودوامهم — ويضيفهم ويوقفهم ويحذفهم بنفسه إذا البرج سمحله (restaurants/{rid}.cashSelf)
       allow read: if ownsRest(resource.data.restaurantId) && resource.data.role == 'cashier';
+      allow create: if ownsRest(request.resource.data.get('restaurantId', ''))
+        && request.resource.data.role == 'cashier'
+        && cashSelfOn(request.resource.data.restaurantId)
+        && request.resource.data.keys().hasOnly(['email','role','name','restaurantId','perms','hours','createdAtMs'])
+        && str(request.resource.data.get('name', ''), 60) && str(request.resource.data.get('email', ''), 120)
+        && request.resource.data.get('perms', {}) is map
+        && validHours(request.resource.data);
+      allow update: if ownsRest(resource.data.restaurantId) && resource.data.role == 'cashier'
+        && cashSelfOn(resource.data.restaurantId) && onlyChanged(['disabled']) && request.resource.data.disabled is bool;
+      allow delete: if ownsRest(resource.data.restaurantId) && resource.data.role == 'cashier'
+        && cashSelfOn(resource.data.restaurantId);
       allow update: if ownsRest(resource.data.restaurantId)
         && resource.data.role == 'cashier'
         && request.resource.data.get('perms', {}) is map
@@ -239,7 +259,7 @@ service cloud.firestore {
         // المطعم لا يستطيع تعديل الاشتراك أو التفعيل أو ربط الحساب
         //  وشكل شاشة «طلبك جاهز» (screenTheme) وعدد شاشاتها (screenMax) يختارهن البرج بس
         || (ownsRest(rid) && !changed().hasAny(
-             ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs','features','screenTheme','screenMax']));
+             ['active','expiry','expiryMs','subscription','userId','email','createdAt','createdAtMs','features','screenTheme','screenMax','cashSelf']));
 
       // المنيو والإعدادات المتزامنة بين أجهزة المطعم
       //  (ملاحظة: {coll}/{d=**} وليس {sub=**} — الأخير يطابق مستند المطعم نفسه)
@@ -343,14 +363,14 @@ service cloud.firestore {
       allow read: if isOffice() || hqView('rests')
         || (staffOf(resource.data.restaurantId))
         || (isCaptain() && cid == myCap());
-      allow create: if isAdmin()
+      allow create: if isAdmin() || hqEdit('rests')
         || (ownsRest(request.resource.data.restaurantId));
-      allow update: if isAdmin()
+      allow update: if isAdmin() || hqEdit('rests')
         || (ownsRest(resource.data.restaurantId)
             && request.resource.data.restaurantId == resource.data.restaurantId)
         // الكابتن يغيّر حالة التوفر فقط
         || (isCaptain() && cid == myCap() && onlyChanged(['available','lastSeenMs']));
-      allow delete: if isAdmin() || (ownsRest(resource.data.restaurantId));
+      allow delete: if isAdmin() || hqEdit('rests') || (ownsRest(resource.data.restaurantId));
     }
 
     // ── captainLocations ────────────────────────────────────

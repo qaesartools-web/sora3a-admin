@@ -1052,3 +1052,44 @@ test('شاشة المطبخ: آخر قسم يعلّم kitchenSecDoneAt (رقم) 
   await assertFails(updateDoc(doc(S, 'orders/OK1'), { kitchenSecDoneAt: 'x' }), 'must be a number');
   await assertFails(updateDoc(doc(S, 'orders/OK1'), { kitchenSecDoneAt: 1, value: 1 }), 'cannot touch the price');
 });
+
+// ── البرج يضيف كابتن للمطعم، والمطعم يضيف كاشيرية بنفسه إذا البرج سمحله ──
+test('البرج: فريق المطاعم (تعديل) يضيف كابتن للمطعم ويوقفه ويحذفه — والمشاهدة بس ما تكدر، وما يصير مدير', async () => {
+  await seedHq();
+  const h2 = hqAs('hq2'), h1 = hqAs('hq1');
+  const capUser = { email: 'k@x.com', role: 'captain', name: 'كرار', restaurantId: 'R1', captainId: 'CNEW', createdAtMs: 1 };
+  await assertSucceeds(setDoc(doc(h2, 'captains/CNEW'), { restaurantId: 'R1', userId: 'capNew', name: 'كرار', phone: '0770', email: 'k@x.com', available: true, createdAtMs: 1 }));
+  await assertSucceeds(setDoc(doc(h2, 'users/capNew'), capUser));
+  await assertFails(setDoc(doc(h1, 'users/capNew2'), { ...capUser, captainId: 'C77' }), 'view-only member');
+  await assertFails(setDoc(doc(h1, 'captains/C77'), { restaurantId: 'R1', userId: 'x', name: 'x' }), 'view-only member');
+  await assertFails(setDoc(doc(h2, 'users/capBad'), { ...capUser, role: 'admin' }), 'no admin accounts');
+  await assertFails(setDoc(doc(h2, 'users/capBad2'), { ...capUser, perms: { all: true } }), 'only the captain fields');
+  await assertSucceeds(updateDoc(doc(h2, 'users/capNew'), { disabled: true }));
+  await assertFails(updateDoc(doc(h2, 'users/capNew'), { role: 'restaurant' }), 'cannot change role');
+  await assertSucceeds(updateDoc(doc(h2, 'captains/CNEW'), { available: false }));
+  await assertSucceeds(deleteDoc(doc(h2, 'users/capNew')));
+  await assertSucceeds(deleteDoc(doc(h2, 'captains/CNEW')));
+});
+
+test('المطعم يضيف كاشير بنفسه بس إذا البرج شغّلها (cashSelf) — ويوقفه ويحذفه؛ وما يكدر يشغّلها لنفسه', async () => {
+  const r = as('rest1');
+  const cash = { email: 'c@x.com', role: 'cashier', name: 'علي', restaurantId: 'R1', perms: { discount: true }, createdAtMs: 1 };
+  await assertFails(setDoc(doc(r, 'users/cashNew'), cash), 'off by default');
+  await assertFails(updateDoc(doc(r, 'restaurants/R1'), { cashSelf: true }), 'owner cannot switch it on');
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'restaurants/R1'), { cashSelf: true }); });
+  await assertSucceeds(setDoc(doc(r, 'users/cashNew'), cash));
+  await assertSucceeds(setDoc(doc(r, 'users/cashNew2'), { ...cash, hours: { from: 600, to: 1080 } }));
+  await assertFails(setDoc(doc(r, 'users/cashBad'), { ...cash, role: 'restaurant' }), 'only cashiers');
+  await assertFails(setDoc(doc(r, 'users/cashBad2'), { ...cash, restaurantId: 'R2' }), 'only its own restaurant');
+  await assertFails(setDoc(doc(r, 'users/cashBad3'), { ...cash, branches: ['R2'] }), 'only the cashier fields');
+  await assertFails(setDoc(doc(as('rest2'), 'users/cashBad4'), { ...cash, restaurantId: 'R2' }), 'R2 is not allowed');
+  await assertSucceeds(updateDoc(doc(r, 'users/cashNew'), { disabled: true }));
+  await assertFails(updateDoc(doc(r, 'users/cashNew'), { role: 'admin' }));
+  await assertSucceeds(deleteDoc(doc(r, 'users/cashNew')));
+  // البرج يطفيها ← ترجع للبرج بس
+  await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), 'restaurants/R1'), { cashSelf: false }); });
+  await assertFails(updateDoc(doc(r, 'users/cashNew2'), { disabled: true }));
+  await assertFails(deleteDoc(doc(r, 'users/cashNew2')));
+  // صلاحيات ودوام الكاشير يبقى يحددها صاحب المطعم مثل قبل
+  await assertSucceeds(updateDoc(doc(r, 'users/cashNew2'), { perms: { discount: false } }));
+});

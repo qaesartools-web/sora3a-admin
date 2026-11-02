@@ -596,3 +596,38 @@ test('two cashiers at the same time (delivery + hall): each opens and closes the
   assert.deepEqual(clean(a), []); assert.deepEqual(clean(b), []);
   await a.context().close(); await b.context().close();
 });
+
+test('the Tower lets a restaurant add its own cashiers (cashSelf): the owner adds, stops and deletes them from the admin app; off again → only Sora management', async () => {
+  const o = await page(B, { w: 1280, h: 800 });
+  o.on('dialog', (d) => d.accept().catch(() => {}));
+  await adminLogin(o, 'owner@x.com');
+  await o.click('.dnav-btn[data-screen="scMyRest"]');
+  await o.waitForSelector('#mcOwnerNote', { state: 'visible' });
+  assert.equal(await o.isVisible('#mcAddBox'), false);
+  // البرج يشغّلها ← تطلع خانة الإضافة فوراً (بدون اختيار مطعم)
+  await write('restaurants/RC', { cashSelf: true });
+  await o.waitForSelector('#mcAddBox', { state: 'visible', timeout: 10000 });
+  assert.equal(await o.isVisible('#mcOwnerNote'), false);
+  assert.equal(await o.isVisible('#mcFor'), false);
+  await o.fill('#mcName', 'زهراء'); await o.fill('#mcEmail', 'zahraa@x.com'); await o.fill('#mcPass', 'zahraa123');
+  await o.click('#mcAddBtn');
+  const z = await until(async () => (await all('users', 'role', 'cashier')).find((u) => u.email === 'zahraa@x.com'));
+  assert.ok(z, 'the owner added a cashier'); assert.equal(z.restaurantId, 'RC'); assert.equal(z.name, 'زهراء');
+  // تدخل للكاشير بحسابها
+  const r = await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=fake', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'zahraa@x.com', password: 'zahraa123', returnSecureToken: true }) });
+  assert.equal(r.status, 200);
+  // إيقاف وحذف من صاحب المطعم
+  const row = o.locator('#mcList .entity', { hasText: 'zahraa@x.com' });
+  await row.locator('button', { hasText: 'إيقاف' }).click();
+  await until(async () => (await read('users/' + z.id)).disabled === true);
+  await row.locator('.btn-del').click();
+  await until(async () => !(await all('users', 'role', 'cashier')).some((u) => u.id === z.id));
+  // البرج يطفيها ← ترجع الملاحظة، والسيرفر يرفض
+  await write('restaurants/RC', { cashSelf: false });
+  await o.waitForSelector('#mcOwnerNote', { state: 'visible', timeout: 10000 });
+  assert.equal(await o.isVisible('#mcAddBox'), false);
+  const denied = await o.evaluate(async () => { try { await window._fb.setDoc(window._fb.doc(window._fb.db, 'users', 'fakeCashier2'), { role: 'cashier', restaurantId: 'RC', email: 'f2@x.com', name: 'x', perms: {}, createdAtMs: 1 }); return false; } catch (e) { return e.code; } });
+  assert.equal(denied, 'permission-denied');
+  assert.deepEqual(clean(o), []);
+  await o.context().close();
+});
