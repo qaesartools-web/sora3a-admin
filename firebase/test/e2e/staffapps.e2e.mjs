@@ -1311,6 +1311,66 @@ test('warehouse app (إدارة المخزن) is an on/off service: ON → the s
   await st.context().close(); await c.context().close();
 });
 
+test('warehouse app works without internet: opens from its saved copy, stock changes stay on the device, and when the internet is back they merge with the cashier sales — nothing is lost', async () => {
+  await write('restaurants/RW', { features: { store: true }, svcOff: {} });
+  await put('accounting/RW', { materials: [{ id: 'MAT1', name: 'جبن', unit: 'كغم', qty: 20, cost: 5000, min: 2 }, { id: 'MAT2', name: 'خبز', unit: 'حبة', qty: 100, cost: 250, min: 10 }], recipes: {}, costs: {}, moves: [], expenses: [], updatedAt: 1 });
+  const st = await page(B, { w: 1100, h: 800 });
+  // «بدون نت» يبقى بعد إعادة الفتح (navigator.onLine = false)
+  await st.addInitScript(() => { if (sessionStorage.getItem('fakeOff') === '1') Object.defineProperty(Navigator.prototype, 'onLine', { get: () => false, configurable: true }); });
+  await pairScreen(st, BASE + 'index.html?store=1', { name: 'أبو حيدر' });
+  await st.waitForSelector('#appPage.show', { timeout: 20000 });
+  // المخزون كما بالجهاز (ينحفظ بالجهاز أول)
+  const loc = (id) => st.evaluate((id) => { try { return (JSON.parse(localStorage.getItem('pos_acc_RW')).materials.find((m) => m.id === id) || {}); } catch (e) { return {}; } }, id);
+  await st.waitForSelector('#acBody >> text=جبن', { timeout: 15000 });
+  assert.ok(await until(async () => (await loc('MAT1')).qty === 20, 10000));
+  await st.waitForTimeout(1500);   // الكاش المحلي ينحفظ
+  const OFF = /127\.0\.0\.1:(8080|9099)|localhost:(8080|9099)/;
+  // ── ينقطع النت
+  await st.context().route(OFF, (r) => r.abort('internetdisconnected'));
+  await st.evaluate(() => { sessionStorage.setItem('fakeOff', '1'); Object.defineProperty(Navigator.prototype, 'onLine', { get: () => false, configurable: true }); window.dispatchEvent(new Event('offline')); });
+  await st.waitForSelector('#storeNet:not([hidden])', { timeout: 5000 });
+  assert.match(await st.textContent('#storeNet'), /ماكو نت/);
+  // أمين المخزن يستلم ١٠ كغم جبن ويعدّل الحد الأدنى للخبز — بدون نت
+  await st.evaluate(() => window.matBuy('MAT1'));
+  await st.waitForSelector('#acf_qty'); await st.fill('#acf_qty', '10'); await st.fill('#acf_total', '50000'); await st.click('#acDlgOk');
+  await st.evaluate(() => window.matEdit('MAT2'));
+  await st.waitForSelector('#acf_min'); await st.fill('#acf_min', '25'); await st.click('#acDlgOk');
+  assert.ok(await until(async () => (await loc('MAT1')).qty === 30 && (await loc('MAT2')).min === 25, 5000), 'saved on the device');
+  // بنفس الوقت الكاشير (عنده نت) باع وسحب ٣ كغم جبن و٤ خبز
+  const srv = await read('accounting/RW');
+  srv.materials.find((m) => m.id === 'MAT1').qty = 17; srv.materials.find((m) => m.id === 'MAT2').qty = 96;
+  srv.moves = [{ id: 'MVSALE1', mid: 'MAT1', name: 'جبن', unit: 'كغم', type: 'sale', qty: -3, cost: 5000, value: -15000, ts: Date.now(), day: 'x', note: '' }];
+  await put('accounting/RW', srv);
+  // البرنامج انسد وانفتح وبعده ماكو نت: يفتح من النسخة المحفوظة وبيه التعديلات
+  await st.reload();
+  await st.waitForSelector('#appPage.show', { timeout: 30000 });
+  await st.waitForSelector('#acBody >> text=جبن', { timeout: 30000 });
+  assert.equal((await loc('MAT1')).qty, 30, 'the offline change is still there');
+  assert.equal(await st.isVisible('#storeGate'), false, 'no link code needed offline');
+  await st.waitForSelector('#storeNet:not([hidden])', { timeout: 5000 });
+  assert.match(await st.textContent('#acBody'), /جبن/);
+  await st.screenshot({ path: 'shots/store-offline.png' });
+  assert.equal((await read('accounting/RW')).materials.find((m) => m.id === 'MAT1').qty, 17, 'nothing reached the server yet');
+  // ── رجع النت: التعديلات تندمج ويا مبيعات الكاشير (٢٠ − ٣ + ١٠ = ٢٧)، والحد الأدنى الجديد يبقى
+  await st.context().unroute(OFF);
+  await st.evaluate(() => { sessionStorage.removeItem('fakeOff'); Object.defineProperty(Navigator.prototype, 'onLine', { get: () => true, configurable: true }); window.dispatchEvent(new Event('online')); });
+  const after = await until(async () => { const d = await read('accounting/RW'); const m = d.materials.find((x) => x.id === 'MAT1'); return m && m.qty === 27 ? d : null; }, 30000);
+  assert.ok(after, 'merged on the server');
+  assert.equal(after.materials.find((m) => m.id === 'MAT2').qty, 96, 'cashier sale kept');
+  assert.equal(after.materials.find((m) => m.id === 'MAT2').min, 25, 'warehouse edit kept');
+  assert.ok(after.moves.some((m) => m.id === 'MVSALE1'), 'cashier move kept');
+  assert.ok(after.moves.some((m) => m.type === 'purchase' && m.qty === 10), 'warehouse purchase kept');
+  assert.ok(await until(async () => (await loc('MAT1')).qty === 27, 10000), 'the device shows the merged stock');
+  await st.waitForSelector('#storeNet', { state: 'hidden', timeout: 10000 });
+  // بعدها بالنت: تعديل جديد يوصل مباشرة
+  await st.evaluate(() => window.matWaste('MAT1'));
+  await st.waitForSelector('#acf_qty'); await st.fill('#acf_qty', '2'); await st.click('#acDlgOk');
+  assert.ok(await until(async () => (await read('accounting/RW')).materials.find((m) => m.id === 'MAT1').qty === 25, 10000));
+  assert.deepEqual(clean(st).filter((e) => !/permission|insufficient|Could not reach Cloud Firestore backend|client is offline|internetdisconnected|ERR_INTERNET|acc sync|unavailable/i.test(e)), []);
+  await write('restaurants/RW', { features: { store: false } });
+  await st.context().close();
+});
+
 test('a device that still has an OLD copy of brand.js (no welcome/health) still logs into the admin panel and the cashier — it once signed the owner out silently', async () => {
   const { readFileSync } = await import('node:fs');
   const oldBrand = (repo) => readFileSync(new URL(`../../../../${repo}/brand.js`, import.meta.url), 'utf8').replace(' welcome: welcome,', '').replace(' health: health,', '');
