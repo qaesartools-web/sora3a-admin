@@ -339,6 +339,11 @@ body.staff-mode .staff-banner{display:block;}
 .perm-grid label,.perm-row label{display:flex!important;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:12px;font-weight:700;color:var(--text)!important;margin:0!important;cursor:pointer;}
 .perm-grid input,.perm-row input{width:16px;height:16px;accent-color:var(--accent);}
 .tm-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+/* يوم العمل (صاحب المطعم): وقت الفتح والإغلاق — الحسابات من الفتح للإغلاق حتى لو يعبر نص الليل */
+.biz-box{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:-4px 0 12px;padding:8px 12px;border:1px solid var(--line,#e5e7eb);border-radius:12px;font-size:13px}
+.biz-box label{display:flex;align-items:center;gap:6px}
+.biz-box .form-inp{width:auto;padding:5px 8px}
+.biz-box small{flex-basis:100%;color:var(--muted,#6b7280)}
 .tm-filters select{flex:1;min-width:140px;}
 .tm-kpi .stat-v{font-size:22px;}
 .tm-kpi .stat-s{font-size:11px;color:var(--muted);margin-top:2px;}
@@ -608,6 +613,10 @@ body.staff-mode .staff-banner{display:block;}
         <select class="form-sel" id="axRange" onchange="axRangeCh()"><option value="today" selected>اليوم</option><option value="yesterday">أمس</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يوم</option><option value="month">هذا الشهر</option><option value="custom">من تاريخ إلى تاريخ</option><option value="all">الكل</option></select>
         <input type="date" class="form-inp" id="axFrom" style="display:none;max-width:170px" onchange="accRender()"><input type="date" class="form-inp" id="axTo" style="display:none;max-width:170px" onchange="accRender()">
       </div>
+      <div class="biz-box" id="bizBox" hidden><b>🕐 يوم العمل</b>
+        <label>يفتح <input type="time" class="form-inp" id="bizOpen"></label><label>يسد <input type="time" class="form-inp" id="bizClose"></label>
+        <button type="button" class="btn-sm" id="bizSaveBtn" onclick="bizSave()">حفظ</button>
+        <small id="bizNote"></small></div>
       <div class="ax-tabs" id="axTabs"></div>
       <div id="axBody"></div>
     </div>
@@ -1072,6 +1081,7 @@ function enterApp(){
   if(window.SB&&SB.welcome)SB.welcome({app:'admin',name:currentUser.name||'',rest:currentUser.restaurantName||'',role:isAdmin()?'لوحة الإدارة — الإدارة العليا':isStaff()?'لوحة الإدارة — موظف':'لوحة الإدارة'});
   document.body.classList.toggle('rest-mode',isRest());
   document.body.classList.toggle('staff-mode',isStaff());
+  bizListen();   // يوم العمل (من الفتح للإغلاق) لمطعم صاحب الحساب
   buildNavs();
   startListeners();
   initBranches();
@@ -1169,8 +1179,8 @@ window.goTab=function(screenId,btn){
 const ymdLocal=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 function dateDefaults(fromId,toId){
   const f=document.getElementById(fromId),t=document.getElementById(toId);if(!f||!t)return;
-  if(!f.value)f.value=ymdLocal(isRest()?Date.now()-6*86400000:Date.now());
-  if(!t.value)t.value=ymdLocal(Date.now());
+  if(!f.value)f.value=isRest()?ymdLocal(dayOf(bizYmd())-6*86400000):bizYmd();
+  if(!t.value)t.value=bizYmd();
 }
 // ═══ الطلبات بلوحة الإدارة: ما ننزّل كل التاريخ ═══
 // مباشر — المدير: آخر ١٠٠ طلب بكل المطاعم + النشطة. صاحب المطعم: من بداية أمس + المفتوحة.
@@ -1179,7 +1189,48 @@ function dateDefaults(fromId,toId){
 const DAY=86400000,ORD_ACTIVE=['pending','accepted','pickup','delivering','preparing','ready'];
 let ordSets={},ordExpect=[],ordSince=0,ordIdxMissing=false,ordIdxLink='',ordUnsubs=[],ordTimer=0;
 const ordRanges=new Map();
-const dayStart=ms=>{const d=new Date(ms??Date.now());d.setHours(0,0,0,0);return d.getTime();};
+// يوم العمل (مبيعات اليوم والتقارير): من وقت فتح المطعم لوقت إغلاقه حتى لو يعبر نص الليل (مثلاً يسد ٢ بالليل)
+//  الأوقات من إعدادات المطعم (bizHours — يحددها صاحب المطعم من الحسابات هنا أو من إعدادات الكاشير)، وإذا ماكو: ساعات الدوام من برج سرعة
+//  اليوم الجديد يبدي بنص فترة الغلق. المدير الأعلى (كل المطاعم): نص الليل. أرقام الطلبات تبقى تتصفر ١٢ بالليل
+let bizHoursSet=null,bizUnsub=null;
+const okHM=h=>!!h&&[h.open,h.close].every(m=>Number.isInteger(m)&&m>=0&&m<1440)&&h.open!==h.close;
+const bizHoursNow=()=>okHM(bizHoursSet)?bizHoursSet:(restData&&restData.hours&&restData.hours.on&&okHM(restData.hours)?restData.hours:null);
+const bizCutMin=()=>{if(!isRest())return 0;const h=bizHoursNow();return !h||h.close>h.open?0:Math.round(h.close+(h.open-h.close)/2);};
+const dayStart=ms=>{const c=bizCutMin()*60000,d=new Date((ms??Date.now())-c);d.setHours(0,0,0,0);return d.getTime()+c;};
+const dayOf=v=>new Date(v+'T00:00:00').getTime()+bizCutMin()*60000;   // بداية يوم العمل لتاريخ (yyyy-mm-dd)
+const bizYmd=()=>ymdLocal(dayStart()-bizCutMin()*60000);             // تاريخ يوم العمل الحالي
+const hmS=m=>String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+const hmV=v=>{const x=/^(\d{1,2}):(\d{2})$/.exec(String(v||''));return x&&+x[1]<24&&+x[2]<60?+x[1]*60+ +x[2]:null;};
+function bizListen(){
+  if(bizUnsub){bizUnsub();bizUnsub=null;}
+  bizHoursSet=null;
+  if(!isRest()||!currentUser.restaurantId)return;
+  const fb=window._fb;
+  bizUnsub=fb.onSnapshot(fb.doc(fb.db,'restaurants',currentUser.restaurantId,'settings','main'),s=>{
+    const was=bizCutMin();bizHoursSet=(s.exists()&&s.data().bizHours)||null;bizUi();
+    if(was!==bizCutMin()){ordStart();if(document.getElementById('scDash')?.classList.contains('on'))renderDash();if(document.getElementById('scAcc')?.classList.contains('on'))accRender();}
+  },()=>{});
+}
+// خانة يوم العمل بالحسابات (صاحب المطعم)
+function bizUi(){
+  const el=document.getElementById('bizBox');if(!el)return;
+  el.hidden=!isRest();if(!isRest())return;
+  const h=bizHoursSet,o=document.getElementById('bizOpen'),c=document.getElementById('bizClose');
+  if(document.activeElement!==o&&document.activeElement!==c){o.value=okHM(h)?hmS(h.open):'';c.value=okHM(h)?hmS(h.close):'';}
+  const n=bizHoursNow();
+  document.getElementById('bizNote').textContent=!n?'بدون أوقات: اليوم من ١٢ بالليل لـ ١٢ بالليل'
+    :n.close>n.open?'اليوم من '+hmS(n.open)+' لـ '+hmS(n.close)+(okHM(h)?'':' (ساعات الدوام من برج سرعة)')
+    :'يعبر ١٢ بالليل: مبيعات لحد '+hmS(n.close)+' بالليل تنحسب على اليوم اللي قبله'+(okHM(h)?'':' (ساعات الدوام من برج سرعة)');
+}
+window.bizSave=async()=>{
+  if(!isRest())return;
+  const o=hmV(document.getElementById('bizOpen').value),c=hmV(document.getElementById('bizClose').value);
+  if((o==null)!==(c==null)||(o!=null&&o===c)){toast('⚠️ حدد وقت الفتح والإغلاق (مختلفين)، أو اتركهم فارغين','warn');return;}
+  const fb=window._fb,v=o==null?null:{open:o,close:c};
+  try{await fb.setDoc(fb.doc(fb.db,'restaurants',currentUser.restaurantId,'settings','main'),{bizHours:v,updatedAtMs:Date.now()},{merge:true});
+    audit('rest.bizHours',{v});toast(v?'✅ يوم العمل: '+hmS(o)+' ← '+hmS(c):'✅ يوم العمل من ١٢ بالليل');}
+  catch(e){toast('❌ ما انحفظ: '+(e.code||e.message),'warn');}
+};
 function ordRecalc(){
   const m=new Map();
   ordRanges.forEach(r=>{if(r.list)r.list.forEach(o=>m.set(o.id,o));});
@@ -1585,7 +1636,7 @@ function ordRangeMs(v){
   if(v==='7'||v==='30')return[d0-(+v-1)*DAY,Infinity];
   if(v==='custom'){   // من تاريخ إلى تاريخ (اليومين داخلين) — وإذا انعكسوا نقلبهم
     const a=document.getElementById('ordFrom').value,b=document.getElementById('ordTo').value;if(!a||!b)return null;
-    const [x,y]=a<=b?[a,b]:[b,a];return[new Date(x+'T00:00:00').getTime(),new Date(y+'T00:00:00').getTime()+DAY];
+    const [x,y]=a<=b?[a,b]:[b,a];return[dayOf(x),dayOf(y)+DAY];
   }
   return null;
 }
@@ -1672,8 +1723,8 @@ window.renderCapStats=function(force){
   dateDefaults('capFrom','capTo');
   const from=document.getElementById('capFrom')?.value;
   const to=document.getElementById('capTo')?.value;
-  const start=from?new Date(from+'T00:00:00').getTime():0;
-  const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
+  const start=from?dayOf(from):0;
+  const end=to?dayOf(to)+86400000:Infinity;
   if(force===true)ordRefresh();
   if(!needOrders(start,end,'',()=>{if(document.getElementById('scCaptains').classList.contains('on'))renderCapStats();})){document.getElementById('capStatsList').innerHTML=ordWait();return;}
   const filtered=allOrders.filter(o=>{const t=o.createdAtMs||0;return t>=start&&t<end;});
@@ -2265,8 +2316,7 @@ window.renderTimes=async function(){
   if(isAdmin()){const sel=document.getElementById('tmRest'),cur=sel.value;sel.innerHTML='<option value="">كل المطاعم</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur;}
   const range=document.getElementById('tmRange').value,type=document.getElementById('tmType').value;
   const rid=isRest()?currentUser.restaurantId:document.getElementById('tmRest').value;
-  const d0=new Date();d0.setHours(0,0,0,0);
-  let from=d0.getTime(),to=Infinity;
+  let from=dayStart(),to=Infinity;   // يوم العمل
   if(range==='yesterday'){to=from;from-=86400000;}else if(range!=='today')from-=(+range-1)*86400000;
   if(!needOrders(from,to,rid,()=>{if(document.getElementById('scTimes').classList.contains('on'))renderTimes();})){el.innerHTML=ordWait();return;}
   const list=allOrders.filter(o=>(o.createdAtMs||0)>=from&&(o.createdAtMs||0)<to&&o.status!=='cancelled'&&(!type||tmType(o)===type)&&(!rid||o.restaurantId===rid));
@@ -2560,14 +2610,16 @@ const axFmtD=ms=>ms?new Date(ms).toLocaleString('ar-IQ-u-nu-latn',{year:'numeric
 const axQ=n=>Number(Math.round((Number(n)||0)*1000)/1000).toLocaleString('ar-IQ-u-nu-latn');
 window.axRangeCh=()=>{const c=document.getElementById('axRange').value==='custom';['axFrom','axTo'].forEach(id=>{const e=document.getElementById(id);e.style.display=c?'':'none';if(c&&!e.value){const d=new Date();e.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}});accRender();};
 function axRange(){
-  const v=document.getElementById('axRange').value,d0=new Date();d0.setHours(0,0,0,0);
-  if(v==='custom'){const f=new Date((document.getElementById('axFrom').value||'1970-01-01')+'T00:00:00').getTime(),t=new Date((document.getElementById('axTo').value||'2999-01-01')+'T00:00:00').getTime()+86400000;return[f,t];}
-  if(v==='yesterday')return[d0.getTime()-86400000,d0.getTime()];
-  if(v==='all')return[0,Infinity];if(v==='today')return[d0.getTime(),Infinity];
-  if(v==='month')return[new Date(d0.getFullYear(),d0.getMonth(),1).getTime(),Infinity];
-  return[d0.getTime()-(+v-1)*86400000,Infinity];
+  // يوم العمل (من الفتح للإغلاق)
+  const v=document.getElementById('axRange').value,t0=dayStart(),d0=new Date(t0-bizCutMin()*60000);
+  if(v==='custom'){const f=dayOf(document.getElementById('axFrom').value||'1970-01-01'),t=dayOf(document.getElementById('axTo').value||'2999-01-01')+86400000;return[f,t];}
+  if(v==='yesterday')return[t0-86400000,t0];
+  if(v==='all')return[0,Infinity];if(v==='today')return[t0,Infinity];
+  if(v==='month')return[new Date(d0.getFullYear(),d0.getMonth(),1).getTime()+bizCutMin()*60000,Infinity];
+  return[t0-(+v-1)*86400000,Infinity];
 }
 window.accInit=function(){
+  bizUi();
   const sel=document.getElementById('axRest');
   if(isAdmin()){const cur=sel.value;sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur||(allRestaurants[0]&&allRestaurants[0].id)||'';}
   const rid=isRest()?currentUser.restaurantId:sel.value;
@@ -2853,7 +2905,7 @@ function axChg(c,p,good){
   const x=axChgPct(c,p);if(x===null)return '<span style="color:var(--muted);font-size:12px">جديد</span>';if(!x)return '<span style="color:var(--muted);font-size:12px">= نفسه</span>';
   const up=x>0,ok=good>0?up:!up;return `<span class="${ok?'ax-pos':'ax-neg'}" style="font-size:12px;font-weight:800">${up?'▲':'▼'} ${toA(Math.abs(x))}٪</span>`;
 }
-const axDayKey=ms=>{const d=new Date(ms||0);d.setHours(0,0,0,0);return d.getTime();};
+const axDayKey=ms=>dayStart(ms||0);   // كل يوم عمل لوحده
 const axYmd=ms=>{const d=new Date(ms);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 // طريقة الدفع لكل طلب (نفس منطق تقرير المبيعات): الدلفري غير المسدد «عند الكباتن»
 function axPaySplit(o){
@@ -2989,7 +3041,7 @@ function axReport(from,to){
   const os=allOrders.filter(o=>o.restaurantId===axRid&&(o.createdAtMs||0)>=from&&(o.createdAtMs||0)<to);
   const live=os.filter(o=>o.status!=='cancelled'),canc=os.filter(o=>o.status==='cancelled');
   const R={n:live.length,sales:0,disc:0,fees:0,items:0,cash:0,card:0,later:0,cod:0,credit:0,cancN:canc.length,cancV:canc.reduce((s,o)=>s+(o.value||0),0),byType:{salon:{n:0,v:0},takeaway:{n:0,v:0},delivery:{n:0,v:0}},days:[]};
-  const day={},dk=ms=>{const d=new Date(ms);d.setHours(0,0,0,0);return d.getTime();};
+  const day={},dk=ms=>dayStart(ms);
   live.forEach(o=>{const t=axTypeOf(o),v=o.value||0;R.sales+=v;R.disc+=o.discount||0;R.byType[t].n++;R.byType[t].v+=v;(o.items||[]).forEach(i=>{R.items+=i.qty||1;});
     const k=dk(o.createdAtMs||0),D=day[k]||(day[k]={n:0,sales:0,salon:0,takeaway:0,delivery:0,exp:0});D.n++;D.sales+=v;D[t]+=v;
     // الدلفري: الكابتن يستلم من الزبون ويسدد للكاشير قيمة الطلب (الأجرة اله) — اللي انسدد ينحسب نقد، والباقي «عند الكباتن»
@@ -3136,8 +3188,8 @@ window.renderAnalytics=function(force){
   dateDefaults('anFrom','anTo');
   const from=document.getElementById('anFrom')?.value;
   const to=document.getElementById('anTo')?.value;
-  const start=from?new Date(from+'T00:00:00').getTime():0;
-  const end=to?new Date(to+'T00:00:00').getTime()+86400000:Infinity;
+  const start=from?dayOf(from):0;
+  const end=to?dayOf(to)+86400000:Infinity;
   if(force===true)ordRefresh();
   if(!needOrders(start,end,'',()=>{if(document.getElementById('scAnalytics').classList.contains('on'))renderAnalytics();})){document.getElementById('analyticsContent').innerHTML=ordWait();window._lastAnalyticsOrders=[];return;}
   const fil=allOrders.filter(o=>{const t=o.createdAtMs||0;return t>=start&&t<end;});
