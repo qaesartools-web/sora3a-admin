@@ -18,8 +18,19 @@ export default {
     const turl = new URL(req.url);
     if (req.method === 'GET' && turl.pathname.startsWith('/tower/')) return towerUpdate(turl, env, h);
     const { sa, key } = readServiceAccount(env.FIREBASE_SERVICE_ACCOUNT);
+    // فحص: افتح /appcheck بالمتصفح ← يجرّب يطلع رمز (بدون ما يرجّعه) ويكول ok أو سبب المشكلة
+    if (req.method === 'GET' && turl.pathname === '/appcheck') {
+      if (!sa) return reply({ ok: false, error: 'not_configured', key }, 503, h);
+      return reply(await appCheckSelfTest(env, sa), 200, h);
+    }
     // افتح رابط السيرفر بالمتصفح: key = ok يعني المفتاح مضبوط، غيرها تبيّن السبب
-    if (req.method === 'GET') return reply({ ok: true, service: 'sora3a-push', key, tower: env.GITHUB_TOKEN ? 'ok' : 'no_github_token' }, 200, h);
+    if (req.method === 'GET') return reply({ ok: true, service: 'sora3a-push', key, tower: env.GITHUB_TOKEN ? 'ok' : 'no_github_token', appcheck: 'v1' }, 200, h);
+    // رمز الحماية (App Check) لتطبيقات الأندرويد: فحص كوكل (reCAPTCHA) ما يشتغل داخل التطبيقات، فالسيرفر ينطيه للجهاز المربوط أو الحساب المسجّل
+    if (req.method === 'POST' && turl.pathname === '/appcheck') {
+      if (!sa) return reply({ ok: false, error: 'not_configured', key }, 503, h);
+      try { return await appCheckToken(req, env, sa, h); }
+      catch (e) { return reply({ ok: false, error: 'server_error', detail: String(e && e.message || e).slice(0, 200) }, 500, h); }
+    }
     if (req.method !== 'POST') return reply({ ok: false, error: 'method_not_allowed' }, 405, h);
     if (!sa) return reply({ ok: false, error: 'not_configured', key }, 503, h);
     try { return await handle(req, env, sa, h); }
@@ -50,6 +61,62 @@ async function towerUpdate(url, env, h) {
   if (!bin.ok) return new Response('asset ' + bin.status, { status: 502, headers: h });
   if (want === 'version.json') return new Response(await bin.text(), { status: 200, headers: { ...h, 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } });
   return new Response(bin.body, { status: 200, headers: { ...h, 'content-type': cfg.type, 'content-disposition': 'attachment; filename="' + cfg.file + '"', 'cache-control': 'no-store' } });
+}
+
+// ── رمز الحماية (App Check) من السيرفر ──
+// منو ياخذه: جهاز مربوط برمز (screens/{uid}) لمطعم شغّال — ومعتمد إذا «الأجهزة المعتمدة» شغّالة —
+// أو حساب مسجّل بدور معروف (كاشير، صاحب مطعم، كابتن، الإدارة) ومو موقوف. الرمز يعيش 6 ساعات.
+const AC_APP_ID = '1:516304449260:web:0110ba6c2621d6a16dbfc9';
+const AC_TTL_S = 6 * 3600;
+const AC_ROLES = ['admin', 'staff', 'restaurant', 'cashier', 'captain'];
+async function appCheckToken(req, env, sa, h) {
+  const pid = sa.project_id, emu = env.EMULATOR_HOST || '';
+  const idToken = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
+  const uid = await verifyIdToken(idToken, pid, !!emu);
+  if (!uid) return reply({ ok: false, error: 'unauthenticated' }, 401, h);
+  const fs = firestore(pid, emu, emu ? null : await accessToken(sa));
+  const scr = await fs.get(`screens/${uid}`);
+  if (scr && scr.restaurantId) {
+    const r = await fs.get(`restaurants/${scr.restaurantId}`);
+    if (!r || r.active === false) return reply({ ok: false, error: 'restaurant_off' }, 403, h);
+    if (r.features && r.features.devices === true && scr.approved !== true) return reply({ ok: false, error: 'not_approved' }, 403, h);
+  } else {
+    const u = await fs.get(`users/${uid}`);
+    if (!u || u.disabled || !AC_ROLES.includes(u.role)) return reply({ ok: false, error: 'not_linked' }, 403, h);
+  }
+  if (emu) return reply({ ok: true, token: 'emu-' + uid, ttlMillis: AC_TTL_S * 1000 }, 200, h);
+  const t = await mintAppCheck(env, sa);
+  return t.token ? reply({ ok: true, token: t.token, ttlMillis: t.ttlMillis }, 200, h) : reply({ ok: false, error: t.error, detail: t.detail }, 502, h);
+}
+async function mintAppCheck(env, sa) {
+  const pid = sa.project_id, appId = env.APPCHECK_APP_ID || AC_APP_ID;
+  // نفس طريقة firebase-admin (appCheck().createToken): توكن موقّع بحساب الخدمة ← نبدّله برمز حماية
+  const now = Math.floor(Date.now() / 1000);
+  const unsigned = b64uStr(JSON.stringify({ alg: 'RS256', typ: 'JWT' })) + '.' + b64uStr(JSON.stringify({
+    iss: sa.client_email, sub: sa.client_email, app_id: appId,
+    aud: 'https://firebaseappcheck.googleapis.com/google.firebase.appcheck.v1.TokenExchangeService',
+    iat: now, exp: now + 300, ttl: AC_TTL_S + 's',
+  }));
+  const customToken = unsigned + '.' + await signRS256(sa, unsigned);
+  const ex = await fetch(`https://firebaseappcheck.googleapis.com/v1/projects/${pid}/apps/${appId}:exchangeCustomToken`, {
+    method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + await accessToken(sa) }, body: JSON.stringify({ customToken }) });
+  const j = await ex.json().catch(() => ({}));
+  if (!ex.ok || !j.token) return { error: 'exchange_' + ex.status, detail: JSON.stringify(j).slice(0, 200) };
+  return { token: j.token, ttlMillis: (parseInt(j.ttl, 10) || AC_TTL_S) * 1000 };
+}
+let acSelf = null;
+async function appCheckSelfTest(env, sa) {
+  if (acSelf && acSelf.exp > Date.now()) return acSelf.res;
+  let res;
+  try { const t = await mintAppCheck(env, sa); res = t.token ? { ok: true, appcheck: 'ok', ttlHours: Math.round(t.ttlMillis / 3600000) } : { ok: false, appcheck: t.error, detail: t.detail }; }
+  catch (e) { res = { ok: false, appcheck: 'server_error', detail: String(e && e.message || e).slice(0, 200) }; }
+  acSelf = { res, exp: Date.now() + 10 * 60e3 };
+  return res;
+}
+async function signRS256(sa, unsigned) {
+  const pem = sa.private_key.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+  const key = await crypto.subtle.importKey('pkcs8', fromB64u(pem.replace(/\+/g, '-').replace(/\//g, '_')), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  return b64u(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned)));
 }
 
 // يقرأ مفتاح حساب الخدمة ويتسامح مع أخطاء اللصق الشائعة (BOM، علامات تنصيص، base64)
@@ -214,7 +281,7 @@ async function accessToken(sa) {
   const now = Math.floor(Date.now() / 1000);
   const unsigned = b64uStr(JSON.stringify({ alg: 'RS256', typ: 'JWT' })) + '.' + b64uStr(JSON.stringify({
     iss: sa.client_email, sub: sa.client_email, aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600,
-    scope: 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/identitytoolkit',
+    scope: 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging https://www.googleapis.com/auth/identitytoolkit https://www.googleapis.com/auth/cloud-platform',
   }));
   const pem = sa.private_key.replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
   const key = await crypto.subtle.importKey('pkcs8', fromB64u(pem.replace(/\+/g, '-').replace(/\//g, '_')), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
