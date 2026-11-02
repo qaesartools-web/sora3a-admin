@@ -207,6 +207,9 @@ html.sb-on .hdr{justify-content:flex-end}
 .order-row:hover{border-color:rgba(0,139,44,.3);}
 .order-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
 .order-id{font-weight:900;font-size:13px;font-family:monospace;}
+.onum-w{display:flex;flex-direction:column;line-height:1.15}
+.onum{font-size:24px;font-weight:900;letter-spacing:.3px}
+.onum-w .onum+.order-id{font-size:11px;font-weight:700;color:var(--muted)}
 .order-time{font-size:11px;color:var(--muted);}
 .badge{display:inline-block;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;}
 .b-pending{background:rgba(255,200,61,.15);color:#ffc83d;}
@@ -236,6 +239,8 @@ html.sb-on .hdr{justify-content:flex-end}
 .ord-mo{max-width:520px;}
 .od-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 .od-id{font-family:monospace;font-size:20px;font-weight:900;letter-spacing:.05em;}
+.od-num{font-family:inherit;font-size:30px;line-height:1.1}
+.od-sid{font-family:monospace;font-size:12px;font-weight:700;color:var(--muted)}
 .od-big{font-size:13px;font-weight:800;background:var(--panel2,rgba(255,255,255,.06));border:1px solid var(--line);border-radius:10px;padding:3px 10px;}
 .od-kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;margin:8px 0 12px;}
 .od-kv dt{color:var(--muted);}.od-kv dd{margin:0;font-weight:600;word-break:break-word;}
@@ -1433,7 +1438,7 @@ function orderCard(o){
   const stL={pending:'🟡 ينتظر',accepted:'🔵 مقبول',pickup:'🟠 استلام',delivering:'🛵 توصيل',delivered:'✅ مسلّم',cancelled:'❌ ملغي',preparing:'🍳 قيد التحضير',ready:'✅ جاهز'};
   const id=esc(o.id);
   return`<div class="order-row clk" data-ord="${id}">
-    <div class="order-head"><span class="order-id">${esc(o.id.substring(0,6).toUpperCase())}</span><span class="order-time">${esc(t12(o.createdAt))}</span></div>
+    <div class="order-head"><span class="onum-w">${odNum(o)?`<b class="onum">${esc(odNum(o))}</b>`:''}<span class="order-id">${esc(o.id.substring(0,6).toUpperCase())}</span></span><span class="order-time">${esc(t12(o.createdAt))}</span></div>
     <div style="margin-bottom:6px;">${typeBadge} <span class="badge ${stB[o.status]||'b-pending'}">${stL[o.status]||esc(o.status)}</span></div>
     ${o.customer?`<div style="font-size:11px;color:var(--muted);">👤 ${esc(o.customer)} ${o.phone?'• 📞 '+esc(o.phone):''}</div>`:''}
     ${o.address?`<div style="font-size:11px;color:var(--muted);">📍 ${esc(o.address)}</div>`:''}
@@ -1507,7 +1512,7 @@ function odHTML(o){
     src?['المصدر',src]:null,
   ].filter(Boolean);
   const tl=Array.isArray(o.timeline)?o.timeline:[];
-  return`<div class="od-h"><span class="od-id">#${esc(o.id.substring(0,6).toUpperCase())}</span><span class="od-big">${OD_TYPE[d.type]||esc(d.type)}${num?' — '+esc(num):''}</span><span class="badge ${o.status==='cancelled'?'b-cancelled':o.status==='delivered'?'b-delivered':'b-accepted'}">${OD_ST[o.status]||esc(o.status||'')}</span></div>
+  return`<div class="od-h">${num?`<span class="onum-w"><b class="od-id od-num">${esc(num)}</b><span class="od-sid">#${esc(o.id.substring(0,6).toUpperCase())}</span></span>`:`<span class="od-id">#${esc(o.id.substring(0,6).toUpperCase())}</span>`}<span class="od-big">${OD_TYPE[d.type]||esc(d.type)}</span><span class="badge ${o.status==='cancelled'?'b-cancelled':o.status==='delivered'?'b-delivered':'b-accepted'}">${OD_ST[o.status]||esc(o.status||'')}</span></div>
     ${o.status==='cancelled'?`<div class="od-warn">❌ ملغي${o.cancelReason?' — '+esc(o.cancelReason):''}${o.cancelNote?' — '+esc(o.cancelNote):''}${o.cancelledByName?`<br>👤 ألغاه: <b>${esc(o.cancelledByName)}</b>${o.cancelledByEmail?' — <bdi>'+esc(o.cancelledByEmail)+'</bdi>':''}`:o.cancelledBy?' (من '+esc(o.cancelledBy)+')':''}</div>`:''}
     <dl class="od-kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
     <div class="od-sec">🍽️ الأصناف (${toA(d.items.reduce((s,i)=>s+i.qty,0))})</div>
