@@ -1204,7 +1204,8 @@ test('welcome screen «النفق» on every entry: Sora3a logo + «سرعة / S
   assert.match(w, /سرعة/); assert.match(w, /SORA3A/); assert.match(w, /الكاشير/); assert.match(w, /CASHIER/);
   assert.doesNotMatch(w, /صباح الخير|هلا بيك|مساء الخير|👋|مطعم الشاشة/, 'no greeting, no name');
   const look = await p.evaluate(() => { const t = document.querySelector('.sb-welcome .sb-w-t'), cv = document.querySelector('.sb-welcome canvas');
-    return { tile: getComputedStyle(t).backgroundImage, cv: !!cv && cv.width > 0 && cv.height > 0 }; });
+    return { tile: getComputedStyle(t).backgroundImage, cv: !!cv && cv.width > 0 && cv.height > 0, base: getComputedStyle(document.querySelector('.sb-welcome')).backgroundColor }; });
+  assert.equal(look.base, 'rgb(3, 5, 7)', 'solid dark base — the page never shows through');
   assert.match(look.tile, /rgb\(43, 196, 106\)/, 'cashier green'); assert.ok(look.cv, 'star tunnel canvas');
   await p.waitForTimeout(1600);
   // النجوم تتحرك (مو صورة ثابتة) — نقارن لقطتين للـ canvas
