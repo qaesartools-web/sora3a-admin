@@ -916,6 +916,8 @@ test('many orders: the ready screen shrinks the numbers so none hide behind the 
 
   // ── شاشة المجهز: 24 طلب ← كلها بالشاشة و«جاهز» ينضغط
   for (let i = 0; i < 30; i++) await write('orders/MQ' + i, { status: 'ready', kitchen: 'ready', kitchenReadyAt: now - 30 * 60000 });
+  // الطلبات الملغية من الاختبارات القديمة (بطاقات حمرة) نخليها قديمة حتى ما تزاحم
+  for (const x of await list('orders', 'restaurantId', 'RW')) if (x.status === 'cancelled' && x.kitchen === 'new') await write('orders/' + x.id, { cancelledAt: now - 3 * 3600000 });
   for (let i = 0; i < 24; i++) await put('orders/MK' + i, { restaurantId: 'RW', orderType: 'takeaway', status: 'delivered', kitchen: 'new', ticketNo: 200 + i, value: 5000, day, createdAt: '20:05', createdAtMs: now - (30 - i) * 60000,
     items: [{ name: 'برغر لحم', variant: 'وحدة', qty: 1 }, { name: 'بطاطا', variant: 'وحدة', qty: 2 }] });
   const k = await page(B, { w: 1280, h: 800 });
