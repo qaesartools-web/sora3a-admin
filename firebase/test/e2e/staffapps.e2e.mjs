@@ -97,6 +97,47 @@ test('ready screen: takeaway/pager orders in two columns, new ready number flash
   await p.context().close();
 });
 
+test('ready screen recovers by itself when the database connection gets stuck (orders stop updating with no error) or the library hits a fatal error — and does not reload when there is simply no internet', async () => {
+  const p = await page(B, { w: 1280, h: 720 });
+  await p.addInitScript(() => { window.__lgMs = 2000; window.__lgTo = 1500; });   // الحارس كل ثانيتين بالاختبار (بدل ٣ دقايق)
+  await login(p, BASE + 'screen.html', 'scr@x.com');
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
+  await p.waitForTimeout(2500);
+  const FS = /127\.0\.0\.1:8080|localhost:8080/;
+  // ── الاتصال «يعلك»: الطلبات لقاعدة البيانات ما ترجع أبد (بدون خطأ)، بس النت نفسه شغّال
+  await p.evaluate(() => { window.__mark = 1; });
+  await p.context().route(FS, () => {});
+  // الاتصال المفتوح ينقطع ويعيد يتصل (مثل ما يصير بالتلفزيون) — والاتصال الجديد يعلك
+  await p.evaluate(() => window.dispatchEvent(new Event('online')));
+  await p.waitForFunction(() => !window.__mark, null, { timeout: 30000 });   // انعادت الصفحة وحدها
+  await p.context().unroute(FS);
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
+  assert.equal(await p.locator('#gPass').count(), 0, 'still linked after the reload');
+  assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('sb_guard_reloads') || '[]').length), 1);
+  // ── خطأ داخلي قاتل من المكتبة ← تحميل من جديد فوراً
+  await p.waitForTimeout(1500);
+  await p.evaluate(() => { window.__mark2 = 1; console.error('@firebase/firestore: Firestore (10.7.1): INTERNAL ASSERTION FAILED: Unexpected state'); });
+  await p.waitForFunction(() => !window.__mark2, null, { timeout: 45000 });   // ينتظر إذا رقم جديد يومض (١٥ ثانية)
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
+  // ── ماكو نت أبد (التلفزيون يكمل ويا الكاشير على الواي فاي): ما يعيد التحميل
+  await p.waitForTimeout(1500);
+  await p.evaluate(() => { window.__mark3 = 1; });
+  await p.context().setOffline(true);
+  await p.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await p.waitForTimeout(7000);
+  assert.equal(await p.evaluate(() => window.__mark3), 1, 'no reload while offline');
+  await p.context().setOffline(false);
+  await p.evaluate(() => window.dispatchEvent(new Event('online')));
+  // ── تكرر ٣ مرات بنص ساعة ← نسخة الجهاز المحلية تنمسح (الطلبات ترجع من السيرفر) والعدّاد يتصفر
+  await p.evaluate(() => { localStorage.setItem('sb_guard_reloads', JSON.stringify([Date.now() - 60000, Date.now() - 30000])); window.__mark4 = 1; console.error('INTERNAL ASSERTION FAILED: Unexpected state'); });
+  await p.waitForFunction(() => !window.__mark4, null, { timeout: 45000 });   // ينتظر إذا رقم جديد يومض (١٥ ثانية)
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
+  assert.equal(await p.evaluate(() => localStorage.getItem('sb_guard_reloads')), '[]');
+  // النبض: تطبيق التلفزيون يشوفه حتى يعيد تحميل صفحة جامدة
+  assert.ok(await p.evaluate(() => Date.now() - (window.__scrBeat || 0) < 60000));
+  await p.context().close();
+});
+
 test('ready screen stays linked when the TV starts without internet — opens from its saved copy; only «فصل الشاشة» unlinks it', async () => {
   const p = await page(B, { w: 1280, h: 720 });
   await login(p, BASE + 'screen.html', 'scr@x.com');
@@ -1293,7 +1334,8 @@ test('warehouse app (إدارة المخزن) is an on/off service: ON → the s
   await st.waitForFunction(() => /إدارة المخزن/.test(document.getElementById('restName').textContent), null, { timeout: 15000 });
   await st.waitForSelector('#acTabs .mtab', { timeout: 15000 });
   const tabs = await st.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
-  assert.deepEqual(tabs.filter((x) => !/رجوع/.test(x)), ['📦 المخزون', '🧾 الوصفات والتكلفة', '🏭 الموردين']);
+  assert.deepEqual(tabs.filter((x) => !/رجوع/.test(x)), ['🏠 الرئيسية', '📦 المخزون', '🧾 الوصفات والتكلفة', '🏭 الموردين']);
+  assert.match(await st.textContent('#acBody'), /استلام بضاعة/, 'the storekeeper starts on the home screen');
   assert.equal(await st.isVisible('.bnav .nb[data-tab="cashier"]'), false, 'no cashier screens on the storekeeper device');
   // يضيف مادة ← تنحفظ بحسابات المطعم
   await st.evaluate(() => window.matNew());
@@ -1333,6 +1375,8 @@ test('warehouse app works without internet: opens from its saved copy, stock cha
   await st.waitForSelector('#appPage.show', { timeout: 20000 });
   // المخزون كما بالجهاز (ينحفظ بالجهاز أول)
   const loc = (id) => st.evaluate((id) => { try { return (JSON.parse(localStorage.getItem('pos_acc_RW')).materials.find((m) => m.id === id) || {}); } catch (e) { return {}; } }, id);
+  await st.waitForSelector('#acTabs .mtab', { timeout: 15000 });
+  await st.evaluate(() => acTab('mat'));
   await st.waitForSelector('#acBody >> text=جبن', { timeout: 15000 });
   assert.ok(await until(async () => (await loc('MAT1')).qty === 20, 10000));
   await st.waitForTimeout(1500);   // الكاش المحلي ينحفظ
@@ -1379,6 +1423,83 @@ test('warehouse app works without internet: opens from its saved copy, stock cha
   await st.waitForSelector('#acf_qty'); await st.fill('#acf_qty', '2'); await st.click('#acDlgOk');
   assert.ok(await until(async () => (await read('accounting/RW')).materials.find((m) => m.id === 'MAT1').qty === 25, 10000));
   assert.deepEqual(clean(st).filter((e) => !/permission|insufficient|Could not reach Cloud Firestore backend|client is offline|internetdisconnected|ERR_INTERNET|acc sync|unavailable/i.test(e)), []);
+  await write('restaurants/RW', { features: { store: false } });
+  await st.context().close();
+});
+
+test('warehouse app extras: home screen, one receipt for many items (credit on the supplier), full stock count, shortage list to the supplier on WhatsApp, and item categories', async () => {
+  await write('restaurants/RW', { features: { store: true }, svcOff: {} });
+  await put('accounting/RW', { materials: [{ id: 'MAT1', name: 'جبن', unit: 'كغم', qty: 1, cost: 5000, min: 2 }, { id: 'MAT2', name: 'خبز', unit: 'حبة', qty: 100, cost: 250, min: 10 }, { id: 'MAT3', name: 'زيت', unit: 'لتر', qty: 0, cost: 3000, min: 3 }], recipes: {}, costs: {}, moves: [], expenses: [], updatedAt: 1 });
+  await put('accounting/RW/suppliers/S1', { name: 'مورد الأجبان', phone: '0770 111 2223', note: '' });
+  const st = await page(B, { w: 1100, h: 800 });
+  await pairScreen(st, BASE + 'index.html?store=1', { name: 'أبو حيدر' });
+  await st.waitForSelector('#appPage.show', { timeout: 20000 });
+  // ── الرئيسية: الأرقام، الأزرار، واللي يحتاج شراء
+  await st.waitForSelector('.st-act', { timeout: 15000 });
+  await st.waitForFunction(() => /زيت/.test(document.getElementById('acBody').textContent), null, { timeout: 15000 });
+  const home = await st.textContent('#acBody');
+  assert.match(home, /استلام بضاعة/); assert.match(home, /جرد كامل/); assert.match(home, /قائمة النواقص/);
+  assert.match(home, /تحتاج شراء \(1 نفذت\)/); assert.ok(home.includes('جبن') && home.includes('زيت') && !/خبز/.test(home.split('تحتاج شراء').pop().split('آخر الحركات')[0]));
+  await st.screenshot({ path: 'shots/store-home.png' });
+  // ── قائمة النواقص ← واتساب المورد (الرقم العراقي بصيغة دولية) بالكميات المقترحة
+  await st.evaluate(() => { window.open = () => null; });
+  await st.click('.st-act >> text=قائمة النواقص');
+  await st.waitForSelector('#stShList .st-cnt');
+  assert.deepEqual(await st.$$eval('#stShList input', (x) => x.map((i) => i.value)), ['6', '3'], 'oil (out) first, then cheese — up to twice the minimum');
+  await st.selectOption('#stShSup', 'S1');
+  await st.fill('#stShList .st-cnt[data-mid="MAT1"] input', '5');
+  await st.click('#stShWa');
+  const wa = decodeURIComponent(await st.evaluate(() => window.__stWa));
+  assert.ok(wa.startsWith('https://wa.me/9647701112223?text='), wa);
+  assert.match(wa, /طلب مواد/); assert.match(wa, /زيت: 6 لتر/); assert.match(wa, /جبن: 5 كغم/);
+  await st.evaluate(() => viewClose());
+  // ── استلام بضاعة: مادتين بفاتورة وحدة، آجل على المورد
+  await st.click('.st-act >> text=استلام بضاعة');
+  await st.waitForSelector('#stRxLines .st-ln');
+  await st.selectOption('#stRxLines .st-ln >> nth=0 >> select', 'MAT1');
+  await st.fill('#stRxLines .st-ln >> nth=0 >> [data-k="q"]', '10'); await st.fill('#stRxLines .st-ln >> nth=0 >> [data-k="t"]', '60000');
+  await st.click('button >> text=مادة ثانية');
+  await st.selectOption('#stRxLines .st-ln >> nth=1 >> select', 'MAT3');
+  await st.fill('#stRxLines .st-ln >> nth=1 >> [data-k="q"]', '5'); await st.fill('#stRxLines .st-ln >> nth=1 >> [data-k="t"]', '15000');
+  assert.match(await st.textContent('#stRxTot'), /75,000/);
+  await st.selectOption('#stRx_sid', 'S1'); await st.fill('#stRx_paid', '0'); await st.fill('#stRx_note', 'فاتورة 77');
+  await st.click('#stRxOk');
+  const acc1 = await until(async () => { const d = await read('accounting/RW'); return d && d.materials.find((m) => m.id === 'MAT1').qty === 11 ? d : null; });
+  assert.ok(acc1, 'stock went up');
+  assert.equal(acc1.materials.find((m) => m.id === 'MAT3').qty, 5);
+  assert.equal(acc1.materials.find((m) => m.id === 'MAT1').cost, 5909.09, 'weighted average cost');
+  const buys = acc1.moves.filter((e) => e.type === 'purchase');
+  assert.equal(buys.length, 2); assert.ok(buys.every((e) => e.sid === 'S1' && /فاتورة 77/.test(e.note)));
+  const inv = await until(async () => { let r; await E.withSecurityRulesDisabled(async (c) => { const q = await getDocs(collection(c.firestore(), 'accounting/RW/ledger')); r = q.docs.map((d) => d.data()).filter((x) => x.type === 'invoice'); }); return r.length ? r : null; });
+  assert.equal(inv.length, 1, 'one invoice for the whole receipt'); assert.equal(inv[0].amount, 75000); assert.equal(inv[0].paid, 0); assert.equal(inv[0].party, 'S1');
+  // ── جرد كامل: الخبز 95 (عجز 5)، والجبن مطابق، والزيت متروك
+  await st.click('.st-act >> text=جرد كامل');
+  await st.waitForSelector('#stCntList .st-cnt');
+  await st.fill('#stCntList .st-cnt[data-mid="MAT2"] input', '95');
+  await st.fill('#stCntList .st-cnt[data-mid="MAT1"] input', '11');
+  assert.match(await st.textContent('#stCntSum'), /2 مادة انجردت — 1 بيها فرق/);
+  await st.click('#stCntOk');
+  const acc2 = await until(async () => { const d = await read('accounting/RW'); return d && d.materials.find((m) => m.id === 'MAT2').qty === 95 ? d : null; });
+  assert.ok(acc2); assert.equal(acc2.moves.filter((e) => e.type === 'count').length, 1, 'only the item with a difference');
+  assert.equal(acc2.moves.find((e) => e.type === 'count').by, 'أبو حيدر');
+  // ── الفئات: الخبز «مخبوزات» ← زر فلترة بالمخزون
+  //  والنافذة مفتوحة توصل مزامنة من جهاز ثاني وتبدّل المخزون: التعديل ما يضيع (قبل كان يتعدل نسخة قديمة وينفقد بصمت)
+  await st.evaluate(() => { acTab('mat'); window.matEdit('MAT2'); });
+  await st.waitForSelector('#acf_cat'); await st.fill('#acf_cat', 'مخبوزات');
+  await st.evaluate(() => { acc = normAcc(JSON.parse(JSON.stringify(acc))); });
+  await st.click('#acDlgOk');
+  await st.waitForSelector('#acMatCats .st-chip >> text=مخبوزات');
+  await st.click('#acMatCats .st-chip >> text=مخبوزات');
+  assert.deepEqual(await st.$$eval('#acMatList .ac-name', (x) => x.map((e) => e.textContent.replace(/(نفذ|منخفض|متوفر)$/, '').trim())), ['خبز']);
+  assert.equal((await until(async () => { const d = await read('accounting/RW'); const m = d.materials.find((x) => x.id === 'MAT2'); return m.cat === 'مخبوزات' ? m : null; })).cat, 'مخبوزات');
+  await st.screenshot({ path: 'shots/store-cats.png' });
+  // نفس الشي ويا «وارد»: الكمية تزيد حتى لو تبدّل المخزون والنافذة مفتوحة
+  await st.evaluate(() => window.matBuy('MAT2'));
+  await st.waitForSelector('#acf_qty'); await st.fill('#acf_qty', '10'); await st.fill('#acf_total', '2500');
+  await st.evaluate(() => { acc = normAcc(JSON.parse(JSON.stringify(acc))); });
+  await st.click('#acDlgOk');
+  assert.ok(await until(async () => (await read('accounting/RW')).materials.find((m) => m.id === 'MAT2').qty === 105), 'stock went up after a sync replaced it under the open dialog');
+  assert.deepEqual(clean(st).filter((e) => !/permission|insufficient/i.test(e)), []);
   await write('restaurants/RW', { features: { store: false } });
   await st.context().close();
 });

@@ -220,6 +220,13 @@ test('صاحب المطعم يدير صلاحيات كاشيريته فقط (ا�
   await assertFails(updateDoc(doc(as('rest1'), 'users/cash1'), { role: 'admin' }));
   await assertSucceeds(getDocs(query(collection(as('rest1'), 'users'), where('restaurantId', '==', 'R1'), where('role', '==', 'cashier'))));
   await assertFails(updateDoc(doc(as('rest2'), 'users/cash1'), { perms: {} }));
+  // الصالة (المطعم اللي بيه أكثر من صالة): صاحب المطعم يختارها، والكاشير ما يغيّرها لنفسه
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'users/cash1'), { hall: 'h1' }));
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'users/cash1'), { hall: '' }));
+  await assertFails(updateDoc(doc(as('rest1'), 'users/cash1'), { hall: 'x'.repeat(41) }), 'hall id too long');
+  await assertFails(updateDoc(doc(as('rest1'), 'users/cash1'), { hall: 5 }), 'hall must be text');
+  await assertFails(updateDoc(doc(as('cash1'), 'users/cash1'), { hall: 'h2' }), 'cashier cannot pick his own hall');
+  await assertFails(updateDoc(doc(as('rest2'), 'users/cash1'), { hall: 'h2' }));
 });
 
 // ── دوام الكاشير ──
