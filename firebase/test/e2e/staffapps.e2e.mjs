@@ -97,6 +97,47 @@ test('ready screen: takeaway/pager orders in two columns, new ready number flash
   await p.context().close();
 });
 
+test('ready screen recovers by itself when the database connection gets stuck (orders stop updating with no error) or the library hits a fatal error — and does not reload when there is simply no internet', async () => {
+  const p = await page(B, { w: 1280, h: 720 });
+  await p.addInitScript(() => { window.__lgMs = 2000; window.__lgTo = 1500; });   // الحارس كل ثانيتين بالاختبار (بدل ٣ دقايق)
+  await login(p, BASE + 'screen.html', 'scr@x.com');
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
+  await p.waitForTimeout(2500);
+  const FS = /127\.0\.0\.1:8080|localhost:8080/;
+  // ── الاتصال «يعلك»: الطلبات لقاعدة البيانات ما ترجع أبد (بدون خطأ)، بس النت نفسه شغّال
+  await p.evaluate(() => { window.__mark = 1; });
+  await p.context().route(FS, () => {});
+  // الاتصال المفتوح ينقطع ويعيد يتصل (مثل ما يصير بالتلفزيون) — والاتصال الجديد يعلك
+  await p.evaluate(() => window.dispatchEvent(new Event('online')));
+  await p.waitForFunction(() => !window.__mark, null, { timeout: 30000 });   // انعادت الصفحة وحدها
+  await p.context().unroute(FS);
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
+  assert.equal(await p.locator('#gPass').count(), 0, 'still linked after the reload');
+  assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem('sb_guard_reloads') || '[]').length), 1);
+  // ── خطأ داخلي قاتل من المكتبة ← تحميل من جديد فوراً
+  await p.waitForTimeout(1500);
+  await p.evaluate(() => { window.__mark2 = 1; console.error('@firebase/firestore: Firestore (10.7.1): INTERNAL ASSERTION FAILED: Unexpected state'); });
+  await p.waitForFunction(() => !window.__mark2, null, { timeout: 15000 });
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
+  // ── ماكو نت أبد (التلفزيون يكمل ويا الكاشير على الواي فاي): ما يعيد التحميل
+  await p.waitForTimeout(1500);
+  await p.evaluate(() => { window.__mark3 = 1; });
+  await p.context().setOffline(true);
+  await p.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await p.waitForTimeout(7000);
+  assert.equal(await p.evaluate(() => window.__mark3), 1, 'no reload while offline');
+  await p.context().setOffline(false);
+  await p.evaluate(() => window.dispatchEvent(new Event('online')));
+  // ── تكرر ٣ مرات بنص ساعة ← نسخة الجهاز المحلية تنمسح (الطلبات ترجع من السيرفر) والعدّاد يتصفر
+  await p.evaluate(() => { localStorage.setItem('sb_guard_reloads', JSON.stringify([Date.now() - 60000, Date.now() - 30000])); window.__mark4 = 1; console.error('INTERNAL ASSERTION FAILED: Unexpected state'); });
+  await p.waitForFunction(() => !window.__mark4, null, { timeout: 15000 });
+  await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
+  assert.equal(await p.evaluate(() => localStorage.getItem('sb_guard_reloads')), '[]');
+  // النبض: تطبيق التلفزيون يشوفه حتى يعيد تحميل صفحة جامدة
+  assert.ok(await p.evaluate(() => Date.now() - (window.__scrBeat || 0) < 60000));
+  await p.context().close();
+});
+
 test('ready screen stays linked when the TV starts without internet — opens from its saved copy; only «فصل الشاشة» unlinks it', async () => {
   const p = await page(B, { w: 1280, h: 720 });
   await login(p, BASE + 'screen.html', 'scr@x.com');
