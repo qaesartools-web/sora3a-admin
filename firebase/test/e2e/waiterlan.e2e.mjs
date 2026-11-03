@@ -384,3 +384,49 @@ test('waiter edits, cancels and completes (served) his orders — online and ove
   wc.stop(); kc.stop(); hub3.stop();
   await c.context().close(); await k.context().close(); await w.context().close();
 });
+
+// شاشة «طلبك جاهز» (تطبيق التلفزيون) واتصالها بالسيرفر يعلك بنص الشغل: المجهز يخلّص كل الطلبات ← كلها تروح لـ«جاهز»
+//  (قبل: الطلبات اللي جانت قبل ما يعلك تبقى «قيد التحضير» من نسخة السيرفر القديمة، والجديدة بس تتحدث من الواي فاي)
+test('ready screen whose server connection gets stuck mid-service: all orders the kitchen finishes move to «ready» (the cashier copy over WiFi wins) and when the server copy stays behind, the screen reconnects then reloads by itself', async () => {
+  const UDP4 = UDP + 3;
+  const hub4 = createHub({ udpPort: UDP4, tcpPort: 0, host: '127.0.0.1', bcast: ['127.0.0.1'] });
+  const c = await page(B, { w: 1280, h: 860 });
+  await wire(c, hub4, 'hub');
+  await c.goto(BASE + 'index.html');
+  await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await c.fill('#inEmail', 'wl@x.com'); await c.fill('#inPass', 'secret123'); await c.click('#loginBtn');
+  await c.waitForSelector('#prods .prod', { timeout: 15000 });
+  await until(() => hub4.status().on);
+  // الطلبات القديمة من الاختبارات اللي قبل تخلص أول
+  await c.evaluate(() => orders.filter((o) => o.kitchen === 'new').forEach((o) => kdsDone(o.id)));
+  const sc = createClient({ role: 'screen', udpPort: UDP4, targets: ['127.0.0.1'] });
+  const s = await page(B, { w: 1280, h: 720 });
+  await s.addInitScript(() => { window.__stMs = 4000; window.__viewMs = 1000; window.__lgMs = 600000; });   // أوقات قصيرة بالاختبار
+  await wire(s, sc, 'screen');
+  await pair(s, BASE + 'screen.html', 'ready', 'طلبك جاهز');
+  await s.waitForSelector('#scr:not([hidden])', { timeout: 15000 });
+  assert.ok(await until(() => hub4.status().peers.some((x) => x.role === 'screen')), 'ready screen connected to the cashier');
+  // ٤ طلبات سفري «قيد التحضير»
+  const ids = [];
+  for (let i = 0; i < 4; i++) {
+    await c.click('#prods .prod >> nth=0');
+    await c.click('#sendBtn'); await c.keyboard.press('3'); await c.click('#acDlgOk');
+    ids.push(await (await c.waitForFunction((n) => { const l = orders.filter((o) => o.held && o.kitchen === 'new'); return l.length > n && l[0].id; }, i, { timeout: 8000 })).jsonValue());
+  }
+  await s.waitForFunction(() => document.getElementById('ppN').textContent === '4', null, { timeout: 15000 });
+  await s.waitForTimeout(1500);
+  // ── اتصال الشاشة بالسيرفر يعلك (الواي فاي ويا الكاشير شغّال)
+  // المكتبة «تعلك» وهي تحسب نفسها متصلة: التحديثات من السيرفر توقف توصل (مثل التلفزيون)
+  await s.evaluate(() => { window.__mark = 1; window.__fsFreeze = true; });
+  // المجهز يخلّص الكل
+  await c.evaluate(() => orders.filter((o) => o.held && o.kitchen === 'new').forEach((o) => kdsDone(o.id)));
+  // كلها تروح لـ«جاهز» على الشاشة (نسخة الكاشير على الواي فاي أحدث من نسخة السيرفر العالقة)
+  await s.waitForFunction(() => document.getElementById('ppN').textContent === '0' && +document.getElementById('rdN').textContent >= 4, null, { timeout: 15000 });
+  // ونسخة السيرفر بقت متأخرة عن الكاشير ← الشاشة تعيد الاتصال، وإذا بقت ← تحمّل نفسها من جديد
+  await s.waitForFunction(() => !window.__mark, null, { timeout: 30000 });
+  await s.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
+  await s.waitForFunction(() => document.getElementById('ppN').textContent === '0' && +document.getElementById('rdN').textContent >= 4, null, { timeout: 30000 });
+  assert.equal(await s.locator('#pairCode').count(), 0, 'still linked');
+  sc.stop(); hub4.stop();
+  await c.context().close(); await s.context().close();
+});
