@@ -117,7 +117,7 @@ test('ready screen recovers by itself when the database connection gets stuck (o
   // ── خطأ داخلي قاتل من المكتبة ← تحميل من جديد فوراً
   await p.waitForTimeout(1500);
   await p.evaluate(() => { window.__mark2 = 1; console.error('@firebase/firestore: Firestore (10.7.1): INTERNAL ASSERTION FAILED: Unexpected state'); });
-  await p.waitForFunction(() => !window.__mark2, null, { timeout: 15000 });
+  await p.waitForFunction(() => !window.__mark2, null, { timeout: 45000 });   // ينتظر إذا رقم جديد يومض (١٥ ثانية)
   await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
   // ── ماكو نت أبد (التلفزيون يكمل ويا الكاشير على الواي فاي): ما يعيد التحميل
   await p.waitForTimeout(1500);
@@ -130,7 +130,7 @@ test('ready screen recovers by itself when the database connection gets stuck (o
   await p.evaluate(() => window.dispatchEvent(new Event('online')));
   // ── تكرر ٣ مرات بنص ساعة ← نسخة الجهاز المحلية تنمسح (الطلبات ترجع من السيرفر) والعدّاد يتصفر
   await p.evaluate(() => { localStorage.setItem('sb_guard_reloads', JSON.stringify([Date.now() - 60000, Date.now() - 30000])); window.__mark4 = 1; console.error('INTERNAL ASSERTION FAILED: Unexpected state'); });
-  await p.waitForFunction(() => !window.__mark4, null, { timeout: 15000 });
+  await p.waitForFunction(() => !window.__mark4, null, { timeout: 45000 });   // ينتظر إذا رقم جديد يومض (١٥ ثانية)
   await p.waitForSelector('#scr:not([hidden])', { timeout: 30000 });
   assert.equal(await p.evaluate(() => localStorage.getItem('sb_guard_reloads')), '[]');
   // النبض: تطبيق التلفزيون يشوفه حتى يعيد تحميل صفحة جامدة
