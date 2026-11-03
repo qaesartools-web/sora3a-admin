@@ -1442,13 +1442,22 @@ test('warehouse app extras: home screen, one receipt for many items (credit on t
   assert.ok(acc2); assert.equal(acc2.moves.filter((e) => e.type === 'count').length, 1, 'only the item with a difference');
   assert.equal(acc2.moves.find((e) => e.type === 'count').by, 'أبو حيدر');
   // ── الفئات: الخبز «مخبوزات» ← زر فلترة بالمخزون
+  //  والنافذة مفتوحة توصل مزامنة من جهاز ثاني وتبدّل المخزون: التعديل ما يضيع (قبل كان يتعدل نسخة قديمة وينفقد بصمت)
   await st.evaluate(() => { acTab('mat'); window.matEdit('MAT2'); });
-  await st.waitForSelector('#acf_cat'); await st.fill('#acf_cat', 'مخبوزات'); await st.click('#acDlgOk');
+  await st.waitForSelector('#acf_cat'); await st.fill('#acf_cat', 'مخبوزات');
+  await st.evaluate(() => { acc = normAcc(JSON.parse(JSON.stringify(acc))); });
+  await st.click('#acDlgOk');
   await st.waitForSelector('#acMatCats .st-chip >> text=مخبوزات');
   await st.click('#acMatCats .st-chip >> text=مخبوزات');
   assert.deepEqual(await st.$$eval('#acMatList .ac-name', (x) => x.map((e) => e.textContent.replace(/(نفذ|منخفض|متوفر)$/, '').trim())), ['خبز']);
   assert.equal((await until(async () => { const d = await read('accounting/RW'); const m = d.materials.find((x) => x.id === 'MAT2'); return m.cat === 'مخبوزات' ? m : null; })).cat, 'مخبوزات');
   await st.screenshot({ path: 'shots/store-cats.png' });
+  // نفس الشي ويا «وارد»: الكمية تزيد حتى لو تبدّل المخزون والنافذة مفتوحة
+  await st.evaluate(() => window.matBuy('MAT2'));
+  await st.waitForSelector('#acf_qty'); await st.fill('#acf_qty', '10'); await st.fill('#acf_total', '2500');
+  await st.evaluate(() => { acc = normAcc(JSON.parse(JSON.stringify(acc))); });
+  await st.click('#acDlgOk');
+  assert.ok(await until(async () => (await read('accounting/RW')).materials.find((m) => m.id === 'MAT2').qty === 105), 'stock went up after a sync replaced it under the open dialog');
   assert.deepEqual(clean(st).filter((e) => !/permission|insufficient/i.test(e)), []);
   await write('restaurants/RW', { features: { store: false } });
   await st.context().close();
