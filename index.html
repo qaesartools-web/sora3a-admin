@@ -450,7 +450,7 @@ body.staff-mode .staff-banner{display:block;}
   <div class="sp-sub">لوحة الإدارة المتقدمة</div>
   <div class="sp-bar"><div class="sp-bar-fill"></div></div>
 </div>
-<script src="brand.js?v=4"></script>
+<script src="brand.js?v=5"></script>
 <script>window.SB && SB.mount('admin')</script>
 
 <button id="installBtn" onclick="doInstall()">📲 تثبيت التطبيق</button>
@@ -981,12 +981,39 @@ setTimeout(hideSplash,2800);
 // AUTH
 window.addEventListener('fbReady',()=>{
   const fb=window._fb;
+  // «اللحظة اللي بين» (الواي فاي متصل والنت ما يجاوب) أو بدون نت: لوحة الإدارة تحتاج السيرفر —
+  //  ما نطلّع صاحب الحساب (چان يرجع يكتب الرمز من جديد)، نكتب «ننتظر الإنترنت» ونفتح وحدنا أول ما يجاوب
+  const isNet=e=>!!e&&(e.code==='unavailable'||e.code==='deadline-exceeded'||/offline|network|server slow/i.test(e.message||''));
+  // ما ننتظر السيرفر أكثر من ٨ ثواني — وأول مرة أبد إذا فحص الحساب لگه النت عالق (__netStuckAt من brand.js)
+  const quick=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error('offline: server slow'),{code:'unavailable'})),ms))]);
+  let waitT=0,waitUser=null,tries=0;
+  const netWait=user=>{
+    waitUser=user;
+    document.getElementById('loginPage').style.display='flex';document.getElementById('appPage').style.display='none';
+    showErr('📶 النت ضعيف أو مقطوع — لوحة الإدارة تفتح وحدها أول ما يرجع (ما تحتاج تسجّل دخول من جديد)');
+    clearTimeout(waitT);waitT=setTimeout(()=>{if(waitUser===user&&fb.auth.currentUser===user)openAs(user);},window.__admRetryMs||10000);
+  };
+  window.addEventListener('online',()=>{if(waitUser&&fb.auth.currentUser===waitUser){clearTimeout(waitT);openAs(waitUser);}});
   fb.onAuthStateChanged(fb.auth,async user=>{
     hideSplash();
-    if(user){
+    clearTimeout(waitT);waitUser=null;tries=0;
+    if(user)openAs(user);
+    else{
+      currentUser=null;restData=null;
+      unsubs.forEach(u=>u&&u());unsubs=[];
+      document.getElementById('loginPage').style.display='flex';
+      document.getElementById('appPage').style.display='none';
+      document.body.classList.remove('rest-mode','staff-mode');
+      resetLoginBtn();
+    }
+  });
+  async function openAs(user){
+      const ms=!tries++&&Date.now()-(window.__netStuckAt||0)<20000?0:8000;
+      let netErr=null;
       try{
         // الصلاحية من users/{uid} فقط — لا بحث بالإيميل ولا إعادة ربط تلقائية
-        const udoc=await fb.getDoc(fb.doc(fb.db,'users',user.uid));
+        const udoc=await quick(fb.getDoc(fb.doc(fb.db,'users',user.uid)),ms);
+        if(fb.auth.currentUser!==user)return;
         const ud=udoc.exists()?udoc.data():null;
         // رقمنا وإيميلنا من البرج (config/brand) لشريط الهوية والفاتورة — مرة كل ٦ ساعات بالأكثر
         if(window.SB)SB.sync(async()=>{const s=await fb.getDoc(fb.doc(fb.db,'config','brand'));return s.exists()?s.data():null;});
@@ -1008,13 +1035,14 @@ window.addEventListener('fbReady',()=>{
           const tryIds=branches.length?[...new Set([...(saved&&branches.includes(saved)?[saved]:[]),restId,...branches])]:[restId];
           let rs=null;
           for(const id of tryIds){
-            const s=await fb.getDoc(fb.doc(fb.db,'restaurants',id)).catch(()=>null);
+            const s=await quick(fb.getDoc(fb.doc(fb.db,'restaurants',id)),8000).catch(e=>{if(isNet(e))netErr=e;return null;});
             if(!s||!s.exists())continue;
             const d=s.data();
             if(id===restId&&d.userId!==user.uid)continue;
             if(!rs)rs=s;
             if(d.active!==false&&!(d.expiryMs&&d.expiryMs<Date.now())){rs=s;break;}
           }
+          if(!rs&&netErr)throw netErr;   // السيرفر ما جاوب — مو «غير مرتبط»
           if(!rs){await fb.signOut(fb.auth);showErr('❌ هذا الحساب غير مرتبط بمطعم');return;}
           restData={id:rs.id,...rs.data()};
           if(restData.active===false){await fb.signOut(fb.auth);showErr('⏸️ حساب المطعم موقوف — تواصل مع الإدارة');return;}
@@ -1023,17 +1051,15 @@ window.addEventListener('fbReady',()=>{
           currentUser.restaurantId=restData.id;
           currentUser.restaurantName=restData.name;
         }
+        if(fb.auth.currentUser!==user)return;
+        clearTimeout(waitT);waitUser=null;document.getElementById('lErr').style.display='none';
         enterApp();
-      }catch(e){console.error(e);await fb.signOut(fb.auth);showErr('⚠️ ما كمل الدخول ('+String((e&&(e.code||e.message))||e).slice(0,80)+') — حدّث الصفحة وجرّب مرة ثانية');}
-    }else{
-      currentUser=null;restData=null;
-      unsubs.forEach(u=>u&&u());unsubs=[];
-      document.getElementById('loginPage').style.display='flex';
-      document.getElementById('appPage').style.display='none';
-      document.body.classList.remove('rest-mode','staff-mode');
-      resetLoginBtn();
-    }
-  });
+      }catch(e){
+        if(fb.auth.currentUser!==user)return;
+        if(isNet(e)){console.warn('admin open: waiting for the server',e&&e.code);netWait(user);return;}
+        console.error(e);await fb.signOut(fb.auth);showErr('⚠️ ما كمل الدخول ('+String((e&&(e.code||e.message))||e).slice(0,80)+') — حدّث الصفحة وجرّب مرة ثانية');
+      }
+  }
   document.getElementById('lPass').addEventListener('keypress',e=>{if(e.key==='Enter')doLogin();});
 });
 
