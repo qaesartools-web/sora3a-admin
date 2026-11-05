@@ -67,12 +67,13 @@ test('inventory tabs stay reachable after opening stock movement, with a back bu
   await p.fill('#inEmail', 'off@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
   await p.waitForSelector('#prods .prod', { timeout: 15000 });
   await p.click('.dnb[data-tab="acc"]');
-  await p.click('#acTabs .mtab >> text=الوصفات والتكلفة');
+  // الوصفات والتكلفة صارت بلوحة الإدارة بس
+  assert.equal(await p.locator('#acTabs .mtab', { hasText: 'الوصفات' }).count(), 0);
   await p.click('#acTabs .mtab >> text=المصروفات', { timeout: 3000 });
   await p.click('#acTabs .mtab >> text=أدوات', { timeout: 3000 });
   assert.equal(await p.evaluate(() => acCur), 'tools');
   await p.click('#acTabs .ac-back'); assert.equal(await p.evaluate(() => acCur), 'exp');
-  await p.click('#acTabs .ac-back'); assert.equal(await p.evaluate(() => acCur), 'rec');
+  await p.click('#acTabs .ac-back'); assert.equal(await p.evaluate(() => acCur), 'mat');
   assert.ok((await p.locator('#acTabs').boundingBox()).height > 30);
   await p.context().close();
 });

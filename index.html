@@ -369,6 +369,26 @@ body.staff-mode .staff-banner{display:block;}
 .ax-kv b{color:var(--muted);font-weight:700;}
 .ax-kv span{word-break:break-word;}
 .ax-note{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;white-space:pre-wrap;}
+.ax-flag{display:block;color:#b45309;font-size:11.5px;font-weight:700;margin-top:2px;white-space:normal;}
+.ax-warn td{background:rgba(245,158,11,.06);}
+.ax-help{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.9;}
+.ax-alert{background:rgba(229,72,77,.07);border:1px solid rgba(229,72,77,.3);color:#b42318;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600;margin-top:8px;}
+.ax-aud{display:flex;flex-direction:column;gap:10px;}
+.ax-aud-i{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel);}
+.ax-aud-i.bad{border-color:rgba(229,72,77,.35);background:rgba(229,72,77,.04);}.ax-aud-i.warn{border-color:rgba(245,158,11,.45);background:rgba(245,158,11,.05);}.ax-aud-i.ok{border-color:rgba(0,168,62,.35);background:rgba(0,168,62,.05);}
+.ax-aud-t{font-weight:800;font-size:14px;}.ax-aud-s{font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.8;}
+.ax-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.ax-chip{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:5px 11px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--text);}
+.ax-chip:hover{border-color:var(--accent);color:var(--accent);}
+.ax-seg{display:flex;gap:6px;margin:12px 0 8px;}.ax-seg button{flex:1;border:1px solid var(--line);background:var(--panel2);border-radius:10px;padding:9px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;color:var(--muted);}
+.ax-seg button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.ax-ing{display:grid;grid-template-columns:1fr 92px 84px 32px;gap:6px;align-items:center;margin-bottom:6px;}
+.ax-ing select,.ax-ing input{min-width:0;}.ax-ing .c{font-size:12.5px;font-weight:800;text-align:center;}
+.ax-ing button{border:0;background:rgba(229,72,77,.1);color:var(--red);border-radius:8px;height:34px;font-size:15px;cursor:pointer;}
+.ax-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0;}.ax-sum div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center;}
+.ax-sum b{display:block;font-size:17px;}.ax-sum small{color:var(--muted);font-size:11.5px;}
+.ax-chk{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:10px;line-height:1.7;cursor:pointer;}
+.ax-chk input{margin-top:4px;}
 .mn-cats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
 .mn-cats button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:12px;padding:9px 14px;font-weight:800;font-family:inherit;cursor:pointer;}
 .mn-cats button small{color:var(--muted);font-weight:700;margin-inline-start:4px;}
@@ -2544,7 +2564,7 @@ function mnVarRows(){
   document.getElementById('mnVars').innerHTML=e.vars.map((v,i)=>`<div class="mn-var">
     <input class="form-inp" placeholder="الحجم (مثلاً وحدة، صغير، كبير)" value="${esc(v.name)}" oninput="mnEd.vars[${i}].name=this.value">
     <input class="form-inp" type="number" min="0" placeholder="السعر" value="${v.price||''}" oninput="mnEd.vars[${i}].price=Math.round(Number(this.value)||0);mnProf(${i})">
-    <input class="form-inp" type="number" min="0" placeholder="${v.rec?'من الوصفة':'التكلفة (اختياري)'}" value="${v.rec?'':v.cost||''}" ${v.rec?'disabled title="التكلفة محسوبة من الوصفة بالكاشير"':''} oninput="mnEd.vars[${i}].cost=Math.round(Number(this.value)||0);mnProf(${i})">
+    <input class="form-inp" type="number" min="0" placeholder="${v.rec?'من الوصفة':'التكلفة (اختياري)'}" value="${v.rec?'':v.cost||''}" ${v.rec?'disabled title="التكلفة محسوبة من الوصفة — تتعدّل من «المخزون والحسابات» ← «الأصناف والأرباح»"':''} oninput="mnEd.vars[${i}].cost=Math.round(Number(this.value)||0);mnProf(${i})">
     ${e.vars.length>1?`<button class="btn-sm btn-del" onclick="mnEd.vars.splice(${i},1);mnVarRows()">✕</button>`:''}</div><div class="mn-prof" id="mnPf${i}"></div>`).join('');
   e.vars.forEach((v,i)=>mnProf(i));
 }
@@ -2624,6 +2644,10 @@ async function mnSaveCosts(e,name,vars){
       clears.forEach(k=>{delete costs[k];});sets.forEach(([k,c])=>{costs[k]=c;});
       if(s.exists())tx.update(ref,{costs,recipes});else tx.set(ref,{costs,recipes,materials:[],moves:[],expenses:[]});
     });
+    // تصحيح المبيعات القديمة يمشي ويا الاسم الجديد
+    if(renames.length){const fr=fb.doc(fb.db,'accounting',mnRid,'meta','recost');
+      await fb.runTransaction(fb.db,async tx=>{const s=await tx.get(fr);if(!s.exists())return;const items={...(s.data().items||{})};let ch=false;
+        renames.forEach(([a,b])=>{if(a in items){items[b]=items[a];delete items[a];ch=true;}});if(ch)tx.set(fr,{items,updatedAt:Date.now()});});}
   }catch(err){toast('⚠️ الصنف انحفظ بس التكلفة ما انحفظت: '+(err.code||err.message),'warn');}
 }
 function axOpenMn(html){document.getElementById('mnMoBody').innerHTML=html;document.getElementById('mnMo').classList.add('open');}
@@ -2631,7 +2655,7 @@ window.mnClose=()=>{document.getElementById('mnMo').classList.remove('open');mnE
 // ── المخزون والحسابات: قراءة كاملة لكل الأرقام + الإدارة فقط تعدّل وتحذف المصروفات ──
 const AX_MV={open:'رصيد افتتاحي',purchase:'وارد — مشتريات',sale:'صادر — منصرف للمبيعات',sale_return:'وارد — مردود مبيعات',waste:'صادر — تالف / هالك',count:'تسوية جرد',purchase_return:'صادر — مرتجع للمورد'};
 const AX_CATS=['رواتب','إيجار','كهرباء وماء','غاز / وقود','صيانة','تغليف','تسويق وإعلان','مشتريات أخرى','أخرى'];
-let axRid=null,axDoc=null,axExp=[],axTab='rep',axUnsubs=[],axView=null,axShifts=[],axMenu=[],axSup=[],axLed=[];
+let axRid=null,axDoc=null,axExp=[],axTab='rep',axUnsubs=[],axView=null,axShifts=[],axMenu=[],axSup=[],axLed=[],axFix={};
 const axFmtD=ms=>ms?new Date(ms).toLocaleString('ar-IQ-u-nu-latn',{year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true}):'—';
 const axQ=n=>Number(Math.round((Number(n)||0)*1000)/1000).toLocaleString('ar-IQ-u-nu-latn');
 window.axRangeCh=()=>{const c=document.getElementById('axRange').value==='custom';['axFrom','axTo'].forEach(id=>{const e=document.getElementById(id);e.style.display=c?'':'none';if(c&&!e.value){const d=new Date();e.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}});accRender();};
@@ -2650,7 +2674,7 @@ window.accInit=function(){
   if(isAdmin()){const cur=sel.value;sel.innerHTML='<option value="">-- اختر المطعم --</option>'+allRestaurants.map(r=>`<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');sel.value=cur||(allRestaurants[0]&&allRestaurants[0].id)||'';}
   const rid=isRest()?currentUser.restaurantId:sel.value;
   if(rid===axRid&&axUnsubs.length){accRender();return;}
-  axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=rid;axDoc=null;axExp=[];axShifts=[];axMenu=[];axSup=[];axLed=[];
+  axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=rid;axDoc=null;axExp=[];axShifts=[];axMenu=[];axSup=[];axLed=[];axFix={};
   if(!rid){accRender();return;}
   const fb=window._fb;
   axUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'accounting',rid),s=>{axDoc=s.exists()?s.data():{};accRender(true);},()=>{axDoc={};accRender(true);}));
@@ -2659,6 +2683,8 @@ window.accInit=function(){
   axUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'restaurants',rid,'menu','main'),s=>{axMenu=(s.exists()&&s.data().cats)||[];accRender(true);},()=>{}));
   axUnsubs.push(fb.onSnapshot(fb.collection(fb.db,'accounting',rid,'suppliers'),s=>{axSup=s.docs.map(d=>({id:d.id,...d.data()}));accRender(true);},()=>{}));
   axUnsubs.push(fb.onSnapshot(fb.collection(fb.db,'accounting',rid,'ledger'),s=>{axLed=s.docs.map(d=>({id:d.id,...d.data()}));accRender(true);},()=>{}));
+  // تصحيح تكلفة المبيعات القديمة (المالك بس) — وثيقة لحالها حتى ما تتداخل ويا مزامنة المخزون بالكاشير وأمين المخزن
+  axUnsubs.push(fb.onSnapshot(fb.doc(fb.db,'accounting',rid,'meta','recost'),s=>{axFix=(s.exists()&&s.data().items)||{};accRender(true);},()=>{}));
   unsubs.push(()=>{axUnsubs.forEach(u=>u&&u());axUnsubs=[];axRid=null;});
   accRender();
 };
@@ -2803,17 +2829,21 @@ window.accRender=function(live){
     ${S.unsold.length?`<div class="card"><div class="card-title"><span class="dot"></span> ⛔ أصناف ما انباعت بهاي الفترة (${toA(S.unsold.length)})</div><div class="tm-scroll"><table class="tm-tbl" id="axUnsoldTbl"><tr><th>الصنف</th><th>السعر</th><th>العدد</th></tr>
       ${S.unsold.map(x=>`<tr><td>${nm(x)}</td><td>${fmt(x.price)}</td><td class="ax-neg">${toA(0)}</td></tr>`).join('')}</table></div></div>`:''}`;
   }else if(axTab==='items'){
-    const os=allOrders.filter(o=>o.restaurantId===axRid&&inR(o.createdAtMs)&&o.status==='delivered');
-    const sold={};os.forEach(o=>(o.items||[]).forEach(i=>{const k=i.name+'|'+(i.variant||'وحدة');const a=sold[k]||(sold[k]={q:0,rev:0,cost:0});a.q+=i.qty||1;a.rev+=(i.price||0)*(i.qty||1);a.cost+=(Number(i.cost)||0)*(i.qty||1);}));
-    const rows=[];axMenu.forEach(c=>(c.items||[]).forEach(it=>(it.variants||[]).forEach(v=>{const k=it.name+'|'+v.name,c0=axUnitCost(it.name,v.name),sd=sold[k]||{q:0,rev:0,cost:0};
-      rows.push({k,cat:c.cat,name:it.name,vn:v.name,price:v.price,cost:c0,rec:axHasRec(k),q:sd.q,rev:sd.rev,prof:sd.rev-sd.cost});})));
-    const tr=rows.reduce((s,x)=>s+x.rev,0),tp=rows.reduce((s,x)=>s+x.prof,0);
-    h=`<div class="stats">${kpi(toA(rows.length),'📋 صنف/حجم')}${kpi(toA(rows.filter(x=>!x.cost).length),'⚠️ بدون تكلفة')}${kpi(fmt(Math.round(tr)),'💰 مبيعات الأصناف')}${kpi(fmt(Math.round(tp)),'📈 ربح الأصناف')}</div>
-    <div class="card"><div class="card-title"><span class="dot"></span> كل صنف: السعر والتكلفة والربح — اضغط لتعديل التكلفة</div><div class="tm-scroll"><table class="tm-tbl">
-      <tr><th>الصنف</th><th>سعر البيع</th><th>التكلفة</th><th>الربح للحبة</th><th>نسبة الربح</th><th>المباع</th><th>المبيعات</th><th>الربح</th></tr>
-      ${(window.axKeys=rows.sort((a,b)=>b.rev-a.rev).map(x=>x.k),rows).map((x,ix)=>{const pr=x.price-x.cost,m=x.price?Math.round(pr*100/x.price):0;
-        return `<tr class="ax-row" onclick="axItemView(axKeys[${ix}])"><td><b>${esc(x.name)}</b>${x.vn!=='وحدة'?' ('+esc(x.vn)+')':''}<small style="display:block;color:var(--muted)">${esc(x.cat)}</small></td><td>${fmt(x.price)}</td><td>${x.cost?fmt(Math.round(x.cost))+(x.rec?' 🧾':''):'<span class="ax-neg">—</span>'}</td><td class="${x.cost?(pr>=0?'ax-pos':'ax-neg'):''}">${x.cost?fmt(Math.round(pr)):'—'}</td><td>${x.cost?m+'%':'—'}</td><td>${toA(x.q)}</td><td>${fmt(Math.round(x.rev))}</td><td class="${x.prof>=0?'ax-pos':'ax-neg'}">${x.q?fmt(Math.round(x.prof)):'—'}</td></tr>`;}).join('')||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">لا توجد أصناف</td></tr>'}
-    </table></div><div style="font-size:11px;color:var(--muted);margin-top:6px">🧾 = التكلفة محسوبة من وصفة الصنف (الوصفات تتعدّل من الكاشير ← المخزون ← «الوصفات والتكلفة»). الربح بالمبيعات محسوب بتكلفة يوم البيع.</div></div>`;
+    const A=axItemsAudit(from,to),rows=A.rows;
+    h=`<div class="stats">${kpi(toA(rows.length),'📋 صنف/حجم')}${kpi(fmt(Math.round(A.rev)),'💰 مبيعات الأصناف')}${kpi(fmt(Math.round(A.cogs)),'🧮 تكلفة المباع')}${kpi(`<span class="${A.prof>=0?'ax-pos':'ax-neg'}">${fmt(Math.round(A.prof))}</span>`,'📈 ربح الأصناف',A.rev?toA(Math.round(A.prof*100/A.rev))+'% من المبيعات':'')}</div>
+    ${axAuditCard(A)}
+    <div class="card"><div class="card-title"><span class="dot"></span> كل صنف: السعر والتكلفة والربح — اضغط على الصنف لتعديل تكلفته أو وصفته</div><div class="tm-scroll"><table class="tm-tbl">
+      <tr><th>الصنف</th><th>سعر البيع</th><th>التكلفة</th><th>الربح للحبة</th><th>نسبة الربح</th><th>المباع</th><th>المبيعات</th><th>تكلفة المباع</th><th>الربح</th></tr>
+      ${(window.axKeys=rows.map(x=>x.k),rows).map((x,ix)=>{const pr=x.price-x.cost,m=x.price?Math.round(pr*100/x.price):0;
+        return `<tr class="ax-row${x.flags.length?' ax-warn':''}" onclick="axItemView(axKeys[${ix}])"><td><b>${esc(x.name)}</b>${x.vn!=='وحدة'?' ('+esc(x.vn)+')':''}<small style="display:block;color:var(--muted)">${esc(x.cat)}</small>${x.flags.map(f=>`<small class="ax-flag">⚠️ ${f}</small>`).join('')}</td>
+          <td>${x.price?fmt(x.price):'—'}</td><td>${x.cost?fmt(Math.round(x.cost))+(x.rec?' 🧾':''):'<span class="ax-neg">—</span>'}</td>
+          <td class="${x.cost?(pr>=0?'ax-pos':'ax-neg'):''}">${x.cost&&x.price?fmt(Math.round(pr)):'—'}</td><td>${x.cost&&x.price?m+'%':'—'}</td>
+          <td>${toA(x.q)}</td><td>${fmt(Math.round(x.rev))}</td><td>${x.q?fmt(Math.round(x.cogs))+(x.fixQ?' ✏️':''):'—'}</td>
+          <td class="${x.prof>=0?'ax-pos':'ax-neg'}">${x.q?fmt(Math.round(x.prof)):'—'}</td></tr>`;}).join('')}
+      <tr style="background:var(--bg)"><td><b>المجموع</b></td><td></td><td></td><td></td><td></td><td><b>${toA(A.q)}</b></td><td><b>${fmt(Math.round(A.rev))}</b></td><td><b>${fmt(Math.round(A.cogs))}</b></td><td class="${A.prof>=0?'ax-pos':'ax-neg'}"><b>${fmt(Math.round(A.prof))}</b></td></tr>
+    </table></div><div class="ax-help">• <b>الربح = المبيعات − تكلفة المباع</b>، للطلبات المسلّمة بس وبسعر الصنف قبل الخصم (الخصومات تنطرح بقائمة الدخل).<br>
+      • تكلفة المباع بتكلفة <b>يوم البيع</b> (سعر المواد وقتها). الصنف اللي انباع قبل ما تنحط تكلفته ينحسب بتكلفته الحالية.<br>
+      • 🧾 = التكلفة من وصفة الصنف (مواد المخزن × الكمية) · ✏️ = مبيعات قديمة انصحّحت تكلفتها. التكلفة والوصفات تتعدّل من هنا بس.</div></div>`;
   }else if(axTab==='shifts'){
     const list=axShifts.filter(x=>inR(x.openedAtMs)).sort((a,b)=>(b.openedAtMs||0)-(a.openedAtMs||0));
     const diffT=list.filter(x=>x.status==='closed').reduce((s,x)=>s+(x.diff||0),0);
@@ -2886,6 +2916,8 @@ window.accRender=function(live){
       ${row('متوسط الطلب (د.ع)','avg','',1)}
       ${F.canc.n?`<tr><td>طلبات ملغية (${toA(F.canc.n)})</td><td style="text-align:left">${fmt(F.canc.v)}</td>${P?'<td></td><td></td>':''}</tr>`:''}
     </table></div>
+    ${F.noCost?`<div class="ax-alert">⚠️ ${fmt(Math.round(F.noCost))} د.ع مبيعات أصناف <b>بدون تكلفة</b> — الربح يطلع أعلى من الحقيقي. حط تكلفتها من «📋 الأصناف والأرباح».</div>`:''}
+    ${F.cogsEst?`<div class="ax-help">ℹ️ ${fmt(Math.round(F.cogsEst))} د.ع من تكلفة البضاعة <b>تقديرية</b>: أصناف انباعت قبل ما تنحط تكلفتها، فانحسبت بتكلفتها الحالية.</div>`:''}
     ${F.tax?`<div style="font-size:12px;color:var(--muted);margin-top:6px">ℹ️ صافي المبيعات يشمل ضريبة ${fmt(Math.round(F.tax))} د.ع — بملف المحاسب تطلع بحساب منفصل.</div>`:''}
     <div style="font-size:12px;color:var(--muted);margin-top:6px">📤 ملف المحاسب: قائمة الدخل، والقيود اليومية (مدين/دائن) جاهزة للإدخال ببرامج مثل «البيان» و«الأمين»، والمبيعات حسب اليوم وطريقة الدفع، والمصروفات، وأرصدة الموردين وديون الزبائن وحركاتهم، والصندوق اليومي، ودليل الحسابات.</div></div>`;
   }else{
@@ -2902,15 +2934,16 @@ window.accRender=function(live){
 const axTypeOf=o=>o.orderType||'delivery';
 function axRangeLabel(){const s=document.getElementById('axRange');const o=s.options[s.selectedIndex];if(s.value==='custom')return (document.getElementById('axFrom').value||'')+' ← '+(document.getElementById('axTo').value||'');return o?o.text:'';}
 // ── قائمة الدخل: نفس الحساب للفترة الحالية والسابقة وملف المحاسب ──
-// المبيعات = الطلبات المسلّمة بس (مثل قائمة الدخل بالكاشير)، والتكلفة من تكلفة الصنف المحفوظة وقت البيع
+// المبيعات = الطلبات المسلّمة بس (مثل قائمة الدخل بالكاشير)، والتكلفة من axLineCost (نفس جدول الأصناف وملف المحاسب)
 function axFin(from,to){
   const inR=ts=>(ts||0)>=from&&(ts||0)<to,os=allOrders.filter(o=>o.restaurantId===axRid&&inR(o.createdAtMs));
   const done=os.filter(o=>o.status==='delivered'),canc=os.filter(o=>o.status==='cancelled');
-  let sales=0,cogs=0,tax=0;done.forEach(o=>{sales+=o.value||0;tax+=Number(o.tax)||0;(o.items||[]).forEach(i=>{cogs+=(Number(i.cost)||0)*(i.qty||1);});});
+  let sales=0,cogs=0,tax=0,cogsEst=0,noCost=0;done.forEach(o=>{sales+=o.value||0;tax+=Number(o.tax)||0;(o.items||[]).forEach(i=>{const q=Number(i.qty)||1,L=axLineCost(o,i);cogs+=L.c*q;
+    if(L.src==='est')cogsEst+=L.c*q;else if(L.src==='none')noCost+=(Number(i.price)||0)*q;});});
   const exp=axExpAll().filter(e=>inR(e.ts)).reduce((s,e)=>s+(Number(e.amount)||0),0);
   const mv=((axDoc&&axDoc.moves)||[]).filter(e=>inR(e.ts)),waste=-mv.filter(e=>e.type==='waste').reduce((s,e)=>s+(e.value||0),0),cnt=mv.filter(e=>e.type==='count').reduce((s,e)=>s+(e.value||0),0);
   const gross=sales-cogs;
-  return{done,orders:done.length,sales,cogs,gross,exp,waste,cnt,tax,net:gross-exp-waste+cnt,avg:done.length?sales/done.length:0,
+  return{done,orders:done.length,sales,cogs,cogsEst,noCost,gross,exp,waste,cnt,tax,net:gross-exp-waste+cnt,avg:done.length?sales/done.length:0,
     canc:{n:canc.length,v:canc.reduce((s,o)=>s+(o.value||0),0)}};
 }
 // الفترة السابقة للمقارنة (نفس الطول، قبلها مباشرة) — حدودها ثابتة (ساعة أو يوم كامل)
@@ -2953,7 +2986,7 @@ function axJournal(from,to,F){
   const inR=ts=>(ts||0)>=from&&(ts||0)<to,J=[],R=Math.round;
   const add=(ts,desc,lines)=>{lines=lines.filter(l=>R(l.dr||0)||R(l.cr||0)).map(l=>({a:l.a,dr:R(l.dr||0),cr:R(l.cr||0)}));if(lines.length)J.push({ts,desc,lines});};
   const day={};F.done.forEach(o=>{const k=axDayKey(o.createdAtMs),d=day[k]||(day[k]={n:0,v:0,tax:0,cost:0,cash:0,card:0,later:0,cod:0});
-    const sp=axPaySplit(o);d.n++;d.v+=o.value||0;d.tax+=Number(o.tax)||0;(o.items||[]).forEach(i=>{d.cost+=(Number(i.cost)||0)*(i.qty||1);});
+    const sp=axPaySplit(o);d.n++;d.v+=o.value||0;d.tax+=Number(o.tax)||0;(o.items||[]).forEach(i=>{d.cost+=axLineCost(o,i).c*(Number(i.qty)||1);});
     d.cash+=sp.cash;d.card+=sp.card;d.later+=sp.later+sp.credit;d.cod+=sp.cod;});
   Object.keys(day).sort((a,b)=>a-b).forEach(k=>{const d=day[k],ts=+k;
     const card=R(d.card),later=R(d.later),cod=R(d.cod),tax=R(d.tax),total=R(d.v),cash=total-card-later-cod;   // الفرق البسيط (فكة/تقريب) ينحسب بالصندوق حتى القيد يتوازن
@@ -3119,27 +3152,155 @@ window.axPrintReport=()=>{
 };
 // ── التكلفة والربح للأصناف (تعديل التكلفة من الإدارة) ──
 const axHasRec=k=>{const r=(axDoc&&axDoc.recipes||{})[k];return !!(r&&r.length);};
+// التكلفة الحالية لصنف/حجم: من وصفته (مواد المخزن × الكمية) إذا عنده وصفة، وإلا التكلفة الثابتة
 function axUnitCost(n,v){const k=n+'|'+v,mats=(axDoc&&axDoc.materials)||[];
   if(axHasRec(k))return axDoc.recipes[k].reduce((s,x)=>{const m=mats.find(mm=>mm.id===x.mid);return s+(m?(Number(m.cost)||0)*(Number(x.q)||0):0);},0);
   return Number(((axDoc&&axDoc.costs)||{})[k])||0;}
-window.axItemView=k=>{
-  window.axCurKey=k;const [n,v]=k.split('|');let price=0,cat='';axMenu.forEach(c=>(c.items||[]).forEach(it=>{if(it.name===n)(it.variants||[]).forEach(x=>{if(x.name===v){price=x.price;cat=c.cat;}});}));
-  const cost=axUnitCost(n,v),rec=axHasRec(k),mats=(axDoc&&axDoc.materials)||[];
-  axOpen(`<div class="modal-title">📋 ${esc(n)}${v!=='وحدة'?' ('+esc(v)+')':''}</div>
-    <div class="ax-kv"><b>الفرع</b><span>${esc(cat)}</span><b>سعر البيع</b><span>${fmt(price)} د.ع</span><b>التكلفة</b><span>${cost?fmt(Math.round(cost))+' د.ع':'غير محددة'}</span>
-      <b>الربح للحبة</b><span class="${price-cost>=0?'ax-pos':'ax-neg'}">${cost?fmt(Math.round(price-cost))+' د.ع ('+(price?Math.round((price-cost)*100/price):0)+'%)':'—'}</span></div>
-    ${rec?`<div style="font-weight:800;margin:6px 0">🧾 الوصفة</div><div class="ax-note">${axDoc.recipes[k].map(x=>{const m=mats.find(mm=>mm.id===x.mid);return esc(m?m.name:'؟')+' × '+axQ(x.q)+' '+esc(m?m.unit:'')+(m?' = '+fmt(Math.round((m.cost||0)*(x.q||0))):'');}).join('\n')}</div><div style="font-size:11px;color:var(--muted);margin-top:6px">التكلفة محسوبة من الوصفة وأسعار المواد — تُعدّل من تبويب الوصفات في الكاشير.</div>`
-      :canEditAcc()?`<div class="form-group" style="margin-top:12px"><label>🧮 تكلفة الإنتاج للحبة (د.ع)</label><input class="form-inp" id="axIcost" type="number" min="0" value="${Math.round(cost)||''}" oninput="axIprev(${price})"><div id="axIprev" style="font-size:13px;font-weight:800;margin-top:6px"></div></div>`:''}
-    <div class="modal-btns">${!rec&&canEditAcc()?`<button class="btn-primary" onclick="axItemSave(axCurKey)">💾 حفظ التكلفة</button>`:''}<button class="btn-sm" onclick="axClose()">إغلاق</button></div>`);
-  if(!rec)axIprev(price);
+// ═══ تكلفة البضاعة المباعة — حساب واحد لكل مكان (جدول الأصناف، قائمة الدخل، القيود وملف المحاسب) ═══
+//  تكلفة كل حبة مباعة = التكلفة المحفوظة يوم البيع (الصح محاسبياً: سعر المواد وقتها)
+//   • المالك صحّح مبيعات صنف قديمة (تكلفة يوم البيع چانت غلط) ← اللي انباع قبل التصحيح ينحسب بالتكلفة المصحّحة  (src: fix)
+//   • انباع بدون تكلفة (قبل ما تنحط) ← بتكلفته الحالية ويتعلّم «تقديري»  (src: est)، وإذا ماكو تكلفة أصلاً ← 0  (src: none)
+function axLineCost(o,i){
+  const k=i.name+'|'+(i.variant||'وحدة'),f=axFix[k],t=o.createdAtMs||0;
+  if(f&&t<(Number(f.to)||0))return{c:Number(f.cost)||0,src:'fix'};
+  const s=Number(i.cost);
+  if(s>0)return{c:s,src:'sale'};
+  const cur=axUnitCost(i.name,i.variant||'وحدة');
+  return{c:cur,src:cur>0?'est':'none'};
+}
+// فحص كل صنف بالفترة: المبيعات وتكلفة المباع والربح، والمشاكل (بدون تكلفة، تكلفة غير منطقية، تكلفة يوم البيع تختلف)
+function axItemsAudit(from,to){
+  const os=allOrders.filter(o=>o.restaurantId===axRid&&(o.createdAtMs||0)>=from&&(o.createdAtMs||0)<to&&o.status==='delivered');
+  const sold={},Z=()=>({q:0,rev:0,cogs:0,est:0,none:0,saleQ:0,saleC:0,fixQ:0});
+  os.forEach(o=>(o.items||[]).forEach(i=>{const vn=i.variant||'وحدة',k=i.name+'|'+vn,q=Number(i.qty)||1,L=axLineCost(o,i);
+    const a=sold[k]||(sold[k]=Object.assign(Z(),{name:i.name,vn}));a.q+=q;a.rev+=(Number(i.price)||0)*q;a.cogs+=L.c*q;
+    if(L.src==='sale'){a.saleQ+=q;a.saleC+=L.c*q;}else if(L.src==='fix')a.fixQ+=q;else if(L.src==='est')a.est+=q;else a.none+=q;}));
+  const rows=[],seen={};
+  const mk=(k,cat,name,vn,price,inMenu)=>{
+    const cost=axUnitCost(name,vn),sd=sold[k]||Z(),is={};
+    if(!cost)is.noCost=1;else if(price&&cost>=price)is.loss=1;else if(price&&cost<price*0.05)is.tiny=1;
+    if(sd.saleQ&&cost){const avg=sd.saleC/sd.saleQ;if(Math.abs(avg-cost)>Math.max(100,cost*0.25))is.diff=avg;}
+    if(sd.est)is.est=sd.est;
+    const fl=[];
+    if(is.noCost)fl.push(sd.q?'بدون تكلفة — ربحه يطلع أعلى من الحقيقي':'بدون تكلفة');
+    if(is.loss)fl.push('التكلفة أكثر من سعر البيع');
+    if(is.tiny)fl.push('التكلفة قليلة جداً ('+fmt(Math.round(cost))+') — تأكد منها');
+    if(is.diff)fl.push('انباع بتكلفة '+fmt(Math.round(is.diff))+' للحبة، وتكلفته هسه '+fmt(Math.round(cost)));
+    if(is.est)fl.push(toA(is.est)+' حبة انباعت بدون تكلفة — انحسبت بتكلفته الحالية');
+    rows.push({k,cat,name,vn,price,cost,rec:axHasRec(k),inMenu,...sd,prof:sd.rev-sd.cogs,issues:is,flags:fl});};
+  axMenu.forEach(c=>(c.items||[]).forEach(it=>(it.variants&&it.variants.length?it.variants:[{name:'وحدة',price:it.price}]).forEach(v=>{const vn=v.name||'وحدة',k=it.name+'|'+vn;if(seen[k])return;seen[k]=1;mk(k,c.cat||'',it.name,vn,Number(v.price)||0,true);})));
+  // انباع وهسه مو بالمنيو (انحذف أو تغيّر اسمه): يبقى بالحساب حتى المجموع يطابق قائمة الدخل
+  Object.keys(sold).forEach(k=>{if(seen[k])return;seen[k]=1;const a=sold[k];mk(k,'مو بالمنيو هسه',a.name,a.vn,a.q?Math.round(a.rev/a.q):0,false);});
+  rows.sort((a,b)=>b.rev-a.rev||a.name.localeCompare(b.name,'ar'));
+  const S=f=>rows.reduce((t,x)=>t+(x[f]||0),0);
+  return{rows,q:S('q'),rev:S('rev'),cogs:S('cogs'),prof:S('prof')};
+}
+// بطاقة «فحص الحسابات»: كل مشكلة بسطر، وكل صنف ينفتح بضغطة
+function axAuditCard(A){
+  const R=A.rows,keys=[],chip=r=>{keys.push(r.k);return `<button class="ax-chip" onclick="axItemView(axAudKeys[${keys.length-1}])">${esc(r.name)}${r.vn!=='وحدة'?' ('+esc(r.vn)+')':''}</button>`;};
+  const diff=R.filter(r=>r.issues.diff),noC=R.filter(r=>r.issues.noCost&&r.q),noC0=R.filter(r=>r.issues.noCost&&!r.q),odd=R.filter(r=>r.issues.loss||r.issues.tiny),est=R.filter(r=>r.issues.est);
+  const it=(cls,t,sub,list,extra)=>`<div class="ax-aud-i ${cls}"><div class="ax-aud-t">${t}</div>${sub?`<div class="ax-aud-s">${sub}</div>`:''}${list&&list.length?`<div class="ax-chips">${list.map(chip).join('')}</div>`:''}${extra||''}</div>`;
+  let h='';
+  if(diff.length){const fixable=diff.filter(r=>!r.issues.loss&&!r.issues.tiny&&!r.issues.noCost);
+    h+=it('bad',`🔴 ${toA(diff.length)} صنف انباع بتكلفة غير تكلفته الهسه`,'تكلفة يوم البيع چانت غلط (أو تغيّرت أسعار المواد) فربحه يطلع غلط، ممكن حتى بالسالب. افتح الصنف، تأكد من تكلفته، واختار «صحّح مبيعاته القديمة».',diff,
+      canEditAcc()&&fixable.length?`<button class="btn-sm btn-edit" style="margin-top:8px" onclick="axFixAll()">✏️ صحّح مبيعات ${toA(fixable.length)} صنف بتكلفتهم الهسه</button>`:'');}
+  if(odd.length)h+=it('warn',`🟠 ${toA(odd.length)} صنف تكلفته غير منطقية`,'أقل من 5% من سعر البيع أو أكثر من السعر نفسه — غالباً غلط بالإدخال.',odd);
+  if(noC.length)h+=it('warn',`🟠 ${toA(noC.length)} صنف انباع وما إله تكلفة`,'ربحه ينحسب كأن تكلفته صفر، فالربح الكلي يطلع أعلى من الحقيقي.',noC);
+  if(est.length)h+=it('','ℹ️ مبيعات قديمة بدون تكلفة يوم البيع','انباعت قبل ما تنحط تكلفتها، فانحسبت بتكلفة الصنف الحالية (تقديري).',est);
+  if(noC0.length)h+=it('',`⚪ ${toA(noC0.length)} صنف بالمنيو بدون تكلفة (ما انباع بهاي الفترة)`,'',noC0.slice(0,40));
+  window.axAudKeys=keys;
+  if(!h)h=it('ok','✅ الحسابات سليمة','كل الأصناف المباعة إلها تكلفة منطقية، وتكلفة يوم البيع تطابق تكلفتها.');
+  return `<div class="card"><div class="card-title"><span class="dot"></span> 🩺 فحص الحسابات — ${esc(axRangeLabel())}</div><div class="ax-aud">${h}</div></div>`;
+}
+// تصحيح المبيعات القديمة: اللي انباع قبل هسه ينحسب بتكلفة الصنف الحالية (تنحفظ القيمة نفسها — تغيّر التكلفة بعدين ما يأثر عليها)
+async function axFixSet(list){
+  const fb=window._fb,ref=fb.doc(fb.db,'accounting',axRid,'meta','recost'),by=(currentUser.name||currentUser.email||'الإدارة').slice(0,60),now=Date.now();
+  await fb.runTransaction(fb.db,async tx=>{const s=await tx.get(ref),items={...((s.exists()&&s.data().items)||{})};
+    list.forEach(([k,c])=>{items[k]={cost:Math.max(0,Math.round(Number(c)||0)),to:now,by,at:now};});
+    tx.set(ref,{items,updatedAt:now});});
+  list.forEach(([k,c])=>audit('item.cost.fix',{restaurantId:axRid,item:k,cost:Math.round(Number(c)||0)}));
+}
+window.axFixAll=async()=>{
+  const [from,to]=axRange(),list=axItemsAudit(from,to).rows.filter(r=>r.issues.diff&&!r.issues.loss&&!r.issues.tiny&&!r.issues.noCost).map(r=>[r.k,r.cost]);
+  if(!list.length)return;
+  if(!confirm(`كل مبيعات ${list.length} صنف القديمة تنحسب بتكلفتهم الهسه؟\nتأكد إن تكلفتهم الهسه صحيحة.`))return;
+  try{await axFixSet(list);toast('✅ انصحّحت مبيعات '+list.length+' صنف');}catch(e){toast('❌ تعذّر التصحيح: '+(e.code||e.message),'error');}
 };
-window.axIprev=price=>{const el=document.getElementById('axIprev'),c=Number((document.getElementById('axIcost')||{}).value)||0;if(!el)return;
-  el.innerHTML=c?`<span class="${price-c>=0?'ax-pos':'ax-neg'}">الربح ${fmt(price-c)} د.ع (${price?Math.round((price-c)*100/price):0}%)</span>`:'<span style="color:var(--muted)">أدخل التكلفة لحساب الربح</span>';};
-window.axItemSave=async k=>{
-  const c=Math.max(0,Math.round(Number(document.getElementById('axIcost').value)||0));
-  const costs={...((axDoc&&axDoc.costs)||{})};if(c)costs[k]=c;else delete costs[k];
-  try{const fb=window._fb;await fb.setDoc(fb.doc(fb.db,'accounting',axRid),{costs},{merge:true});audit('item.cost',{restaurantId:axRid,item:k,cost:c});toast('✅ تم حفظ التكلفة');axClose();}
-  catch(e){toast('❌ تعذّر الحفظ: '+(e.code||e.message),'error');}
+window.axFixDel=async k=>{
+  if(!confirm('ترجع مبيعاته القديمة تنحسب بتكلفة يوم البيع؟'))return;
+  const fb=window._fb,ref=fb.doc(fb.db,'accounting',axRid,'meta','recost');
+  try{await fb.runTransaction(fb.db,async tx=>{const s=await tx.get(ref),items={...((s.exists()&&s.data().items)||{})};delete items[k];tx.set(ref,{items,updatedAt:Date.now()});});
+    audit('item.cost.unfix',{restaurantId:axRid,item:k});toast('✅ انلغى التصحيح');axItemDraw();}catch(e){toast('❌ '+(e.code||e.message),'error');}
+};
+// ═══ تكلفة الصنف ووصفته — تتعدّل من لوحة الإدارة بس ═══
+//  وصفة: مواد المخزن × الكمية لحبة وحدة (تنخصم من المخزن مع كل بيع، والتكلفة تتبع أسعار المواد)
+//  تكلفة ثابتة: رقم واحد (ما تنخصم مواد)
+let axIt=null;
+window.axItemView=k=>{
+  window.axCurKey=k;const [n,v]=k.split('|');let price=0,cat='';
+  axMenu.forEach(c=>(c.items||[]).forEach(it=>{if(it.name===n)(it.variants&&it.variants.length?it.variants:[{name:'وحدة',price:it.price}]).forEach(x=>{if((x.name||'وحدة')===v){price=Number(x.price)||0;cat=c.cat;}});}));
+  const rec=axHasRec(k);
+  axIt={k,n,v,price,cat,mode:rec?'rec':'fixed',rows:rec?axDoc.recipes[k].map(x=>({mid:x.mid,q:Number(x.q)||0})):[],fixed:Math.round(Number(((axDoc&&axDoc.costs)||{})[k])||0)||'',apply:null};
+  axItemDraw();
+};
+const axMatsSorted=()=>(((axDoc&&axDoc.materials)||[]).slice().sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ar')));
+function axDraftCost(){const I=axIt,mats=(axDoc&&axDoc.materials)||[];if(!I)return 0;
+  if(I.mode==='rec')return I.rows.reduce((s,x)=>{const m=mats.find(mm=>mm.id===x.mid);return s+(m?(Number(m.cost)||0)*(Number(x.q)||0):0);},0);
+  return Math.max(0,Number(I.fixed)||0);}
+function axItemDraw(){
+  const I=axIt;if(!I)return;const ed=canEditAcc(),mats=axMatsSorted(),k=I.k;
+  const [from,to]=axRange(),A=axItemsAudit(from,to),r=A.rows.find(x=>x.k===k)||{q:0,rev:0,cogs:0,prof:0,issues:{},flags:[],saleQ:0,saleC:0};
+  const cur=axUnitCost(I.n,I.v),fx=axFix[k];
+  if(I.apply===null)I.apply=!!r.issues.diff;
+  const kv=(a,b,c)=>`<b>${a}</b><span class="${c||''}">${b}</span>`;
+  const ing=(x,i)=>{const m=mats.find(mm=>mm.id===x.mid),lc=m?(Number(m.cost)||0)*(Number(x.q)||0):0;
+    return `<div class="ax-ing"><select class="form-inp" onchange="axIng(${i},'mid',this.value)">${mats.map(mm=>`<option value="${esc(mm.id)}" ${mm.id===x.mid?'selected':''}>${esc(mm.name)} (${fmt(Math.round(Number(mm.cost)||0))}/${esc(mm.unit||'')})</option>`).join('')}</select>
+      <input class="form-inp" type="number" step="any" min="0" value="${x.q||''}" placeholder="الكمية" oninput="axIng(${i},'q',this.value)" title="${esc(m?m.unit||'':'')}">
+      <span class="c" id="axIngC${i}">${fmt(Math.round(lc))}</span><button type="button" onclick="axIngDel(${i})" aria-label="حذف">✕</button></div>`;};
+  const edit=!ed?'':`<div style="font-weight:800;margin-top:14px">🧮 تكلفة الحبة</div>
+    <div class="ax-seg"><button class="${I.mode==='rec'?'on':''}" onclick="axIt.mode='rec';axItemDraw()">🧾 وصفة من مواد المخزن</button><button class="${I.mode==='fixed'?'on':''}" onclick="axIt.mode='fixed';axItemDraw()">🔢 تكلفة ثابتة</button></div>
+    ${I.mode==='rec'?(mats.length?`<div class="ax-help" style="margin-top:0">المكونات لحبة وحدة — تنخصم من المخزن مع كل بيع، والتكلفة تتبع أسعار المواد.</div>${I.rows.map(ing).join('')}<button class="btn-sm btn-edit" onclick="axIngAdd()">+ إضافة مكوّن</button>`
+        :`<div class="ax-alert">ماكو مواد بالمخزن بعد — أمين المخزن يضيفها من تطبيق «إدارة المخزن»، أو استخدم تكلفة ثابتة.</div>`)
+      :`<input class="form-inp" id="axIcost" type="number" min="0" value="${I.fixed}" placeholder="تكلفة الحبة (د.ع)" oninput="axIt.fixed=this.value;axItemCalc()"><div class="ax-help" style="margin-top:4px">التكلفة الثابتة ما تنقّص مواد من المخزن.</div>`}
+    <div class="ax-sum"><div><b id="axDc">0</b><small>التكلفة د.ع</small></div><div><b id="axDp">0</b><small>الربح للحبة</small></div><div><b id="axDm">0%</b><small>نسبة الربح</small></div></div>
+    <div id="axDwarn"></div>
+    ${r.q?`<label class="ax-chk"><input type="checkbox" ${I.apply?'checked':''} onchange="axIt.apply=this.checked"><span><b>صحّح مبيعاته القديمة كمان</b> — كل اللي انباع لحد هسه ينحسب بهذي التكلفة (إذا تكلفة يوم البيع چانت غلط). خليه مطفي إذا التكلفة تغيّرت لأن أسعار المواد تغيّرت.</span></label>`:''}
+    <div class="modal-btns"><button class="btn-primary" id="axIsave" onclick="axItemSave()">💾 حفظ</button><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`;
+  axOpen(`<div class="modal-title">📋 ${esc(I.n)}${I.v!=='وحدة'?' ('+esc(I.v)+')':''}</div>
+    <div class="ax-kv">${kv('الفرع',esc(I.cat||'—'))}${kv('سعر البيع',I.price?fmt(I.price)+' د.ع':'—')}${kv('التكلفة الهسه',cur?fmt(Math.round(cur))+' د.ع'+(axHasRec(k)?' 🧾 من الوصفة':' (ثابتة)'):'غير محددة',cur?'':'ax-neg')}
+      ${kv('الربح للحبة',cur&&I.price?fmt(Math.round(I.price-cur))+' د.ع ('+Math.round((I.price-cur)*100/I.price)+'%)':'—',I.price-cur>=0?'ax-pos':'ax-neg')}
+      ${r.q?kv(esc(axRangeLabel()),toA(r.q)+' حبة · مبيعات '+fmt(Math.round(r.rev))+' · تكلفة المباع '+fmt(Math.round(r.cogs))+' · الربح <b class="'+(r.prof>=0?'ax-pos':'ax-neg')+'">'+fmt(Math.round(r.prof))+'</b>'):''}</div>
+    ${r.flags.length?`<div class="ax-alert">${r.flags.map(f=>'⚠️ '+f).join('<br>')}</div>`:''}
+    ${fx?`<div class="ax-help">✏️ مبيعاته قبل ${axFmtD(fx.to)} محسوبة بتكلفة مصحّحة ${fmt(fx.cost)} د.ع (صحّحها ${esc(fx.by||'')}).${ed?` <a href="#" onclick="event.preventDefault();axFixDel(axCurKey)">إلغاء التصحيح</a>`:''}</div>`:''}
+    ${ed?edit:`${axHasRec(k)?`<div class="ax-note">${axDoc.recipes[k].map(x=>{const m=((axDoc&&axDoc.materials)||[]).find(mm=>mm.id===x.mid);return esc(m?m.name:'؟')+' × '+axQ(x.q)+' '+esc(m?m.unit:'');}).join('\n')}</div>`:''}<div class="modal-btns"><button class="btn-sm" onclick="axClose()">إغلاق</button></div>`}`);
+  axItemCalc();
+}
+function axItemCalc(){
+  const I=axIt;if(!I)return;const c=axDraftCost(),p=I.price-c,m=I.price?Math.round(p*100/I.price):0,set=(id,v,cls)=>{const e=document.getElementById(id);if(e){e.textContent=v;if(cls!=null)e.className=cls;}};
+  set('axDc',fmt(Math.round(c)));set('axDp',c?fmt(Math.round(p)):'—',c?(p>=0?'ax-pos':'ax-neg'):'');set('axDm',c&&I.price?m+'%':'—');
+  const mats=(axDoc&&axDoc.materials)||[];I.rows.forEach((x,i)=>{const mm=mats.find(q=>q.id===x.mid);set('axIngC'+i,fmt(Math.round(mm?(Number(mm.cost)||0)*(Number(x.q)||0):0)));});
+  const w=document.getElementById('axDwarn');if(w)w.innerHTML=c&&I.price&&c>=I.price?'<div class="ax-alert">⚠️ التكلفة أكثر من سعر البيع — كل حبة بخسارة.</div>':c&&I.price&&c<I.price*0.05?'<div class="ax-alert">⚠️ التكلفة قليلة جداً — تأكد من الرقم.</div>':'';
+}
+window.axIng=(i,f,val)=>{const x=axIt&&axIt.rows[i];if(!x)return;if(f==='q')x.q=Math.max(0,Number(val)||0);else{x.mid=val;axItemDraw();return;}axItemCalc();};
+window.axIngAdd=()=>{const mats=axMatsSorted();if(!axIt||!mats.length)return;axIt.rows.push({mid:mats[0].id,q:0});axItemDraw();};
+window.axIngDel=i=>{if(!axIt)return;axIt.rows.splice(i,1);axItemDraw();};
+window.axItemSave=async()=>{
+  const I=axIt;if(!I||!canEditAcc())return;
+  const rows=I.mode==='rec'?I.rows.filter(x=>x.mid&&Number(x.q)>0).map(x=>({mid:x.mid,q:Math.round(Number(x.q)*1000)/1000})):[];
+  if(I.mode==='rec'&&!rows.length&&I.rows.length){toast('⚠️ اكتب كمية كل مكوّن','warn');return;}
+  const fixed=I.mode==='fixed'?Math.max(0,Math.round(Number(I.fixed)||0)):0,k=I.k,btn=document.getElementById('axIsave');if(btn)btn.disabled=true;
+  const fb=window._fb,ref=fb.doc(fb.db,'accounting',axRid);
+  try{
+    // update مو set/merge: الخريطة تتبدّل كاملة فالحذف يمشي (merge چان يخلّي التكلفة القديمة)، وباقي المخزون ما ينلمس
+    await fb.runTransaction(fb.db,async tx=>{const s=await tx.get(ref),d=s.exists()?s.data():{};
+      const costs={...(d.costs||{})},recipes={...(d.recipes||{})};
+      if(rows.length){recipes[k]=rows;delete costs[k];}else{delete recipes[k];if(fixed)costs[k]=fixed;else delete costs[k];}
+      if(s.exists())tx.update(ref,{costs,recipes});else tx.set(ref,{costs,recipes,materials:[],moves:[],expenses:[]});});
+    const mats=(axDoc&&axDoc.materials)||[],c=rows.length?rows.reduce((t,x)=>{const m=mats.find(mm=>mm.id===x.mid);return t+(m?(Number(m.cost)||0)*x.q:0);},0):fixed;
+    audit('item.cost',{restaurantId:axRid,item:k,cost:Math.round(c),recipe:rows.length});
+    if(I.apply&&c>0)await axFixSet([[k,c]]);
+    toast(I.apply&&c>0?'✅ انحفظت التكلفة وانصحّحت مبيعاته القديمة':'✅ انحفظت التكلفة');axClose();
+  }catch(e){if(btn)btn.disabled=false;toast('❌ تعذّر الحفظ: '+(e.code||e.message),'error');}
 };
 window.axShiftView=id=>{
   const x=axShifts.find(s=>s.id===id);if(!x)return;const r=x.report||{},bt=r.byType||{};
@@ -3392,7 +3553,7 @@ function scrItems(rid,r){
     {id:'cashier',ic:'🧾',t:'الكاشير',d:'برنامج الكاشير من المتصفح — وإله تطبيق أندرويد وويندوز بقسم التطبيقات.',url:SCR_R2,inst:1},
     {id:'kitchen',ic:'👨‍🍳',t:'شاشة المجهز — يجمّع ويتمم',d:'يوصلها الطلب بعد ما يخلص المطبخ (ولو شاشة المطبخ مطفية يوصلها مباشرة): المجهز يجمّعه ويغلّفه ويضغط «تم التجهيز» ← الصالة والسفري يطلعون «جاهز» بشاشة طلبك جاهز، والدلفري يرجع لكاشيره حتى يختار الكابتن.',url:k,feat:'kitchen',inst:1},
     {id:'kitchenSec',ic:'🔥',t:'شاشة المطبخ (الأقسام) — تطبخ',d:'أول شاشة يوصلها طلب الكاشير. نفس الرابط لكل أجهزة المطبخ: كل جهاز يختار قسمه ('+(secs.length?secs.map(x=>x.name).join('، '):'ماكو أقسام بعد — ضيفها من الكاشير ← الإعدادات ← «أقسام المطبخ والطابعات»')+') وتطلعله أصنافه بس، و«جاهز» يعلّم قسمه — ولما تخلص كل الأقسام الطلب يروح لشاشة المجهز.'+(secs.length&&!scrCfg.secOn?' ⚠️ شغّل «تقسيم الطلب على أقسام المطبخ» من الكاشير ← الإعدادات.':''),url:k+'?sec',feat:'kitchenSec',inst:1},
-    {id:'store',ic:'📦',t:'إدارة المخزن — أمين المخزن',d:'المخزون والوصفات والموردين على تابلت أو تلفون أمين المخزن. ينربط برمز (بدون إيميل) من «ربط جهاز» فوق. لما الخدمة شغّالة تنشال هذي الأقسام من الكاشير، ولما تنطفي ترجع للكاشير.',url:SCR_R2+'index.html?store=1',feat:'store',inst:1},
+    {id:'store',ic:'📦',t:'إدارة المخزن — أمين المخزن',d:'المخزون والموردين على تابلت أو تلفون أمين المخزن. ينربط برمز (بدون إيميل) من «ربط جهاز» فوق. لما الخدمة شغّالة تنشال هذي الأقسام من الكاشير، ولما تنطفي ترجع للكاشير.',url:SCR_R2+'index.html?store=1',feat:'store',inst:1},
     {id:'waiter',ic:'🧑‍🍳',t:'الويتر',d:'الويتر يطلب من الطاولة بالتلفون، والطلب ينطبع بالمطبخ مباشرة. التلفون ينربط برمز (بدون إيميل) من «ربط جهاز» فوق.',url:SCR_R2+'waiter.html',feat:'waiter',inst:1},
     {id:'captain',ic:'🛵',t:'الكابتن (للآيفون أو أي تلفون)',d:'تطبيق الكابتن من المتصفح — وإله تطبيق أندرويد تحت.',url:SCR_CAP+'captain.html',feat:'captain',inst:1},
     {id:'menu',ic:'📱',t:'منيو الباركود',d:'الزبون يفتحه ويطلب — اطبع QR الطاولات من الكاشير.',url:SCR_R2+'menu.html?r='+encodeURIComponent(rid),feat:'online'},

@@ -448,6 +448,30 @@ test('الكاشير لا يمسح مواد المخزون ولا يغيّر ا�
   await assertFails(setDoc(doc(as('cash1'), 'accounting/R1'), { ...base, materials: [{ id: 'm1', qty: 4 }], recipes: {} }));
   await assertSucceeds(setDoc(doc(as('rest1'), 'accounting/R1'), { ...base, materials: [], expenses: [] }));
 });
+test('أمين المخزن يكتب المواد وأسعارها بس — تكلفة الأصناف ووصفاتها من لوحة الإدارة، وتصحيح المبيعات القديمة للمالك بس', async () => {
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'screens/st1'), { restaurantId: 'R1', kind: 'store', approved: true });
+    await updateDoc(doc(db, 'restaurants/R1'), { 'features.store': true });
+    await setDoc(doc(db, 'accounting/R1'), { materials: [{ id: 'm1', qty: 5, cost: 100 }], recipes: { 'a|b': [{ mid: 'm1', q: 1 }] }, costs: { 'c|d': 500 }, moves: [], expenses: [] });
+  });
+  const base = { recipes: { 'a|b': [{ mid: 'm1', q: 1 }] }, costs: { 'c|d': 500 }, moves: [], expenses: [] };
+  const ST = as('st1');
+  await assertSucceeds(setDoc(doc(ST, 'accounting/R1'), { ...base, materials: [{ id: 'm1', qty: 9, cost: 120 }] }), 'stock and material price');
+  await assertFails(setDoc(doc(ST, 'accounting/R1'), { ...base, materials: [{ id: 'm1', qty: 9, cost: 120 }], recipes: { 'a|b': [{ mid: 'm1', q: 2 }] } }), 'store cannot change a recipe');
+  await assertFails(setDoc(doc(ST, 'accounting/R1'), { ...base, materials: [{ id: 'm1', qty: 9, cost: 120 }], costs: { 'c|d': 1 } }), 'store cannot change an item cost');
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1'), { ...base, materials: [{ id: 'm1', qty: 9, cost: 120 }], costs: {} }), 'cashier cannot clear a cost');
+  await assertSucceeds(updateDoc(doc(as('rest1'), 'accounting/R1'), { costs: {}, recipes: { 'a|b': [{ mid: 'm1', q: 2 }] } }), 'owner edits costs and recipes');
+  const fix = { items: { 'a|b': { cost: 750, to: 5, by: 'المالك', at: 5 } }, updatedAt: 5 };
+  await assertSucceeds(setDoc(doc(as('rest1'), 'accounting/R1/meta/recost'), fix));
+  await assertSucceeds(getDoc(doc(as('rest1'), 'accounting/R1/meta/recost')));
+  await assertFails(setDoc(doc(as('cash1'), 'accounting/R1/meta/recost'), fix), 'cashier');
+  await assertFails(setDoc(doc(ST, 'accounting/R1/meta/recost'), fix), 'store');
+  await assertFails(getDoc(doc(ST, 'accounting/R1/meta/recost')), 'store cannot read it');
+  await assertFails(setDoc(doc(as('rest2'), 'accounting/R1/meta/recost'), fix), 'another restaurant');
+  await assertFails(setDoc(doc(as('rest1'), 'accounting/R1/meta/other'), fix), 'only meta/recost');
+  await assertFails(setDoc(doc(as('rest1'), 'accounting/R1/meta/recost'), { ...fix, hack: 1 }), 'no extra fields');
+});
 
 // ── خطوط الاتصال والمكالمات ──
 const call = (o) => ({ token: 'TOKEN_R1_LINE1_xxxxxxxxxxxxxxxx', restaurantId: 'R1', line: '1', number: '07701234567', status: 'ringing', ...o });

@@ -492,13 +492,26 @@ service cloud.firestore {
     match /accounting/{rid} {
       // الكاشير يحتاجها لخصم المواد عند كل بيع (عرضها بالواجهة حسب صلاحية inventory)
       allow read: if isOffice() || staffOf(rid) || storeOf(rid);
-      allow write: if isAdmin() || ownsRest(rid) || storeOf(rid)
+      // تكلفة الأصناف ووصفاتها تتعدّل من لوحة الإدارة بس (المالك والإدارة)؛ أمين المخزن يكتب المواد والحركات بس
+      allow write: if isAdmin() || ownsRest(rid)
+        || (storeOf(rid) && (resource == null || (
+              request.resource.data.get('recipes', {}) == resource.data.get('recipes', {})
+              && request.resource.data.get('costs', {}) == resource.data.get('costs', {}))))
         // الكاشير: لا يحذف مواد، ولا يغيّر الوصفات والتكاليف أو المصروفات القديمة
         || (cashierOf(rid) && (resource == null || (
               request.resource.data.get('expenses', []) == resource.data.get('expenses', [])
               && request.resource.data.get('recipes', {}) == resource.data.get('recipes', {})
               && request.resource.data.get('costs', {}) == resource.data.get('costs', {})
               && request.resource.data.get('materials', []).size() >= resource.data.get('materials', []).size())));
+
+      // تصحيح تكلفة المبيعات القديمة (meta/recost): المالك والإدارة بس — وثيقة لحالها حتى ما تتداخل ويا مزامنة المخزون
+      match /meta/{mid} {
+        allow read: if isOffice() || ownsRest(rid);
+        allow write: if (isAdmin() || ownsRest(rid)) && mid == 'recost'
+          && request.resource.data.keys().hasOnly(['items','updatedAt'])
+          && request.resource.data.get('items', {}) is map
+          && request.resource.data.get('items', {}).size() <= 2000;
+      }
 
       // المصروفات: كل مصروف سجل مستقل. الكاشير يضيف فقط؛ التعديل والحذف للمطعم والإدارة
       match /expenses/{eid} {
