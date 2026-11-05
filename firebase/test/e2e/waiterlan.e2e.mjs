@@ -430,3 +430,50 @@ test('ready screen whose server connection gets stuck mid-service: all orders th
   sc.stop(); hub4.stop();
   await c.context().close(); await s.context().close();
 });
+
+// محركات أندرويد القديمة: جسر التطبيق (window.SoraLan) يوصل للصفحة بعد ما تخلص تحميل — وبدون نت التحميل يطول.
+//  چانت الصفحة تنتظره ٤ ثواني بس وبعدين تتركه للأبد: الويتر يكتب «ماكو نت» والطلب ما يوصل للكاشير على الواي فاي
+test('waiter app on an old phone engine: the app bridge reaches the page late (after it stopped waiting) — with no internet the order still reaches the cashier over WiFi', async () => {
+  const U = UDP + 5;
+  const h = createHub({ udpPort: U, tcpPort: 0, host: '127.0.0.1', bcast: ['127.0.0.1'] });
+  const c = await page(B, { w: 1280, h: 860 });
+  await wire(c, h, 'hub');
+  await c.goto(BASE + 'index.html');
+  await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await c.fill('#inEmail', 'wl@x.com'); await c.fill('#inPass', 'secret123'); await c.click('#loginBtn');
+  await c.waitForSelector('#prods .prod', { timeout: 15000 });
+  await until(() => h.status().on);
+  // الويتر: نفس الجسر بس ما يوصل للصفحة إلا بعدين
+  const wc = createClient({ role: 'waiter', udpPort: U, targets: ['127.0.0.1'] });
+  const w = await page(B, { w: 390, h: 844 });
+  await w.exposeBinding('__lan', async (_s, m, a) => {
+    if (m === 'start') { const st = await wc.start({ ...a[0], dev: 'waiter-late' }); return st || { on: true, rid: a[0].rid, peers: [] }; }
+    if (m === 'status') return { on: true, peers: wc.hubs().filter((x) => x.on) };
+    if (m === 'send') { wc.send(a[0], a[1]); return true; }
+    if (m === 'broadcast') { wc.broadcast(a[0]); return true; }
+    if (m === 'stop') { wc.stop(); return true; }
+    return null;
+  });
+  await w.addInitScript(() => {
+    window.__lanCbs = [];
+    window.__lanLate = () => {
+      window.SoraLan = { role: 'waiter', start: (c) => window.__lan('start', [c || {}]), stop: () => window.__lan('stop', []), status: () => window.__lan('status', []),
+        send: (to, m) => { window.__lan('send', [String(to || '*'), m]); }, broadcast: (m) => { window.__lan('broadcast', [m]); }, on: (cb) => { window.__lanCbs.push(cb); } };
+      window.dispatchEvent(new Event('soralan'));
+    };
+  });
+  ['join', 'leave', 'msg', 'ev', 'status'].forEach((t) => wc.on(t, (v) => { w.evaluate((ev) => (window.__lanCbs || []).forEach((cb) => cb(ev)), { ...v, t }).catch(() => {}); }));
+  await pair(w, BASE + 'waiter.html', 'waiter', 'سجاد');
+  await w.waitForSelector('.tb', { timeout: 15000 });
+  await w.waitForTimeout(5000);                 // الصفحة خلصت انتظارها (٤ ثواني)
+  await w.evaluate(() => window.__lanLate());   // هسه وصل جسر التطبيق
+  assert.ok(await until(() => h.status().peers.some((x) => x.role === 'waiter')), 'the late bridge connects to the cashier');
+  await w.waitForFunction(() => /الكاشير متصل على الواي فاي/.test(document.getElementById('lanSt').textContent), null, { timeout: 15000 });
+  // ينقطع النت (الواي فاي باقي) ← الطلب يوصل للكاشير على الواي فاي
+  await offline(c); await offline(w);
+  await order(w, '4', ['شاورما']);
+  await c.waitForSelector('#webBox .web-card:has-text("طاولة 4")', { timeout: 20000 });
+  assert.doesNotMatch(await w.textContent('#net'), /تطبيق «سرعة - الويتر»/, 'no «use the app» hint inside the app');
+  wc.stop(); h.stop();
+  await c.context().close(); await w.context().close();
+});
