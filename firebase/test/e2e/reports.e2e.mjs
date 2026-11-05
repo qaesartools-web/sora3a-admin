@@ -112,8 +112,8 @@ test('admin: sales report with any date range + print, items & profit, shifts', 
   await p.click('.ax-row:has-text("زنكر")');
   await p.fill('#axIcost', '3600');
   // السعر صار 7,000 من تعديل المنيو بتطبيق الإدارة (الاختبار اللي قبله)
-  await p.waitForFunction(() => document.getElementById('axIprev').textContent.includes('3,400'));
-  await p.click('#axMoBody button >> text=حفظ التكلفة');
+  await p.waitForFunction(() => document.getElementById('axDp').textContent.includes('3,400'));
+  await p.click('#axIsave');
   await until(async () => (await accDoc()).costs['زنكر|وحدة'] === 3600);
   await p.screenshot({ path: 'shots/admin-items.png', fullPage: true });
   // الورديات
@@ -156,7 +156,7 @@ test('no duplicates: owner cashier sends reports to the admin panel; stock keeps
   assert.equal(await p.$('#nb3'), null);
   await p.click('.dnb[data-tab="acc"]');
   const tabs = await p.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
-  assert.deepEqual(tabs, ['📦 المخزون', '🧾 الوصفات والتكلفة', '💸 المصروفات', '🏭 الموردين', '🧾 ديون الزبائن', '🧰 أدوات', '💰 قائمة الدخل والحركات ↗']);
+  assert.deepEqual(tabs, ['📦 المخزون', '💸 المصروفات', '🏭 الموردين', '🧾 ديون الزبائن', '🧰 أدوات', '💰 قائمة الدخل والحركات ↗']);
   await p.click('#acTabs .ac-ext');
   assert.equal(await p.evaluate(() => window.__opened), 'http://localhost:5050/sora3a-admin/');
   await p.context().close();

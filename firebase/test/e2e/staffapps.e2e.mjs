@@ -1334,7 +1334,7 @@ test('warehouse app (إدارة المخزن) is an on/off service: ON → the s
   await st.waitForFunction(() => /إدارة المخزن/.test(document.getElementById('restName').textContent), null, { timeout: 15000 });
   await st.waitForSelector('#acTabs .mtab', { timeout: 15000 });
   const tabs = await st.$$eval('#acTabs .mtab', (b) => b.map((x) => x.textContent.trim()));
-  assert.deepEqual(tabs.filter((x) => !/رجوع/.test(x)), ['🏠 الرئيسية', '📦 المخزون', '🧾 الوصفات والتكلفة', '🏭 الموردين']);
+  assert.deepEqual(tabs.filter((x) => !/رجوع/.test(x)), ['🏠 الرئيسية', '📦 المخزون', '🏭 الموردين']);
   assert.match(await st.textContent('#acBody'), /استلام بضاعة/, 'the storekeeper starts on the home screen');
   assert.equal(await st.isVisible('.bnav .nb[data-tab="cashier"]'), false, 'no cashier screens on the storekeeper device');
   // يضيف مادة ← تنحفظ بحسابات المطعم
