@@ -47,7 +47,7 @@ test('features are grouped in 4 tabs (one group shown at a time), all 14 cards k
   assert.equal(await p.getAttribute('#ft-del', 'aria-selected'), 'true');
   assert.match(await p.textContent('#fp-del'), /يرن عند الكابتن/);
   await p.click('#fp-del .fnext'); assert.deepEqual(await shown(), ['fp-acc']);
-  assert.equal(await p.$$eval('#apps .app', (a) => a.length), 4);
+  assert.equal(await p.$$eval('#apps .app', (a) => a.length), 8);
   assert.match(await p.textContent('#apps'), /خط المطعم.*شاشة «طلبك جاهز»/s);
   assert.equal(await p.locator('#svcChips input[value="online"]').count(), 1);
   assert.equal(await p.$$eval('#svcChips input', (i) => i.length) <= 10, true, 'leads rule allows at most 10 services');
