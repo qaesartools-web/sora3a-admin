@@ -309,6 +309,47 @@ test('an untaken call disappears after its time and is marked «missed» (calls 
   await p.context().close();
 });
 
+test('a customer who hangs up and calls again shows again and rings — even after the cashier hid the first call with ✕', async () => {
+  const p = await page(B, { w: 1280, h: 800 });
+  // نحسب الرنّات (كل رنّة تسوي صوت جديد)
+  await p.addInitScript(() => { window.__rings = 0; const A = window.AudioContext; window.AudioContext = function () { window.__rings++; return new A(); }; });
+  await posLogin(p, 'cash@x.com', 'cashpass1');
+  await p.waitForSelector('#prods .prod');
+  await p.waitForTimeout(1200);
+  const N = '07705550010';
+  await postCall(N);
+  await p.waitForSelector(`#callsBox .call-card:has-text("${N}")`, { timeout: 10000 });
+  // الكاشير يضغط ✕ ← البطاقة تختفي والرنين يوكف
+  await p.click('#callsBox .call-x');
+  await p.waitForFunction(() => !document.querySelector('#callsBox .call-card'), null, { timeout: 5000 });
+  await p.waitForTimeout(3500);
+  const before = await p.evaluate(() => window.__rings);
+  // الزبون سد ورجع اتصل (نفس الرقم، نفس الخط، خلال أقل من دقيقة) ← تطلع من جديد وترن
+  await postCall(N);
+  await p.waitForSelector(`#callsBox .call-card:has-text("${N}")`, { timeout: 10000 });
+  assert.ok(await p.evaluate((b) => window.__rings > b, before), 'it rings again');
+  assert.equal(await p.locator('#callsBox .call-card').count(), 1);
+  // المكالمة الأولى (اللي انخفت) تنحسب «فائتة»، والجديدة بعدها ترن
+  const docs = await until(async () => { const d = (await all('incomingCalls', 'restaurantId', 'RC')).filter((x) => x.number === N); return d.length === 2 && d.some((x) => x.status === 'missed') ? d : null; });
+  assert.ok(docs && docs.some((x) => x.status === 'ringing'));
+  // البطاقة بعدها ظاهرة والزبون سد ورجع اتصل مرة ثالثة ← ترن من جديد (چانت تندمج بصمت)
+  await p.waitForTimeout(3500);
+  const before2 = await p.evaluate(() => window.__rings);
+  await postCall(N);
+  await p.waitForFunction((b) => window.__rings > b, before2, { timeout: 10000 });
+  assert.equal(await p.locator('#callsBox .call-card').count(), 1);
+  // نفس المكالمة توصل مرتين بنفس اللحظة (أجهزة قديمة) ← بطاقة وحدة
+  await postCall(N);
+  await p.waitForTimeout(1500);
+  assert.equal(await p.locator('#callsBox .call-card').count(), 1, 'one card');
+  // الاستلام يشتغل على آخر مكالمة
+  await p.click('#callsBox .call-go');
+  await p.waitForFunction(() => !document.querySelector('#callsBox .call-card'), null, { timeout: 5000 });
+  assert.ok(await until(async () => (await all('incomingCalls', 'restaurantId', 'RC')).some((x) => x.number === N && x.status === 'taken')));
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
 test('working hours: shift auto-closes with printed total at end, cashier locked until hours start', async () => {
   const bag = () => (Math.floor(Date.now() / 60000) + 180) % 1440;
   const wrap = (n) => ((n % 1440) + 1440) % 1440;
