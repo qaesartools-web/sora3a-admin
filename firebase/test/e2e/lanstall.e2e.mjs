@@ -186,3 +186,25 @@ test('internet drops while the WiFi stays (connections hang silently): every ord
   for (const p of [c, k, s]) await p.context().close();
   kc.stop(); sc.stop();
 });
+
+test('the preparer / kitchen screen updates itself when the page is updated (it stays open for days) — only at a quiet moment', async () => {
+  const { utimes } = await import('node:fs/promises');
+  const k = await page(B, { w: 1100, h: 800 });
+  await k.addInitScript(() => { window.__auMs = 400; window.__auIdle = 1500; });
+  await pair(k, BASE + 'kitchen.html', 'kitchen', 'المجهز ٢');
+  await k.waitForSelector('#app:not([hidden])', { timeout: 15000 });
+  await k.evaluate(() => { window.__oldPage = true; });
+  await k.waitForTimeout(1500);                       // البصمة الأولى
+  assert.equal(await k.evaluate(() => window.__oldPage), true, 'no reload without an update');
+  // القائمة مفتوحة (مو وقت هادئ) ← ما يحدّث
+  await k.evaluate(() => { document.getElementById('menu').hidden = false; });
+  const f = new URL('../../../../sora3a-rest2/staff.js', import.meta.url).pathname, t = new Date(Date.now() + 120000);
+  await utimes(f, t, t);                              // «نشرنا تحديث»
+  await k.waitForTimeout(3000);
+  assert.equal(await k.evaluate(() => window.__oldPage), true, 'waits for a quiet moment');
+  await k.evaluate(() => { document.getElementById('menu').hidden = true; });
+  await k.waitForFunction(() => !window.__oldPage, null, { timeout: 15000 });
+  await k.waitForSelector('#app:not([hidden])', { timeout: 15000 });   // رجعت وحدها بدون ما تنربط من جديد
+  assert.equal(await k.locator('#pairCode').count(), 0);
+  await k.context().close();
+});
