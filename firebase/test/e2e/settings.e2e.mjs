@@ -148,6 +148,18 @@ test('printer choice is saved the moment it changes and stays; test print goes t
   const r = await p.evaluate(() => window.__prints.at(-1));
   assert.equal(r.printer, 'CHALLENGE MONSTER 80mm');
   assert.doesNotMatch(r.html, /\p{Extended_Pictographic}/u, 'no emoji on paper');
-  assert.match(r.html, /صالة — طاولة 4/); assert.match(r.html, /font-weight:700/); assert.match(r.html, /\.num\{[^}]*font-size:44px/);
+  assert.match(r.html, /صالة — طاولة 4/); assert.match(r.html, /font-weight:700/); assert.match(r.html, /رقم الطلب:<\/div><div class="v bx big">#22</); assert.match(r.html, /<div class="tot"><span>الصافي<\/span><span>4,500<\/span>/);
+  assert.match(r.html, /<th>اسم الصنف<\/th><th>الكمية<\/th><th>السعر<\/th>/);
+  // شعار الفاتورة من برج سرعة (restaurants/{id}/theme/receipt) ← ينحفظ بالجهاز وينطبع يسار فوق الفاتورة
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RP/theme/receipt'), { data: PNG, atMs: Date.now() }); });
+  await p.waitForFunction((u) => window.posReceiptLogo() === u, PNG, { timeout: 10000 });
+  await p.waitForSelector('#stLogoPv img');
+  await p.evaluate(() => printOrderReceipt({ id: 'ABC124x', orderType: 'takeaway', ticketNo: 23, createdAt: '10:05', createdAtMs: Date.now(), value: 3000, subtotal: 3000,
+    items: [{ name: 'كلاسك برغر', variant: 'وحدة', price: 3000, qty: 1 }], payment: { method: 'cash' } }, 'takeaway'));
+  await p.waitForFunction(() => window.__prints.length > 2);
+  const lg = await p.evaluate(() => window.__prints.at(-1).html);
+  assert.ok(lg.includes('<div class="lg"><img src="' + PNG + '"'), 'logo printed at the top left');
+  assert.match(lg, /<div class="nm"><b>/);
   await p.context().close();
 });

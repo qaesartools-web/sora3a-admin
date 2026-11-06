@@ -312,7 +312,7 @@ test('delivery edge cases: self pickup is paid into the drawer, paid orders are 
   await p.waitForSelector('#acOv.on'); await p.click('#acDlgOk');
   const h = await until(async () => (await ordersRP()).find((x) => x.held && x.orderType === 'takeaway' && x.status === 'preparing' && x.id !== 'ED1'));
   assert.ok(h.ticketNo > 0); assert.equal(h.holdNum, h.ticketNo); assert.equal(h.customer, 'سفري #' + h.ticketNo);
-  assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), new RegExp('تذكرة مطبخ #' + h.ticketNo + '\\b'));
+  { const sd = await p.evaluate(() => document.getElementById('prtFr').srcdoc); assert.match(sd, /تذكرة مطبخ/); assert.match(sd, new RegExp('التسلسل:</div><div class="v big">#' + h.ticketNo + '<')); }
   await p.waitForSelector(`#holdStrip .hchip:has-text("#${h.ticketNo}")`);
   await p.click('#prods .prod >> nth=0'); await p.click('#sendBtn'); await p.keyboard.press('2');
   await p.waitForSelector('#payOv.on'); await p.click('#payOk');

@@ -143,7 +143,7 @@ test('table QR: customer orders from table 4 → cashier accepts → kitchen tic
   await cashier.waitForSelector(`#holdStrip .hchip:has-text("QR")`, { timeout: 10000 });
   assert.match(await cashier.textContent('#holdStrip'), /🪑 4/);
   const slip = await cashier.evaluate(() => document.getElementById('prtFr').srcdoc);
-  assert.ok(slip.includes('QR') && slip.includes('شاورما لحم [بدون طماطة]') && !slip.includes('الإجمالي النهائي'), 'kitchen ticket only');
+  assert.ok(slip.includes('QR') && /<td>شاورما لحم<\/td><td class="q">\d+<\/td><td class="m">بدون طماطة<\/td>/.test(slip) && !slip.includes('الصافي'), 'kitchen ticket only');
   const w2 = await until(async () => { const d = await read('webOrders/' + w.id); return d.orderId ? d : null; });
   assert.equal(w2.status, 'accepted'); assert.equal(w2.orderId, o.id); assert.equal(w2.ticket, String(o.ticketNo)); assert.equal(w2.stage, 'preparing');
   await c.waitForSelector('#stView .tk');
