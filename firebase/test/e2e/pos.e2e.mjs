@@ -300,7 +300,7 @@ test('delivery edge cases: self pickup is paid into the drawer, paid orders are 
   await p.click('#edOrder .confbtn');
   const ed = await until(async () => { const o = await read('orders/ED1'); return o.value === 6000 ? o : null; });
   assert.equal(ed.payment.cash, 6000, 'cash grows by the added amount'); assert.equal(ed.items[0].qty, 2);
-  assert.equal(await p.isVisible('#edOv.on'), false);
+  await p.waitForFunction(() => !document.getElementById('edOv').classList.contains('on'), null, { timeout: 5000 });   // النافذة تنسد بعد الحفظ
   // إلغاء دلفري ← يطلع من قائمة الكباتن (ما يتراكم)
   await p.evaluate(() => ordCancel('CN1'));
   await p.waitForSelector('#acOv.on');
