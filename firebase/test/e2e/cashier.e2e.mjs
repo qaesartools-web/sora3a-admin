@@ -682,7 +682,8 @@ test('two cashiers at the same time (delivery + hall): each opens and closes the
   const shifts = await all('restaurants/RC/shifts');
   const sa = shifts.find((s) => s.uid === ua && s.status === 'open'), sb = shifts.find((s) => s.uid === ub && s.status === 'open');
   assert.ok(sa && sb && sa.id !== sb.id, 'two separate open shifts');
-  const os = await until(async () => { const l = (await all('orders', 'restaurantId', 'RC')).filter((o) => o.shiftId === sa.id || o.shiftId === sb.id); return l.length === 9 ? l : null; });
+  const os = await until(async () => { const l = (await all('orders', 'restaurantId', 'RC')).filter((o) => o.shiftId === sa.id || o.shiftId === sb.id); return l.length === 9 ? l : null; }, 25000);
+  if (!os) { const l = await all('orders', 'restaurantId', 'RC'); assert.fail('9 orders in the two shifts: ' + JSON.stringify(l.map((o) => [o.shiftId === sa.id ? 'A' : o.shiftId === sb.id ? 'B' : o.shiftId, o.byUid === ua ? 'ua' : o.byUid === ub ? 'ub' : o.byUid, o.ticketNo, o.status])) + ' errors: ' + JSON.stringify([a.errors, b.errors])); }
   assert.equal(os.filter((o) => o.shiftId === sa.id).length, 4, "A's sales are in A's shift");
   assert.equal(os.filter((o) => o.shiftId === sb.id).length, 5, "B's sales are in B's shift");
   const nums = os.map((o) => o.ticketNo);
