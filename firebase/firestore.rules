@@ -678,7 +678,9 @@ service cloud.firestore {
       function waiterOf(u, r) { return u is string && u.size() > 0 && exists(/databases/$(database)/documents/screens/$(u))
         && get(/databases/$(database)/documents/screens/$(u)).data.restaurantId == r && get(/databases/$(database)/documents/screens/$(u)).data.get('kind', '') == 'waiter'; }
       function okNew(d) {
-        return d.keys().hasOnly(['restaurantId','source','mode','table','items','customer','phone','address','note','status','total','createdAtMs','waiter','waiterUid','day'])
+        return d.keys().hasOnly(['restaurantId','source','mode','table','items','customer','phone','address','note','status','total','createdAtMs','waiter','waiterUid','day','toCashiers'])
+          // toCashiers: الكاشيرية اللي تروحلهم طلبات هالويتر (يختارهم صاحب المطعم)
+          && (!('toCashiers' in d) || (d.toCashiers is list && d.toCashiers.size() <= 30))
           && str(d.restaurantId, 64) && d.status == 'new'
           && d.mode in ['table', 'pickup', 'delivery']
           && d.items is list && d.items.size() >= 1 && d.items.size() <= 40

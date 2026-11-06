@@ -634,6 +634,10 @@ test('webOrders: الويتر (موظف) يطلب لطاولة باسمه، وا
   await assertFails(setDoc(doc(as('cash1'), 'webOrders/W3'), WEB({ source: 'waiter', mode: 'pickup', waiterUid: 'cash1' })));
   await assertFails(setDoc(doc(as('rest2'), 'webOrders/W4'), WEB({ source: 'waiter', mode: 'table', table: '3', phone: '', waiterUid: 'rest2' })));
   await assertSucceeds(getDoc(doc(anon(), 'webOrders/W1')));
+  // الويتر مربوط بكاشيرية محددين (toCashiers) ← قائمة بس، وبحد ٣٠
+  await assertSucceeds(setDoc(doc(as('cash1'), 'webOrders/W5'), WEB({ source: 'waiter', mode: 'table', table: '3', phone: '', waiterUid: 'cash1', toCashiers: ['cash1', 'cash2'] })));
+  await assertFails(setDoc(doc(as('cash1'), 'webOrders/W6'), WEB({ source: 'waiter', mode: 'table', table: '3', phone: '', waiterUid: 'cash1', toCashiers: 'cash2' })));
+  await assertFails(setDoc(doc(as('cash1'), 'webOrders/W7'), WEB({ source: 'waiter', mode: 'table', table: '3', phone: '', waiterUid: 'cash1', toCashiers: Array.from({ length: 31 }, (_, i) => 'c' + i) })));
   await assertFails(getDocs(collection(anon(), 'webOrders')));
   await assertSucceeds(getDocs(query(collection(as('cash1'), 'webOrders'), where('restaurantId', '==', 'R1'))));
   await assertFails(getDocs(query(collection(as('rest2'), 'webOrders'), where('restaurantId', '==', 'R1'))));

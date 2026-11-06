@@ -52,7 +52,7 @@ test('cashier stays smooth in the moment between no internet and internet (WiFi 
     await p.click('#prods .prod >> nth=0');
     await p.click('#sendBtn'); await p.keyboard.press('1');
     await p.waitForSelector('#payOv.on', { timeout: 5000 }); await p.click('#payOk');
-    await p.waitForFunction(() => cart.length === 0 && document.getElementById('prtFr').srcdoc.includes('الإجمالي'), null, { timeout: 8000 });
+    await p.waitForFunction(() => cart.length === 0 && /الصافي|المطلوب/.test(document.getElementById('prtFr').srcdoc), null, { timeout: 8000 });
   }, 8000);
   assert.ok(await snappy(p) < 500, 'page answers at once');
   // سفري قيد التحضير ← جاهز

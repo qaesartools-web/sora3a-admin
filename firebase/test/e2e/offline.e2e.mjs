@@ -37,7 +37,7 @@ test('cashier keeps selling without internet and syncs when it returns', async (
   await p.click('#prods .prod >> nth=0');
   await p.click('#sendBtn'); await p.keyboard.press('1');
   await p.waitForSelector('#payOv.on'); await p.click('#payOk');
-  await p.waitForFunction(() => cart.length === 0 && document.getElementById('prtFr').srcdoc.includes('الإجمالي'), null, { timeout: 5000 });
+  await p.waitForFunction(() => cart.length === 0 && /الصافي|المطلوب/.test(document.getElementById('prtFr').srcdoc), null, { timeout: 5000 });
   // سفري قيد التحضير ثم تسليمه (عملية تنتظر تحديث الطلب)
   await p.click('#prods .prod >> nth=0');
   await p.click('#sendBtn'); await p.keyboard.press('3'); await p.click('#acDlgOk');

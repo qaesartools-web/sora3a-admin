@@ -312,13 +312,13 @@ test('delivery edge cases: self pickup is paid into the drawer, paid orders are 
   await p.waitForSelector('#acOv.on'); await p.click('#acDlgOk');
   const h = await until(async () => (await ordersRP()).find((x) => x.held && x.orderType === 'takeaway' && x.status === 'preparing' && x.id !== 'ED1'));
   assert.ok(h.ticketNo > 0); assert.equal(h.holdNum, h.ticketNo); assert.equal(h.customer, 'سفري #' + h.ticketNo);
-  assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), new RegExp('تذكرة مطبخ #' + h.ticketNo + '\\b'));
+  { const sd = await p.evaluate(() => document.getElementById('prtFr').srcdoc); assert.match(sd, /تذكرة مطبخ/); assert.match(sd, new RegExp('التسلسل:</div><div class="v big">#' + h.ticketNo + '<')); }
   await p.waitForSelector(`#holdStrip .hchip:has-text("#${h.ticketNo}")`);
   await p.click('#prods .prod >> nth=0'); await p.click('#sendBtn'); await p.keyboard.press('2');
   await p.waitForSelector('#payOv.on'); await p.click('#payOk');
   // أحدث طلب سفري فوري بعد تذكرة «قيد التحضير» (طلبات الاختبار المزروعة فوق بيها أرقام أكبر — ترتيب القراءة مو ثابت)
   const q = await until(async () => (await ordersRP()).filter((x) => x.orderType === 'takeaway' && !x.held && (x.createdAtMs || 0) > (h.createdAtMs || 0)).sort((a, b) => b.createdAtMs - a.createdAtMs)[0]);
-  assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), new RegExp('class="num">#' + q.ticketNo + '<'), 'quick takeaway receipt shows the screen number');
+  assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), new RegExp('class="v bx big">#' + q.ticketNo + '<'), 'quick takeaway receipt shows the screen number');
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
@@ -349,6 +349,36 @@ test('windows app (no native prompt): the menu tab is settings only, menu editin
   await p.waitForSelector('.ask-ov');
   await p.click('.ask-ov .ask-no');
   assert.deepEqual(native, [], 'no native dialogs in the windows app');
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
+test('order note for the whole order: written before the items, saved on the order, printed on the kitchen ticket and the receipt, cleared for the next order', async () => {
+  const p = await page(B, { w: 1280, h: 800 });
+  await login(p);
+  await p.evaluate(() => goTab('cashier'));
+  await p.waitForSelector('#ordNote .on-add');
+  await p.click('#ordNote .on-add');
+  await p.waitForSelector('#acOv.on'); await p.fill('#acf_n', 'الزبون مستعجل'); await p.click('#acDlgOk');
+  await p.waitForSelector('#ordNote .on-chip');
+  assert.match(await p.textContent('#ordNote'), /ملاحظة الطلب:\s*الزبون مستعجل/);
+  await p.click('#prods .prod >> nth=0');
+  await p.click('#sendBtn'); await p.waitForSelector('#typeOv.on'); await p.keyboard.press('3');
+  await p.waitForSelector('#acOv.on'); await p.fill('#acf_name', 'أبو حسين'); await p.click('#acDlgOk');
+  const o = await until(async () => (await ordersRP()).find((x) => x.note === 'الزبون مستعجل'));
+  assert.ok(o, 'the note is saved on the order');
+  await p.waitForSelector('#ordNote .on-add', { timeout: 5000 });
+  assert.doesNotMatch(await p.textContent('#ordNote'), /مستعجل/, 'cleared for the next order');
+  // تذكرة المطبخ والفاتورة
+  const slip = await p.evaluate((id) => window.posKitchenTicket(orders.find((x) => x.id === id), orderItemsFull(orders.find((x) => x.id === id)), {}), o.id);
+  assert.match(slip, /الملاحظة: الزبون مستعجل/);
+  await p.evaluate((id) => printOrderReceipt(orders.find((x) => x.id === id), 'takeaway'), o.id);
+  await until(() => p.evaluate(() => { const f = document.getElementById('prtFr'); return !!(f && /ملاحظة: الزبون مستعجل/.test(f.srcdoc)); }));
+  assert.ok(await p.evaluate(() => /ملاحظة: الزبون مستعجل/.test(document.getElementById('prtFr').srcdoc)), 'on the receipt');
+  // ✕ يشيل الملاحظة قبل الإرسال
+  await p.click('#ordNote .on-add'); await p.waitForSelector('#acOv.on'); await p.fill('#acf_n', 'بدون بصل'); await p.click('#acDlgOk');
+  await p.click('#ordNote .on-x');
+  await p.waitForSelector('#ordNote .on-add');
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });

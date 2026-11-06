@@ -475,6 +475,31 @@ test('hours end → the cashier extends and keeps working; the owner sees it and
   await write('users/' + U.cash, { hours: null, hoursExt: { untilMs: 0, atMs: 0, h: '0' } });
 });
 
+// «لنهاية اليوم» = نهاية دوام المطعم: قبل كانت نص الليل ثابت، فإذا الدوام يخلص قرب ١٢ تختفي ساعة/ساعتين/٣
+test('end of the cashier hours: «until the end of the day» means the restaurant closing time, and 1/2/3 hours still show near midnight', async () => {
+  const bag = () => (Math.floor(Date.now() / 60000) + 180) % 1440;
+  const wrap = (x) => ((x % 1440) + 1440) % 1440;
+  const n = bag(), close = wrap(n + 240);
+  await write('restaurants/RC', { hours: { on: true, open: wrap(n - 600), close } });
+  await write('users/' + U.cash, { hours: { from: wrap(n - 120), to: wrap(n + 60) }, hoursExt: { untilMs: 0, atMs: 0, h: '0' } });
+  const p = await page(B, { w: 1280, h: 800 });
+  await posLogin(p, 'cash@x.com', 'cashpass1');
+  await p.waitForSelector('#prods .prod');
+  await write('users/' + U.cash, { hours: { from: wrap(n - 120), to: wrap(n - 2) } });
+  await p.waitForSelector('#extAsk.on', { timeout: 10000 });
+  assert.equal(await p.locator('#extAsk .ext-b').count(), 4, '1h, 2h, 3h and until closing');
+  const eod = await p.textContent('#extAsk .ext-b.eod');
+  const hh = Math.floor(close / 60), mm = String(close % 60).padStart(2, '0');
+  assert.match(eod, /لنهاية دوام المطعم/);
+  assert.ok(eod.includes(((hh % 12) || 12) + ':' + mm), eod);
+  await p.click('#extAsk .ext-b.eod');
+  const u = await until(async () => { const d = await read('users/' + U.cash); return d.hoursExt && d.hoursExt.h === 'day' ? d : null; });
+  assert.ok(Math.abs(u.hoursExt.untilMs - (Date.now() + 240 * 60000)) < 3 * 60000, 'until the restaurant closes');
+  await p.context().close();
+  await write('restaurants/RC', { hours: null });
+  await write('users/' + U.cash, { hours: null, hoursExt: { untilMs: 0, atMs: 0, h: '0' } });
+});
+
 test('owner sets and clears cashier working hours from the admin app', async () => {
   const p = await page(B, { w: 1280, h: 800 });
   await adminLogin(p, 'owner@x.com');
@@ -657,7 +682,8 @@ test('two cashiers at the same time (delivery + hall): each opens and closes the
   const shifts = await all('restaurants/RC/shifts');
   const sa = shifts.find((s) => s.uid === ua && s.status === 'open'), sb = shifts.find((s) => s.uid === ub && s.status === 'open');
   assert.ok(sa && sb && sa.id !== sb.id, 'two separate open shifts');
-  const os = await until(async () => { const l = (await all('orders', 'restaurantId', 'RC')).filter((o) => o.shiftId === sa.id || o.shiftId === sb.id); return l.length === 9 ? l : null; });
+  const os = await until(async () => { const l = (await all('orders', 'restaurantId', 'RC')).filter((o) => o.shiftId === sa.id || o.shiftId === sb.id); return l.length === 9 ? l : null; }, 25000);
+  if (!os) { const l = await all('orders', 'restaurantId', 'RC'); assert.fail('9 orders in the two shifts: ' + JSON.stringify(l.map((o) => [o.shiftId === sa.id ? 'A' : o.shiftId === sb.id ? 'B' : o.shiftId, o.byUid === ua ? 'ua' : o.byUid === ub ? 'ub' : o.byUid, o.ticketNo, o.status])) + ' errors: ' + JSON.stringify([a.errors, b.errors])); }
   assert.equal(os.filter((o) => o.shiftId === sa.id).length, 4, "A's sales are in A's shift");
   assert.equal(os.filter((o) => o.shiftId === sb.id).length, 5, "B's sales are in B's shift");
   const nums = os.map((o) => o.ticketNo);

@@ -148,6 +148,37 @@ test('printer choice is saved the moment it changes and stays; test print goes t
   const r = await p.evaluate(() => window.__prints.at(-1));
   assert.equal(r.printer, 'CHALLENGE MONSTER 80mm');
   assert.doesNotMatch(r.html, /\p{Extended_Pictographic}/u, 'no emoji on paper');
-  assert.match(r.html, /صالة — طاولة 4/); assert.match(r.html, /font-weight:700/); assert.match(r.html, /\.num\{[^}]*font-size:44px/);
+  assert.match(r.html, /صالة — طاولة 4/); assert.match(r.html, /font-weight:700/); assert.match(r.html, /رقم الطلب:<\/div><div class="v bx big">#22</); assert.match(r.html, /<div class="tot"><span>الصافي<\/span><span>4,500<\/span>/);
+  assert.match(r.html, /<th>اسم الصنف<\/th><th>الكمية<\/th><th>السعر<\/th>/);
+  // شعار الفاتورة من برج سرعة (restaurants/{id}/theme/receipt) ← ينحفظ بالجهاز وينطبع يسار فوق الفاتورة
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RP/theme/receipt'), { data: PNG, atMs: Date.now() }); });
+  await p.waitForFunction((u) => window.posReceiptLogo() === u, PNG, { timeout: 10000 });
+  await p.waitForSelector('#stLogoPv img');
+  await p.evaluate(() => printOrderReceipt({ id: 'ABC124x', orderType: 'takeaway', ticketNo: 23, createdAt: '10:05', createdAtMs: Date.now(), value: 3000, subtotal: 3000,
+    items: [{ name: 'كلاسك برغر', variant: 'وحدة', price: 3000, qty: 1 }], payment: { method: 'cash' } }, 'takeaway'));
+  await p.waitForFunction(() => window.__prints.length > 2);
+  const lg = await p.evaluate(() => window.__prints.at(-1).html);
+  assert.ok(lg.includes('<div class="lg"><img src="' + PNG + '"'), 'logo printed at the top left');
+  assert.match(lg, /<div class="nm"><b>/);
+  // قياسات الفاتورة من البرج (حتى ما يضيع ورق): كتابة 70٪، شعار 60، بدون اسم سرعة والأرقام ← تنطبع هيج
+  const base = lg.match(/table\.it th,table\.it td\{[^}]*font-size:([\d.]+)px/)[1];
+  await E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'restaurants/RP/theme/receipt'), { data: PNG, atMs: Date.now(),
+    cfg: { scale: 70, logo: 60, num: 30, gap: 50, border: 9, show: { brand: false, phones: false, bad: 1 } } }); });
+  await p.waitForFunction(() => window.posReceiptCfg().scale === 70, null, { timeout: 10000 });
+  await p.evaluate(() => printOrderReceipt({ id: 'ABC125x', orderType: 'takeaway', ticketNo: 24, createdAt: '10:06', createdAtMs: Date.now(), value: 3000, subtotal: 3000,
+    items: [{ name: 'كلاسك برغر', variant: 'وحدة', price: 3000, qty: 1 }], payment: { method: 'cash' } }, 'takeaway'));
+  await p.waitForFunction(() => window.__prints.length > 3);
+  const sm = await p.evaluate(() => window.__prints.at(-1).html);
+  const small = sm.match(/table\.it th,table\.it td\{[^}]*font-size:([\d.]+)px/)[1];
+  assert.ok(Math.abs(small - base * 0.7) < 0.2, `text 70%: ${base} → ${small}`);
+  assert.match(sm, /max-height:60px/, 'logo height from the Tower');
+  assert.match(sm, /\.f \.v\.big\{font-size:21px/, 'order number 30 × 70%');
+  assert.match(sm, /border:3px solid/, 'line thickness is capped');
+  assert.doesNotMatch(sm, /class="ph"/, 'phones hidden');
+  assert.equal(await p.evaluate(() => window.posReceiptCfg().show.phones), false);
+  // البرج رجّعها للأصل (مسح المستند) ← القياسات العادية
+  await E.withSecurityRulesDisabled(async (c) => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(c.firestore(), 'restaurants/RP/theme/receipt')); });
+  await p.waitForFunction(() => window.posReceiptCfg().scale === 100 && !window.posReceiptLogo(), null, { timeout: 10000 });
   await p.context().close();
 });
