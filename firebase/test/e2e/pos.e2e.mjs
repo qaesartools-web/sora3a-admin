@@ -270,7 +270,7 @@ test('«تسديد طلبات الكابتن»: captain cash orders wait per cap
   await p.context().close();
 });
 
-test('delivery edge cases: self pickup is paid into the drawer, paid orders cannot be edited, «captain didn\'t answer» alert, cancelled delivery leaves the captain list', async () => {
+test('delivery edge cases: self pickup is paid into the drawer, paid orders are edited and the payment follows the difference, «captain didn\'t answer» alert, cancelled delivery leaves the captain list', async () => {
   const now = Date.now();
   const put = (id, d) => E.withSecurityRulesDisabled(async (c) => { await setDoc(doc(c.firestore(), 'orders/' + id), { restaurantId: 'RP', orderType: 'delivery', createdAtMs: now, fee: 2000, ...d }); });
   await put('SP1', { status: 'ready', ticketNo: 41, customer: 'أبو سجاد', value: 4000, awaitCap: true, captainId: null, payment: { method: 'cod' }, capSettled: false,
@@ -292,10 +292,15 @@ test('delivery edge cases: self pickup is paid into the drawer, paid orders cann
   const sp = await until(async () => { const o = await read('orders/SP1'); return o.status === 'delivered' ? o : null; });
   assert.equal(sp.orderType, 'takeaway'); assert.equal(sp.fee, 0); assert.equal(sp.payment.method, 'cash'); assert.equal(sp.payment.cash, 4000);
   assert.equal(sp.payment.shiftId, 'SHCAP'); assert.equal(sp.capSettled, null); assert.equal(sp.captainId, null);
-  // الطلب المدفوع ما يتعدل
+  // الطلب المدفوع صار يتعدّل: الفرق ينضاف للدفع نفسه، والكاشير ينبّه «استلم من الزبون»
   await p.evaluate(() => ordEdit('ED1'));
-  await p.waitForTimeout(400);
-  assert.equal(await p.isVisible('#viewOv.on'), false, 'paid order: no edit dialog');
+  await p.waitForSelector('#edOv.on');
+  await p.click('#edOrder .ed-q button[aria-label="أكثر"]');
+  assert.match(await p.textContent('#edOrder .ed-paid'), /استلم من الزبون 3,000/);
+  await p.click('#edOrder .confbtn');
+  const ed = await until(async () => { const o = await read('orders/ED1'); return o.value === 6000 ? o : null; });
+  assert.equal(ed.payment.cash, 6000, 'cash grows by the added amount'); assert.equal(ed.items[0].qty, 2);
+  await p.waitForFunction(() => !document.getElementById('edOv').classList.contains('on'), null, { timeout: 5000 });   // النافذة تنسد بعد الحفظ
   // إلغاء دلفري ← يطلع من قائمة الكباتن (ما يتراكم)
   await p.evaluate(() => ordCancel('CN1'));
   await p.waitForSelector('#acOv.on');
