@@ -665,6 +665,24 @@ test('two cashiers at the same time (delivery + hall): each opens and closes the
   // كل واحد يشوف مبيعاته بس بالوردية
   const ordersIn = (p) => p.evaluate(async () => { goTab('shift'); await new Promise((r) => setTimeout(r, 300)); return [...document.querySelectorAll('#shiftBody .sh-stat')].find((x) => x.textContent.includes('طلب')).querySelector('b').textContent.trim(); });
   assert.equal(await ordersIn(a), '4'); assert.equal(await ordersIn(b), '5');
+  // كل كاشير يشوف طلباته بس: تبويب الطلبات و«جاهز للزبون» (طلب الثاني ما يطلع عنده)
+  const tabCount = (p) => p.evaluate(async () => { goTab('orders'); await new Promise((r) => setTimeout(r, 300));
+    const me = window.posUser.uid, shown = orders.filter((o) => posOrdMine(o));
+    return { n: +document.getElementById('sAll').textContent.trim(), shown: shown.length, mine: shown.filter((o) => o.byUid === me).length,
+      others: shown.filter((o) => o.byUid && o.byUid !== me).length, total: orders.length }; });
+  const ta = await tabCount(a), tb = await tabCount(b);
+  assert.equal(ta.others, 0, "A never sees another cashier's orders"); assert.equal(tb.others, 0, "B never sees another cashier's orders");
+  assert.equal(ta.mine, 4); assert.equal(tb.mine, 5);
+  assert.equal(ta.n, ta.shown); assert.equal(tb.n, tb.shown);
+  assert.ok(ta.total > ta.shown, 'the restaurant has more orders than the ones A sees');
+  const oa = os.find((o) => o.shiftId === sa.id), ob = os.find((o) => o.shiftId === sb.id);
+  for (const o of [oa, ob]) await write('orders/' + o.id, { kitchen: 'ready', kitchenReadyAt: Date.now() });
+  await a.evaluate(() => goTab('cashier')); await b.evaluate(() => goTab('cashier'));
+  await a.waitForSelector(`#readyBar [data-served="${oa.id}"]`, { timeout: 10000 }); await b.waitForSelector(`#readyBar [data-served="${ob.id}"]`, { timeout: 10000 });
+  assert.equal(await a.locator(`#readyBar [data-served="${ob.id}"]`).count(), 0, "B's ready order never shows on A's «ready» bar");
+  assert.equal(await b.locator(`#readyBar [data-served="${oa.id}"]`).count(), 0, "A's ready order never shows on B's «ready» bar");
+  await a.screenshot({ path: 'shots/pos-two-cashiers-a.png' }); await b.screenshot({ path: 'shots/pos-two-cashiers-b.png' });
+  for (const p of [a, b]) { await p.evaluate(() => goTab('shift')); await p.waitForSelector('#shiftBody .sh-status.open'); }
   // الأول يسكّر ورديته ← وردية الثاني تبقى مفتوحة
   await a.click('button:has-text("إغلاق الوردية")'); await a.waitForSelector('#acOv.on');
   await a.fill('#acf_c', '22000'); await a.click('#acDlgOk');
