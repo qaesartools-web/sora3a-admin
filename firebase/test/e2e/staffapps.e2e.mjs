@@ -237,7 +237,8 @@ test('waiter: picks table 5 on the phone → the cashier gets an alert and appro
   assert.equal(o.orderType, 'salon'); assert.equal(o.tableNo, 5); assert.equal(o.source, 'waiter'); assert.equal(o.waiter, 'علي');
   assert.equal(o.value, 6000 * 2 + 7500 + 750); assert.equal(o.note, 'الطاولة مستعجلة'); assert.equal(o.payment.method, 'later');
   const slip = await until(() => cashier.evaluate(() => { const f = document.getElementById('prtFr'); return f && f.srcdoc.includes('ويتر') ? f.srcdoc : null; }));
-  assert.ok(slip.includes('طاولة 5') && slip.includes('برغر دجاج [بدون مخلل]') && slip.includes('علي'));
+  assert.ok(slip.includes('طاولة 5') && slip.includes('علي'));
+  assert.match(slip, /برغر دجاج[^<]*<\/td><td class="q">\d+<\/td><td class="m">بدون مخلل</, 'item note in its own column');
   assert.equal(await cashier.locator('#webBox .web-card').count(), 0);
   await w.waitForFunction(() => document.querySelector('.od .st').textContent.includes('يتحضر'));
   // المطبخ يخلص ← الويتر يشوف «جاهز — وصّله» وعلامة على الطاولة

@@ -76,7 +76,7 @@ test('order splits by section, one printer: receipt + one ticket per section', a
   const doc_ = await p.evaluate(() => document.getElementById('prtFr').srcdoc);
   for (const n of ['قسم الشاورما', 'قسم الكنتاكي', 'قسم البرغر', 'قسم البيتزا']) assert.ok(doc_.includes(n), n);
   assert.equal((doc_.match(/page-break-before:always/g) || []).length >= 4, true);
-  assert.ok(doc_.includes('#' + o.ticketNo) && doc_.includes('بيجر 3'));
+  assert.ok(doc_.includes('#' + o.ticketNo) && /رقم البيجر:<\/div><div class="v[^"]*">3</.test(doc_));
   // تذكرة الشاورما فيها أصنافها فقط
   const sh = await p.evaluate((id) => secTicketBody(orders.find((x) => x.id === id), 'k1'), o.id);
   assert.ok(sh.includes('ساندويش شاورما') && !sh.includes('بيتزا خضار') && sh.includes('يكتمل مع'));

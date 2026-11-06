@@ -318,7 +318,7 @@ test('delivery edge cases: self pickup is paid into the drawer, paid orders are 
   await p.waitForSelector('#payOv.on'); await p.click('#payOk');
   // أحدث طلب سفري فوري بعد تذكرة «قيد التحضير» (طلبات الاختبار المزروعة فوق بيها أرقام أكبر — ترتيب القراءة مو ثابت)
   const q = await until(async () => (await ordersRP()).filter((x) => x.orderType === 'takeaway' && !x.held && (x.createdAtMs || 0) > (h.createdAtMs || 0)).sort((a, b) => b.createdAtMs - a.createdAtMs)[0]);
-  assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), new RegExp('class="num">#' + q.ticketNo + '<'), 'quick takeaway receipt shows the screen number');
+  assert.match(await p.evaluate(() => document.getElementById('prtFr').srcdoc), new RegExp('class="v bx big">#' + q.ticketNo + '<'), 'quick takeaway receipt shows the screen number');
   assert.deepEqual(clean(p), []);
   await p.context().close();
 });
