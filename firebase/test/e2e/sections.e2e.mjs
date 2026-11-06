@@ -92,6 +92,51 @@ test('order splits by section, one printer: receipt + one ticket per section', a
   await v.context().close();
 });
 
+test('each section printer picks its items (checkboxes): an item can print in two sections, another one in none', async () => {
+  const p = await page(B, { w: 1280, h: 900 });
+  await posLogin(p);
+  await p.evaluate(() => { goTab('menu'); showMTab('settings'); });
+  await p.waitForSelector('[data-secit="k3"]');
+  assert.match(await p.textContent('[data-secit="k3"]'), /الأصناف [1١]$/, 'the burger category item');
+  // قسم البرغر: نضيف البيبسي (بدون قسم) والشاورما (هي بقسم الشاورما هم ← تنطبع بالقسمين)
+  await p.click('[data-secit="k3"]');
+  await p.waitForSelector('#secItOv.on');
+  assert.equal(await p.isChecked('#secItOv [data-sit="برغر كلاسك"]'), true);
+  await p.fill('#secItOv .sit-q', 'شاورما');
+  assert.equal(await p.isVisible('#secItOv [data-sit="بيبسي"]'), false, 'search hides the others');
+  await p.check('#secItOv [data-sit="ساندويش شاورما"]');
+  await p.fill('#secItOv .sit-q', '');
+  await p.check('#secItOv [data-sit="بيبسي"]');
+  await p.click('#secItOk');
+  const st = await until(async () => { const d = await read('restaurants/RK/settings/main'); return d && d.itemSec && d.itemSec['بيبسي'] ? d : null; });
+  assert.deepEqual(st.itemSec['بيبسي'], ['k3']); assert.deepEqual(st.itemSec['ساندويش شاورما'], ['k1', 'k3']);
+  assert.equal(st.itemSec['برغر كلاسك'], undefined, 'unchanged items keep their category section');
+  await p.waitForFunction(() => /الأصناف [3٣]$/.test(document.querySelector('[data-secit="k3"]').textContent));
+  // قسم البيتزا: نشيل البيتزا ← ما تنطبع بالمطبخ
+  await p.click('[data-secit="k4"]'); await p.waitForSelector('#secItOv.on');
+  await p.uncheck('#secItOv [data-sit="بيتزا خضار"]'); await p.click('#secItOk');
+  await until(async () => { const d = await read('restaurants/RK/settings/main'); return d && Array.isArray(d.itemSec['بيتزا خضار']) ? d : null; });
+  await p.screenshot({ path: 'shots/pos-section-items.png' });
+  await p.evaluate(() => goTab('cashier'));
+  await addByName(p, 'شاورما'); await addByName(p, 'بيبسي'); await addByName(p, 'بيتزا');
+  await p.click('#sendBtn'); await p.click('#typeOv .otype[data-t="quick"]');
+  await p.waitForSelector('#payOv.on'); await p.click('#payOk');
+  const o = await until(async () => (await all()).find((x) => x.orderType !== 'salon' && x.kSec && x.kSec.k3 && (x.items || []).length === 3 && (x.items || []).some((i) => i.name === 'بيبسي')));
+  const sw = o.items.find((i) => i.name === 'ساندويش شاورما');
+  assert.equal(sw.sec, 'k1'); assert.deepEqual(sw.secs, ['k1', 'k3']);
+  assert.equal(o.items.find((i) => i.name === 'بيبسي').sec, 'k3');
+  assert.equal(o.items.find((i) => i.name === 'بيتزا خضار').sec, undefined, 'unticked everywhere → no kitchen ticket');
+  assert.deepEqual(Object.keys(o.kSec).sort(), ['k1', 'k3']); assert.equal(o.kSec.k3.n, 2);
+  const t3 = await p.evaluate((id) => secTicketBody(orders.find((x) => x.id === id), 'k3'), o.id);
+  const t1 = await p.evaluate((id) => secTicketBody(orders.find((x) => x.id === id), 'k1'), o.id);
+  assert.ok(t3.includes('ساندويش شاورما') && t3.includes('بيبسي') && !t3.includes('بيتزا'));
+  assert.ok(t1.includes('ساندويش شاورما') && !t1.includes('بيبسي'));
+  // نرجّع الإعداد للاختبارات الجاية
+  await E.withSecurityRulesDisabled(async (c) => { const { updateDoc } = await import('firebase/firestore'); await updateDoc(doc(c.firestore(), 'restaurants/RK/settings/main'), { itemSec: {} }); });
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
+
 test('kitchen tracking: section chips, section filter, all sections ready → order ready', async () => {
   const p = await page(B, { w: 1280, h: 900 });
   await posLogin(p);
