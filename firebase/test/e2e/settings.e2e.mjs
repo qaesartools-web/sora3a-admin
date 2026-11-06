@@ -62,3 +62,36 @@ test('if the settings ever fail to show, a red line says why (for a photo)', asy
   assert.match(await p.textContent('#setDiag'), /تجربة خطأ/);
   await p.context().close();
 });
+
+// طابعة تعريفها نصي (Generic / Text Only): العربي يطلع رموز ← البرنامج يطبعها صورة وتبين «تنطبع كصورة»،
+//  وأي طابعة ثانية الكاشير يكدر يشغّلها «اطبع كصورة» بضغطة
+test('printers: text-only driver shows «تنطبع كصورة»; any other printer can be switched to image printing', async () => {
+  const p = await page(B, { w: 1600, h: 900 });
+  await p.addInitScript(() => {
+    const img = new Set();
+    window.__img = [];
+    window.SoraDesktop = { version: '1.0.99', platform: 'win32', canAutoStart: true, canImageMode: true,
+      printers: async () => [{ name: 'CHALLENGE MONSTER 80mm', displayName: 'CHALLENGE MONSTER 80mm', ok: true, isDefault: true, textOnly: true },
+        { name: 'Kitchen', displayName: 'Kitchen', ok: true, ...(img.has('Kitchen') ? { image: true } : {}) }],
+      setImageMode: async (n, on) => { window.__img.push([n, on]); if (on) img.add(n); else img.delete(n); return img.has(n); },
+      print: async () => ({ ok: true }), jobs: async () => [], reprint: async () => ({}), getTestMode: async () => false, setTestMode: async () => false,
+      openSimulator: async () => true, getAutoStart: async () => true, setAutoStart: async () => true, onUpdate: () => {}, installUpdate: async () => false };
+  });
+  await p.goto(BASE + 'index.html');
+  await p.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
+  await p.fill('#inEmail', 'rp@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn');
+  await p.waitForSelector('#prods .prod', { timeout: 15000 });
+  await p.click('[data-tab="menu"]');
+  await p.waitForSelector('#dpStatus .dp-pr');
+  const st = () => p.textContent('#dpStatus');
+  assert.match(await st(), /CHALLENGE MONSTER 80mm 🖼️ تنطبع كصورة/);
+  assert.equal(await p.locator('#dpStatus .dp-img').count(), 1, 'only the normal printer gets the switch');
+  await p.click('#dpStatus .dp-img');
+  await p.waitForSelector('#dpStatus .dp-img.on');
+  assert.match(await st(), /Kitchen 🖼️ تنطبع كصورة ✓/);
+  await p.click('#dpStatus .dp-img.on');
+  await p.waitForSelector('#dpStatus .dp-img:not(.on)');
+  assert.deepEqual(await p.evaluate(() => window.__img), [['Kitchen', true], ['Kitchen', false]]);
+  await p.locator('#dpStatus').screenshot({ path: 'shots/pos-printers-image.png' }).catch(() => {});
+  await p.context().close();
+});
