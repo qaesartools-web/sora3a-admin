@@ -214,6 +214,44 @@ test('incoming call via line token → customer card → repeat last order → d
   await p.context().close();
 });
 
+test('tap the caller\'s number → customer info (a new customer gets name and address) → «order items» → the delivery form is already filled', async () => {
+  const p = await page(B, { w: 1280, h: 800 });
+  await posLogin(p, 'cash@x.com', 'cashpass1');
+  await p.waitForSelector('#prods .prod');
+  const N = '07712340000';
+  await postCall(N);
+  await p.waitForSelector(`#callsBox .call-card:has-text("${N}")`, { timeout: 10000 });
+  await p.click('#callsBox .call-num');
+  await p.waitForSelector('#callInfoOv.on');
+  assert.match(await p.textContent('#callInfoBody .ci-num'), new RegExp(N));
+  assert.match(await p.textContent('#callInfoBody'), /زبون جديد/);
+  assert.equal(await p.locator('#callsBox .call-card').count(), 1, 'the call stays until the cashier confirms');
+  await p.fill('#ciName', 'أم علي'); await p.fill('#ciAddr', 'زيونة قرب الجامع');
+  await p.waitForTimeout(400); await p.screenshot({ path: 'shots/pos-call-info.png' });
+  await p.click('#callInfoBody .confbtn');
+  await p.waitForFunction(() => !document.querySelector('#callsBox .call-card'), null, { timeout: 5000 });
+  assert.match(await p.textContent('#curCust'), /أم علي/);
+  assert.ok(await until(async () => (await all('incomingCalls', 'restaurantId', 'RC')).some((x) => x.number === N && x.status === 'taken')));
+  await p.click('#prods .prod >> nth=0');
+  await p.click('#sendBtn'); await p.keyboard.press('4');
+  await p.waitForSelector('#delivOv.on');
+  assert.equal(await p.inputValue('#dPhone'), N);
+  assert.equal(await p.inputValue('#dName'), 'أم علي');
+  assert.equal(await p.inputValue('#dAddr'), 'زيونة قرب الجامع');
+  await p.evaluate(() => { closeDeliv(); clearCart && clearCart(); clearCurCust(); });
+  // زبون معروف: اسمه وعنوانه وآخر طلبه يطلعن، و«كرر آخر طلب» من نفس النافذة
+  await postCall('07701112222');
+  await p.waitForSelector('#callsBox .call-card:has-text("07701112222")', { timeout: 10000 });
+  await p.click('#callsBox .call-num');
+  await p.waitForSelector('#callInfoOv.on');
+  assert.equal(await p.inputValue('#ciName'), 'أبو حسين');
+  assert.match(await p.inputValue('#ciAddr'), /المنصور/);
+  assert.match(await p.textContent('#callInfoBody .ci-box'), /زنكر/);
+  await p.click('#callInfoBody .ci-rep');
+  await p.waitForFunction(() => cart.some((c) => c.name === 'زنكر' && c.qty === 2));
+  assert.deepEqual(clean(p), []);
+  await p.context().close();
+});
 test('cashier without cancel/discount permission cannot cancel or discount', async () => {
   const p = await page(B, { w: 1280, h: 800 });
   await write('users/' + U.cash, { perms: { discount: false, cancel: false } });

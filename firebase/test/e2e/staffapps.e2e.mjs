@@ -1577,12 +1577,12 @@ test('cashier main screen: «جاهز للزبون» strip — tap a number = se
   // التعديل الأسهل: فروع + بحث، دوس الصنف ينضاف، والحجم يطلع أزرار
   await c.evaluate(() => ordEdit('R5'));
   await c.waitForSelector('#edGrid .ed-it', { timeout: 10000 });
-  assert.match(await c.textContent('#viewTitle'), /#75/, 'edit title shows the order number');
+  assert.match(await c.textContent('#edBox .ed-tit'), /#75/, 'edit title shows the order number');
   await c.click('#edGrid .ed-it:has-text("برغر لحم")');
-  await c.waitForFunction(() => /×?\s*2|٢/.test([...document.querySelectorAll('.ac-line.ed-line-new')].map((e) => e.textContent).join('')), null, { timeout: 5000 });
+  await c.waitForFunction(() => /×?\s*2|٢/.test([...document.querySelectorAll('.ed-line.ed-line-new')].map((e) => e.textContent).join('')), null, { timeout: 5000 });
   await c.click('#edGrid .ed-it:has-text("برغر دجاج")');
   await c.click('.ed-vars .ed-var:has-text("دبل")');
-  await c.waitForSelector('.ac-line.ed-line-new:has-text("دبل")');
+  await c.waitForSelector('.ed-line.ed-line-new:has-text("دبل")');
   await c.fill('#edQ', 'لبن');
   await c.waitForSelector('#edGrid .ed-it:has-text("لبن")');
   assert.equal(await c.locator('#edGrid .ed-it').count(), 1, 'search shows only matches');
