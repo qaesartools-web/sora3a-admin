@@ -264,6 +264,22 @@ test('waiter: picks table 5 on the phone → the cashier gets an alert and appro
   await write('restaurants/RW', { features: {} });
 });
 
+test('waiter linked to a cashier (admin panel → screens/{uid}.cashiers): each order carries toCashiers so only that cashier gets it', async () => {
+  const w = await page(B, { w: 390, h: 844 });
+  const ws = await pairScreen(w, BASE + 'waiter.html', { name: 'سعد' });
+  await w.waitForSelector('.tb');
+  await write('screens/' + ws.uid, { cashiers: ['cashX', '', 7] });
+  await new Promise((r) => setTimeout(r, 1500));
+  await w.click('.tb[data-t="6"]');
+  await w.waitForSelector('.it');
+  await w.click('.it >> text=برغر لحم');
+  await w.click('#barBtn'); await w.waitForSelector('#cartSh.on');
+  await w.click('#cSend');
+  const wo = await until(async () => (await list('webOrders', 'restaurantId', 'RW')).find((x) => x.waiter === 'سعد'));
+  assert.deepEqual(wo.toCashiers, ['cashX'], 'only the linked cashier ids');
+  await w.context().close();
+});
+
 test('waiter: no email or password — the phone shows a link code + QR; the owner links it from the admin panel with the waiter name; unlink brings a new code', async () => {
   await write('restaurants/RW', { features: {} });
   const w = await page(B, { w: 390, h: 844 });
@@ -1122,6 +1138,17 @@ test('Tower picks the ready screen look per restaurant: design + 2 colours + log
   const cs = await p.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, rn: getComputedStyle(document.querySelector('#ready .n')).color, prep: document.documentElement.classList.contains('xs-prepFg') }));
   assert.equal(cs.bg, 'rgb(212, 175, 55)'); assert.equal(cs.rn, 'rgb(255, 255, 255)'); assert.equal(cs.prep, false, 'a wrong colour value is ignored');
   await p.screenshot({ path: 'shots/ready-theme-gold.png' });
+  // شفافية أي جزء (مربعات أرقام «جاهز» ٤٠٪ بلون التصميم، اسم المطعم ٦٠٪) + خط الشاشة من البرج
+  await write('restaurants/RW', { 'screenTheme.op': { readyNumBg: 0.4, nameFg: 0.6, bad: 0.2 }, 'screenTheme.font': 'cairo' });
+  await p.waitForFunction(() => document.documentElement.classList.contains('ff'), null, { timeout: 10000 });
+  const op = await p.evaluate(() => ({ rn: getComputedStyle(document.querySelector('#ready .n')).backgroundColor, nm: getComputedStyle(document.getElementById('nm')).opacity,
+    ff: getComputedStyle(document.querySelector('#ready .n')).fontFamily, link: !!document.querySelector('#ffFont[href*="family=Cairo"]'), bad: document.documentElement.classList.contains('op-bad') }));
+  assert.equal(op.rn, 'rgba(39, 34, 26, 0.4)', 'the design colour of the box, see-through');
+  assert.equal(op.nm, '0.6'); assert.match(op.ff, /Cairo/); assert.ok(op.link, 'font from Google Fonts'); assert.equal(op.bad, false);
+  await p.screenshot({ path: 'shots/ready-theme-opacity-font.png' });
+  await write('restaurants/RW', { 'screenTheme.op': {}, 'screenTheme.font': '' });
+  await p.waitForFunction(() => !document.documentElement.classList.contains('ff') && !document.documentElement.classList.contains('op-nameFg'), null, { timeout: 10000 });
+  assert.notEqual(await p.evaluate(() => getComputedStyle(document.querySelector('#ready .n')).backgroundColor), 'rgba(39, 34, 26, 0.4)', 'back to the design');
   // البرج يشيل الشعار ← يرجع الحرف
   await E.withSecurityRulesDisabled(async (c) => { const { deleteDoc } = await import('firebase/firestore'); await deleteDoc(doc(c.firestore(), 'restaurants/RW/theme/logo')); });
   await p.waitForFunction(() => !document.querySelector('#mk img'), null, { timeout: 10000 });
