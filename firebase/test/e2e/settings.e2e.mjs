@@ -95,3 +95,59 @@ test('printers: text-only driver shows «تنطبع كصورة»; any other prin
   await p.locator('#dpStatus').screenshot({ path: 'shots/pos-printers-image.png' }).catch(() => {});
   await p.context().close();
 });
+
+// اختيار الطابعة ينحفظ أول ما يتغيّر ويبقى (حتى لو الإعدادات انعادت أو الكاشير طلع ورجع)، وزر التجربة يطبع عليها،
+//  والورق بدون إيميجي (بالحرارية الأسود والأبيض يطلع لطخة) وبخط عريض
+test('printer choice is saved the moment it changes and stays; test print goes to it; paper has no emoji', async () => {
+  const p = await page(B, { w: 1600, h: 900 });
+  const prefs = {};
+  await p.exposeBinding('__pref', (_s, op, k, v) => { if (op === 'set') { prefs[k] = v; return true; } return prefs[k] ?? null; });
+  await p.addInitScript(() => {
+    window.__prints = [];
+    window.SoraDesktop = { version: '1.0.99', platform: 'win32', canAutoStart: true,
+      printers: async () => [{ name: 'CHALLENGE MONSTER 80mm', displayName: 'CHALLENGE MONSTER 80mm', ok: true, image: true }, { name: 'Microsoft Print to PDF', displayName: 'Microsoft Print to PDF', ok: true, isDefault: true }],
+      print: async (html, o) => { window.__prints.push({ html, printer: o.printer, title: o.title }); return { ok: true, printer: o.printer }; },
+      jobs: async () => [], reprint: async () => ({}), getTestMode: async () => false, setTestMode: async () => false,
+      getPref: (k) => window.__pref('get', k), setPref: (k, v) => window.__pref('set', k, v),
+      openSimulator: async () => true, getAutoStart: async () => true, setAutoStart: async () => true, onUpdate: () => {}, installUpdate: async () => false };
+  });
+  const login = async () => {
+    await p.goto(BASE + 'index.html');
+    const first = await Promise.race([p.waitForSelector('#loginPage', { state: 'visible', timeout: 30000 }).then(() => 'login'), p.waitForSelector('#prods .prod', { timeout: 30000 }).then(() => 'in')]);
+    if (first === 'login') { await p.fill('#inEmail', 'rp@x.com'); await p.fill('#inPass', 'secret123'); await p.click('#loginBtn'); }
+    await p.waitForSelector('#prods .prod', { timeout: 15000 });
+    await p.click('[data-tab="menu"]');
+    await p.waitForSelector('#dpStatus .dp-pr');
+  };
+  await login();
+  await p.selectOption('#dpMain', 'CHALLENGE MONSTER 80mm');
+  const saved = await p.evaluate(() => JSON.parse(localStorage.getItem(Object.keys(localStorage).find((k) => k.startsWith('pos_dp_')))).main);
+  assert.equal(saved, 'CHALLENGE MONSTER 80mm', 'saved without pressing «save settings»');
+  assert.match(await p.textContent('#toast, .toast, body'), /انحفظت الطابعة/);
+  // الإعدادات تنعاد (تحديث من السحابة) ← الاختيار باقي
+  await p.evaluate(() => { goTab('cashier'); goTab('menu'); showMTab('settings'); });
+  await p.waitForSelector('#dpStatus .dp-pr');
+  assert.equal(await p.inputValue('#dpMain'), 'CHALLENGE MONSTER 80mm');
+  // يطلع ويرجع (تحديث الصفحة) ← باقي
+  await login();
+  assert.equal(await p.inputValue('#dpMain'), 'CHALLENGE MONSTER 80mm');
+  assert.equal(Object.values(prefs)[0].main, 'CHALLENGE MONSTER 80mm', 'a copy is kept inside the cashier program');
+  // ذاكرة الصفحة انمسحت ← الطابعة ترجع من البرنامج وحدها
+  await p.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('pos_dp_')).forEach((k) => localStorage.removeItem(k)));
+  await login();
+  await p.waitForFunction(() => document.getElementById('dpMain') && document.getElementById('dpMain').value === 'CHALLENGE MONSTER 80mm', null, { timeout: 10000 });
+  // زر التجربة يطبع على نفس الطابعة
+  await p.evaluate(() => dpTest('main'));
+  await p.waitForFunction(() => window.__prints.length > 0);
+  const t = await p.evaluate(() => window.__prints[0]);
+  assert.equal(t.printer, 'CHALLENGE MONSTER 80mm');
+  // فاتورة حقيقية: بدون إيموجي، وخط عريض أسود
+  await p.evaluate(() => printOrderReceipt({ id: 'ABC123x', orderType: 'salon', tableNo: '4', ticketNo: 22, createdAt: '10:04 م', createdAtMs: Date.now(), value: 4500, subtotal: 4500,
+    items: [{ name: 'كلاسك برغر', variant: 'وحدة', price: 4500, qty: 1, note: 'حار' }], payment: { method: 'cash' } }, 'salon'));
+  await p.waitForFunction(() => window.__prints.length > 1);
+  const r = await p.evaluate(() => window.__prints.at(-1));
+  assert.equal(r.printer, 'CHALLENGE MONSTER 80mm');
+  assert.doesNotMatch(r.html, /\p{Extended_Pictographic}/u, 'no emoji on paper');
+  assert.match(r.html, /صالة — طاولة 4/); assert.match(r.html, /font-weight:700/); assert.match(r.html, /\.num\{[^}]*font-size:44px/);
+  await p.context().close();
+});
