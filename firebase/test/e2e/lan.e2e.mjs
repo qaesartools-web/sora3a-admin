@@ -201,12 +201,14 @@ test('Windows firewall blocking the screens: the cashier warns and one press all
   // برنامج الكاشير: جدار الحماية يمنع (ويندوز انضغط عليه «إلغاء») ← شريط أحمر + زر «اسمح بضغطة»
   const c = await page(B, { w: 1280, h: 860 });
   await wire(c, hub, 'hub');
-  const fw = { state: { ok: false, blocked: true, missing: true, pub: true }, fixes: 0 };
+  const fw = { state: { ok: false, blocked: true, missing: true, pub: true }, fixes: 0, opens: 0 };
   await c.exposeBinding('__fw', async (_s, m) => {
-    if (m === 'fix') { fw.fixes++; fw.state = { ok: true, blocked: false, missing: false, pub: true, fixed: true }; }
+    if (m === 'open') { fw.opens++; return true; }
+    // أول ضغطة: السماح انضاف بس بعده ممنوع (مكافح فيروسات) ← الشريط يبقى ويكول السبب؛ الثانية تمشي
+    if (m === 'fix') { fw.fixes++; fw.state = fw.fixes === 1 ? { ok: false, blocked: true, missing: false, pub: true, fixed: true, created: 3 } : { ok: true, blocked: false, missing: false, pub: true, fixed: true }; }
     return fw.state;
   });
-  await c.addInitScript(() => { window.SoraLan.fw = () => window.__fw('check'); window.SoraLan.fwFix = () => window.__fw('fix'); });
+  await c.addInitScript(() => { window.SoraLan.fw = () => window.__fw('check'); window.SoraLan.fwFix = () => window.__fw('fix'); window.SoraLan.fwOpen = () => window.__fw('open'); });
   await c.goto(BASE + 'index.html');
   await c.waitForSelector('#loginPage', { state: 'visible', timeout: 15000 });
   await c.fill('#inEmail', 'lan@x.com'); await c.fill('#inPass', 'secret123'); await c.click('#loginBtn');
@@ -216,9 +218,15 @@ test('Windows firewall blocking the screens: the cashier warns and one press all
   await c.waitForSelector('#lanBox:has-text("يمنع الشاشات")', { timeout: 10000 });
   await c.screenshot({ path: 'shots/lan-firewall-blocked.png' });
   await c.click('#lanFwBar button:has-text("اسمح")');
+  await c.waitForSelector('#lanFwBar .fw-why:has-text("برنامج حماية ثاني")', { timeout: 10000 });
+  await c.click('#lanFwBar button:has-text("افتح جدار الحماية")');
+  await c.waitForFunction(() => true);
+  await c.screenshot({ path: 'shots/lan-firewall-why.png' });
+  await c.click('#lanFwBar button:has-text("اسمح")');
   await c.waitForSelector('#lanFwBar', { state: 'detached', timeout: 10000 });
+  assert.equal(fw.opens, 1, '«open firewall» opens the Windows allowed-apps page');
   await c.waitForSelector('#lanBox:has-text("جدار الحماية: مسموح")', { timeout: 10000 });
-  assert.equal(fw.fixes, 1);
+  assert.equal(fw.fixes, 2);
   assert.deepEqual(clean(c), []);
   await c.context().close();
 
