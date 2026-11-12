@@ -1,0 +1,1 @@
+export const SYNC_URL="https://sora3a.francecentral.cloudapp.azure.com";
